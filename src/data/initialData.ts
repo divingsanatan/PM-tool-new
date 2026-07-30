@@ -1,0 +1,832 @@
+import { ProjectData } from '../types';
+
+export const initialProjectData: ProjectData = {
+  id: "proj-1",
+  projectName: "Apex Cloud Infrastructure & Portal",
+  projectCode: "APX-2026",
+  description: "Enterprise multi-tenant cloud application suite featuring ClickUp-grade execution tracking, automated EVM reporting, and real-time collaboration.",
+  startDate: "2026-06-01",
+  targetEndDate: "2026-11-30",
+  budget: 250000,
+  stakeholders: [
+    {
+      id: "sh-1",
+      name: "Alex Morgan",
+      email: "alex.m@apex.io",
+      role: "Project Manager & Scrum Master",
+      category: "internal",
+      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 95,
+      weeklyCapacityHours: 40,
+      skills: ["Agile", "EVM", "Risk Management", "Stakeholder Relations"],
+      status: "active"
+    },
+    {
+      id: "sh-2",
+      name: "Dr. Elena Rostova",
+      email: "elena.r@apex.io",
+      role: "Principal Architect",
+      category: "internal",
+      avatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 130,
+      weeklyCapacityHours: 35,
+      skills: ["Cloud Architecture", "Distributed Systems", "Security"],
+      status: "active"
+    },
+    {
+      id: "sh-3",
+      name: "Marcus Vance",
+      email: "marcus.v@apex.io",
+      role: "Senior Full Stack Engineer",
+      category: "internal",
+      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 110,
+      weeklyCapacityHours: 40,
+      skills: ["React", "TypeScript", "Node.js", "WebSockets"],
+      status: "active"
+    },
+    {
+      id: "sh-4",
+      name: "Priya Sharma",
+      email: "priya.s@apex.io",
+      role: "Lead UI/UX Designer",
+      category: "external",
+      avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 85,
+      weeklyCapacityHours: 30,
+      skills: ["Figma", "Design Systems", "User Research", "Accessibility"],
+      status: "active"
+    },
+    {
+      id: "sh-5",
+      name: "David Chen",
+      email: "david.c@apex.io",
+      role: "DevOps & QA Specialist",
+      category: "internal",
+      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 90,
+      weeklyCapacityHours: 40,
+      skills: ["CI/CD", "Docker", "Kubernetes", "Automated Testing"],
+      status: "active"
+    }
+  ],
+  milestones: [
+    {
+      id: "m-1",
+      title: "M1: Platform Infrastructure Alpha",
+      description: "Backend REST/WebSocket endpoints and data sync engine operational.",
+      dueDate: "2026-07-01",
+      status: "achieved",
+      baselineCost: 40000,
+      actualCost: 38500
+    },
+    {
+      id: "m-2",
+      title: "M2: EVM Dashboard & Gantt Preview",
+      description: "SPI & CPI analytics engine and drag-and-drop Gantt chart ready for testing.",
+      dueDate: "2026-08-01",
+      status: "in_progress",
+      baselineCost: 65000,
+      actualCost: 52000
+    },
+    {
+      id: "m-3",
+      title: "M3: RAID System & Workload Heatmap",
+      description: "Risk matrix scoring and stakeholder capacity load tracking operational.",
+      dueDate: "2026-09-15",
+      status: "upcoming",
+      baselineCost: 50000,
+      actualCost: 12000
+    },
+    {
+      id: "m-4",
+      title: "M4: Production Release & AI Reports",
+      description: "Final security audit, offline storage verification, and AI automated report suite.",
+      dueDate: "2026-11-01",
+      status: "upcoming",
+      baselineCost: 45000,
+      actualCost: 0
+    }
+  ],
+  epics: [
+    {
+      id: "epic-1",
+      title: "Platform Core Infrastructure",
+      description: "Core database schema, security, and WebSocket sync layer.",
+      milestoneId: "m-1",
+      status: "completed",
+      color: "#3b82f6"
+    },
+    {
+      id: "epic-2",
+      title: "Analytics & EVM Engine",
+      description: "Financial, earned value, and schedule performance computation suite.",
+      milestoneId: "m-2",
+      status: "in_progress",
+      color: "#8b5cf6"
+    },
+    {
+      id: "epic-3",
+      title: "Governance & Risk Matrix",
+      description: "RAID items, severity matrix, and mitigation workflows.",
+      milestoneId: "m-3",
+      status: "in_progress",
+      color: "#f59e0b"
+    },
+    {
+      id: "epic-4",
+      title: "Automated Reporting Suite",
+      description: "AI insights, automated summaries, and executive exports.",
+      milestoneId: "m-4",
+      status: "backlog",
+      color: "#10b981"
+    }
+  ],
+  features: [
+    {
+      id: "feat-1",
+      title: "Core Platform Architecture",
+      description: "Foundation, database schema, real-time sync server, and authentication engine.",
+      epicId: "epic-1",
+      milestoneId: "m-1",
+      status: "completed",
+      priority: "urgent",
+      targetReleaseDate: "2026-07-15",
+      color: "#3b82f6"
+    },
+    {
+      id: "feat-2",
+      title: "EVM & Analytics Dashboard",
+      description: "SPI/CPI metrics computation, budget tracking, and real-time Gantt visualizations.",
+      epicId: "epic-2",
+      milestoneId: "m-2",
+      status: "in_progress",
+      priority: "urgent",
+      targetReleaseDate: "2026-08-15",
+      color: "#8b5cf6"
+    },
+    {
+      id: "feat-3",
+      title: "RAID Risk & Oversight Module",
+      description: "Risk, Assumption, Issue, and Dependency matrix tracking with mitigation planning.",
+      epicId: "epic-3",
+      milestoneId: "m-3",
+      status: "in_progress",
+      priority: "high",
+      targetReleaseDate: "2026-09-01",
+      color: "#f59e0b"
+    },
+    {
+      id: "feat-4",
+      title: "Automated Reporting & AI Suite",
+      description: "Automated weekly executive reporting, Gemini risk mitigation advisor, and export.",
+      epicId: "epic-4",
+      milestoneId: "m-4",
+      status: "backlog",
+      priority: "normal",
+      targetReleaseDate: "2026-10-15",
+      color: "#10b981"
+    }
+  ],
+  tasks: [
+    {
+      id: "task-101",
+      title: "Design Relational Schema & Real-Time Sync Protocols",
+      description: "Define database models for tasks, RAID items, EVM metrics, and WebSocket event payloads.",
+      epicId: "epic-1",
+      featureId: "feat-1",
+      milestoneId: "m-1",
+      status: "done",
+      priority: "urgent",
+      assigneeIds: ["sh-2", "sh-3"],
+      raci: {
+        responsible: ["sh-2", "sh-3"],
+        accountable: ["sh-2"],
+        consulted: ["sh-1"],
+        informed: ["sh-4", "sh-5"]
+      },
+      startDate: "2026-06-01",
+      dueDate: "2026-06-15",
+      estimatedHours: 60,
+      actualHours: 58,
+      plannedCost: 6600,
+      actualCost: 6380,
+      completionPercent: 100,
+      dependencies: [],
+      tags: ["Backend", "Architecture", "WebSockets"]
+    },
+    {
+      id: "task-102",
+      title: "Implement ClickUp-style Design System & Glass Theme",
+      description: "Build accessible dark/light mode UI components, cards, status badges, and tabs.",
+      epicId: "epic-1",
+      featureId: "feat-1",
+      milestoneId: "m-1",
+      status: "done",
+      priority: "high",
+      assigneeIds: ["sh-4"],
+      raci: {
+        responsible: ["sh-4"],
+        accountable: ["sh-4"],
+        consulted: ["sh-3"],
+        informed: ["sh-1", "sh-2"]
+      },
+      startDate: "2026-06-10",
+      dueDate: "2026-06-25",
+      estimatedHours: 45,
+      actualHours: 42,
+      plannedCost: 3825,
+      actualCost: 3570,
+      completionPercent: 100,
+      dependencies: [],
+      tags: ["UI/UX", "Tailwind", "Theme"]
+    },
+    {
+      id: "task-103",
+      title: "Develop EVM SPI/CPI Metric Calculation Engine",
+      description: "Compute Earned Value (EV), Planned Value (PV), Actual Cost (AC), SPI, CPI, EAC, and ETC dynamically.",
+      epicId: "epic-2",
+      featureId: "feat-2",
+      milestoneId: "m-2",
+      status: "in_progress",
+      priority: "urgent",
+      assigneeIds: ["sh-1", "sh-3"],
+      raci: {
+        responsible: ["sh-3"],
+        accountable: ["sh-1"],
+        consulted: ["sh-2"],
+        informed: ["sh-5"]
+      },
+      startDate: "2026-07-01",
+      dueDate: "2026-07-28",
+      estimatedHours: 50,
+      actualHours: 35,
+      plannedCost: 5125,
+      actualCost: 3800,
+      completionPercent: 80,
+      dependencies: ["task-101:FS"],
+      tags: ["EVM", "Analytics", "Engine"]
+    },
+    {
+      id: "task-104",
+      title: "Build Interactive Gantt Chart Component",
+      description: "Multi-scale Gantt view with task dependency lines, draggable bars, critical path highlights, and zoom levels.",
+      epicId: "epic-2",
+      featureId: "feat-2",
+      milestoneId: "m-2",
+      status: "in_progress",
+      priority: "urgent",
+      assigneeIds: ["sh-3", "sh-4"],
+      raci: {
+        responsible: ["sh-3", "sh-4"],
+        accountable: ["sh-3"],
+        consulted: ["sh-1"],
+        informed: ["sh-2", "sh-5"]
+      },
+      startDate: "2026-07-05",
+      dueDate: "2026-08-10",
+      estimatedHours: 80,
+      actualHours: 45,
+      plannedCost: 7800,
+      actualCost: 4950,
+      completionPercent: 65,
+      dependencies: ["task-102:SS"],
+      tags: ["Gantt", "Interactive", "Visualization"]
+    },
+    {
+      id: "task-105",
+      title: "Stakeholder Workload Distribution & Heatmap",
+      description: "Calculate capacity utilization per team member and flag overload warnings (>100% capacity).",
+      epicId: "epic-2",
+      featureId: "feat-2",
+      milestoneId: "m-2",
+      status: "in_progress",
+      priority: "high",
+      assigneeIds: ["sh-1", "sh-5"],
+      raci: {
+        responsible: ["sh-5"],
+        accountable: ["sh-1"],
+        consulted: ["sh-4"],
+        informed: ["sh-2", "sh-3"]
+      },
+      startDate: "2026-07-15",
+      dueDate: "2026-08-05",
+      estimatedHours: 40,
+      actualHours: 25,
+      plannedCost: 3700,
+      actualCost: 2325,
+      completionPercent: 60,
+      dependencies: ["task-103:FS"],
+      tags: ["Workload", "Heatmap", "Capacity"]
+    },
+    {
+      id: "task-106",
+      title: "RAID Log Management System & Risk Matrix",
+      description: "Interactive table and 4x4 matrix heatmap for Risks, Assumptions, Issues, and Dependencies.",
+      epicId: "epic-3",
+      featureId: "feat-3",
+      milestoneId: "m-3",
+      status: "in_progress",
+      priority: "high",
+      assigneeIds: ["sh-1", "sh-2"],
+      raci: {
+        responsible: ["sh-1", "sh-2"],
+        accountable: ["sh-1"],
+        consulted: ["sh-5"],
+        informed: ["sh-3", "sh-4"]
+      },
+      startDate: "2026-07-20",
+      dueDate: "2026-08-20",
+      estimatedHours: 55,
+      actualHours: 20,
+      plannedCost: 6187,
+      actualCost: 2250,
+      completionPercent: 40,
+      dependencies: ["task-101:FS"],
+      tags: ["RAID", "Risk", "Oversight"]
+    },
+    {
+      id: "task-107",
+      title: "Offline Access Engine & IndexedDB Persistence",
+      description: "Implement local cache queue, connection status monitor, and auto-sync on reconnect.",
+      epicId: "epic-1",
+      featureId: "feat-1",
+      milestoneId: "m-1",
+      status: "done",
+      priority: "high",
+      assigneeIds: ["sh-3", "sh-5"],
+      raci: {
+        responsible: ["sh-3"],
+        accountable: ["sh-5"],
+        consulted: ["sh-2"],
+        informed: ["sh-1"]
+      },
+      startDate: "2026-06-20",
+      dueDate: "2026-07-10",
+      estimatedHours: 35,
+      actualHours: 35,
+      plannedCost: 3500,
+      actualCost: 3500,
+      completionPercent: 100,
+      dependencies: ["task-101:SS"],
+      tags: ["Offline", "Sync", "IndexedDB"]
+    },
+    {
+      id: "task-108",
+      title: "AI Automated Executive Report Generator",
+      description: "Gemini AI integration endpoint to generate weekly progress reports, SPI/CPI trend commentary, and risk advice.",
+      epicId: "epic-4",
+      featureId: "feat-4",
+      milestoneId: "m-4",
+      status: "todo",
+      priority: "normal",
+      assigneeIds: ["sh-1", "sh-3"],
+      raci: {
+        responsible: ["sh-3"],
+        accountable: ["sh-1"],
+        consulted: ["sh-2", "sh-4"],
+        informed: ["sh-5"]
+      },
+      startDate: "2026-08-15",
+      dueDate: "2026-09-01",
+      estimatedHours: 30,
+      actualHours: 0,
+      plannedCost: 3075,
+      actualCost: 0,
+      completionPercent: 0,
+      dependencies: ["task-103:FS", "task-106:SS"],
+      tags: ["AI", "Gemini", "Reporting"]
+    }
+  ],
+  subtasks: [
+    { id: "sub-1", taskId: "task-101", title: "Write OpenAPI / REST endpoints documentation", completed: true, assigneeId: "sh-2", estimatedHours: 10, actualHours: 10 },
+    { id: "sub-2", taskId: "task-101", title: "Setup Express + WS server handshake logic", completed: true, assigneeId: "sh-3", estimatedHours: 20, actualHours: 18 },
+    { id: "sub-3", taskId: "task-103", title: "Formula verification for Earned Value vs Planned Value", completed: true, assigneeId: "sh-1", estimatedHours: 15, actualHours: 12 },
+    { id: "sub-4", taskId: "task-103", title: "SPI/CPI trend line chart renderer", completed: false, assigneeId: "sh-3", estimatedHours: 20, actualHours: 15 },
+    { id: "sub-5", taskId: "task-104", title: "Draggable timeline bars with date snap", completed: true, assigneeId: "sh-3", estimatedHours: 30, actualHours: 25 },
+    { id: "sub-6", taskId: "task-104", title: "SVG dependency connector lines", completed: false, assigneeId: "sh-4", estimatedHours: 25, actualHours: 10 },
+    { id: "sub-7", taskId: "task-106", title: "Probability vs Impact 4x4 Risk Matrix renderer", completed: true, assigneeId: "sh-1", estimatedHours: 15, actualHours: 12 },
+    { id: "sub-8", taskId: "task-106", title: "Mitigation plan entry form and status filter", completed: false, assigneeId: "sh-2", estimatedHours: 15, actualHours: 5 }
+  ],
+  raidItems: [
+    {
+      id: "raid-1",
+      type: "risk",
+      title: "Third-party WebSocket network latency under heavy load",
+      description: "High concurrency during multi-stakeholder simultaneous editing may introduce event broadcast lag.",
+      ownerId: "sh-2",
+      status: "monitoring",
+      probability: "medium",
+      impact: "high",
+      riskScore: 9,
+      mitigationStrategy: "Implement event throttling (100ms) and local optimistic UI reconciliation.",
+      contingencyPlan: "Fallback to 2-second HTTP polling if WebSocket drops connection.",
+      severity: "high",
+      targetResolutionDate: "2026-08-15",
+      linkedTaskId: "task-101"
+    },
+    {
+      id: "raid-2",
+      type: "risk",
+      title: "Scope creep on custom dashboard widgets",
+      description: "Stakeholders requesting additional unbudgeted charts during M2 review.",
+      ownerId: "sh-1",
+      status: "mitigated",
+      probability: "medium",
+      impact: "medium",
+      riskScore: 6,
+      mitigationStrategy: "Enforce strict Change Control Board (CCB) approval process for new widget types.",
+      contingencyPlan: "Defer secondary widget customizers to Post-V1 product backlog.",
+      severity: "medium",
+      targetResolutionDate: "2026-08-01",
+      linkedTaskId: "task-103"
+    },
+    {
+      id: "raid-3",
+      type: "issue",
+      title: "Design Lead capacity constrained due to simultaneous client pitch",
+      description: "Priya Sharma is allocated 30h/week but task load requires 38h/week for Gantt polish.",
+      ownerId: "sh-1",
+      status: "investigating",
+      severity: "high",
+      mitigationStrategy: "Reassign non-critical icon polishing to Marcus or bring in freelance assistance.",
+      targetResolutionDate: "2026-07-30",
+      linkedTaskId: "task-104"
+    },
+    {
+      id: "raid-4",
+      type: "assumption",
+      title: "Gemini API rate limits are sufficient for automated hourly status reports",
+      description: "Assuming 15 requests per minute free-tier quota is adequate for AI summary generation.",
+      ownerId: "sh-3",
+      status: "validated",
+      severity: "low",
+      targetResolutionDate: "2026-07-10",
+      linkedTaskId: "task-108"
+    },
+    {
+      id: "raid-5",
+      type: "dependency",
+      title: "EVM Engine depends on completed Task 101 REST Schema",
+      description: "Calculation of PV and EV requires standardized task start/due dates and planned cost fields.",
+      ownerId: "sh-3",
+      status: "satisfied",
+      severity: "high",
+      linkedTaskId: "task-103"
+    },
+    {
+      id: "raid-6",
+      type: "risk",
+      title: "Offline sync conflict resolution during multi-user edits",
+      description: "If two users edit the same task offline and reconnect simultaneously, last-write-wins might overwrite changes.",
+      ownerId: "sh-3",
+      status: "identified",
+      probability: "medium",
+      impact: "high",
+      riskScore: 9,
+      mitigationStrategy: "Use timestamp-based granular field patching instead of replacing whole task payload.",
+      contingencyPlan: "Display visual diff dialog if conflict timestamp mismatch > 10 seconds.",
+      severity: "high",
+      targetResolutionDate: "2026-08-30",
+      linkedTaskId: "task-107"
+    }
+  ],
+  activities: [
+    {
+      id: "act-1",
+      timestamp: "2026-07-25T10:15:00Z",
+      user: "Alex Morgan",
+      userEmail: "alex.morgan@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      action: "Updated Milestone",
+      details: "Marked Milestone 'M1: Platform Infrastructure Alpha' as Achieved.",
+      category: "project",
+      entityId: "m-1"
+    },
+    {
+      id: "act-2",
+      timestamp: "2026-07-25T08:45:00Z",
+      user: "Marcus Vance",
+      userEmail: "marcus.vance@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80",
+      action: "Completed Task",
+      details: "Finished 'Design Relational Schema & Real-Time Sync Protocols' (Task 101).",
+      category: "task",
+      entityId: "task-101"
+    },
+    {
+      id: "act-3",
+      timestamp: "2026-07-24T18:20:00Z",
+      user: "Dr. Elena Rostova",
+      userEmail: "elena.rostova@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
+      action: "Logged Risk",
+      details: "Logged risk 'Third-party WebSocket network latency under heavy load'.",
+      category: "raid",
+      entityId: "raid-1"
+    },
+    {
+      id: "act-4",
+      timestamp: "2026-07-24T14:10:00Z",
+      user: "Priya Sharma",
+      userEmail: "priya.sharma@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80",
+      action: "Updated Task Progress",
+      details: "Advanced 'Build Interactive Gantt Chart Component' to 65% completion.",
+      category: "task",
+      entityId: "task-104"
+    },
+    {
+      id: "act-5",
+      timestamp: "2026-07-24T09:30:00Z",
+      user: "Sarah Jenkins",
+      userEmail: "sarah.jenkins@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80",
+      action: "Added Stakeholder",
+      details: "Onboarded David Kim as Lead QA Specialist (Hourly rate: $90/hr).",
+      category: "stakeholder",
+      entityId: "sh-5"
+    },
+    {
+      id: "act-6",
+      timestamp: "2026-07-23T16:00:00Z",
+      user: "Alex Morgan",
+      userEmail: "alex.morgan@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
+      action: "Adjusted Baseline Budget",
+      details: "Updated Project Baseline Budget from $140,000 to $150,000.",
+      category: "project",
+      entityId: "proj-001"
+    },
+    {
+      id: "act-7",
+      timestamp: "2026-07-23T11:15:00Z",
+      user: "Google Workspace SSO",
+      userEmail: "auth-service@google.com",
+      userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=GoogleAuth",
+      action: "Google SSO Login",
+      details: "User Alex Morgan authenticated via Google OAuth 2.0.",
+      category: "auth"
+    }
+  ],
+  widgets: [
+    { id: "evm-summary", title: "EVM Performance Index (SPI & CPI)", enabled: true, order: 1, width: "full" },
+    { id: "gantt-chart", title: "Interactive Gantt Timeline & Critical Path", enabled: true, order: 2, width: "full" },
+    { id: "workload-distribution", title: "Stakeholder Workload Distribution & Load Heatmap", enabled: true, order: 3, width: "half" },
+    { id: "raid-matrix", title: "RAID Risk & Oversight Matrix", enabled: true, order: 4, width: "half" },
+    { id: "completion-metrics", title: "Work Item Completion Progress (Features, Milestones, Tasks)", enabled: true, order: 5, width: "half" },
+    { id: "ai-assistant", title: "AI Executive Project Summary & Risk Advisor", enabled: true, order: 6, width: "half" }
+  ],
+  changeRequests: [
+    {
+      id: "cr-101",
+      crNumber: "CR-001",
+      title: "Add Real-Time Multi-Region WebSocket Synchronization",
+      description: "Expand backend architecture to support redundant regional WebSocket edge servers for sub-50ms latency.",
+      requestor: "Dr. Elena Rostova",
+      requestorEmail: "elena.rostova@apex.io",
+      requestDate: "2026-07-20",
+      status: "approved",
+      priority: "high",
+      impactAreas: ["scope", "cost", "schedule"],
+      costImpactDelta: 10000,
+      scheduleImpactDays: 5,
+      scopeImpactDescription: "Adds 2 additional Redis PubSub worker nodes and edge latency monitoring dashboards.",
+      riskImpactDescription: "Mitigates high-load latency risk (RAID-001) logged during stress testing.",
+      justification: "Critical for enterprise clients demanding real-time multi-user collaboration across geographic regions.",
+      proposedSolution: "Provision managed Redis edge cluster and implement automated failover sync.",
+      pmRecommendation: "Recommend approval. Budget contingency covers the $10,000 cost delta.",
+      ccbDecisionDate: "2026-07-22",
+      ccbNotes: "Approved unanimously by CCB. Baseline schedule extended by 5 days.",
+      approvedBy: "Alex Morgan (Project Manager)",
+      fastTrackApproved: false,
+      linkedTaskId: "task-102",
+      linkedRaidId: "raid-1"
+    },
+    {
+      id: "cr-102",
+      crNumber: "CR-002",
+      title: "Fast-Track QA Automation Suite for Alpha Milestone",
+      description: "Onboard dedicated automated testing contractor to accelerate test script generation before M2 milestone.",
+      requestor: "Marcus Vance",
+      requestorEmail: "marcus.vance@apex.io",
+      requestDate: "2026-07-24",
+      status: "under_review",
+      priority: "medium",
+      impactAreas: ["schedule", "cost", "quality"],
+      costImpactDelta: 4500,
+      scheduleImpactDays: -3,
+      scopeImpactDescription: "Enables parallel execution of End-to-End Cypress integration tests.",
+      riskImpactDescription: "Reduces risk of regressions during fast-paced API updates.",
+      justification: "Will save 3 schedule days during the critical path phase before stakeholder demonstration.",
+      proposedSolution: "Allocate $4,500 from operational reserves for 30 hours of specialized test engineering.",
+      pmRecommendation: "Under review by CCB board. Fast-track approval option available."
+    },
+    {
+      id: "cr-103",
+      crNumber: "CR-003",
+      title: "Scope Modification: Third-Party Billing Gateway Integration",
+      description: "Incorporate automated subscription billing and invoice PDF generation directly into stakeholder dashboard.",
+      requestor: "Priya Sharma",
+      requestorEmail: "priya.sharma@apex.io",
+      requestDate: "2026-07-25",
+      status: "draft",
+      priority: "low",
+      impactAreas: ["scope", "cost", "risk"],
+      costImpactDelta: 12000,
+      scheduleImpactDays: 8,
+      scopeImpactDescription: "Adds Stripe webhooks, invoice generation queue, and billing settings tab.",
+      justification: "Client request from recent steering committee review.",
+      proposedSolution: "De-prioritize non-critical reporting export widgets to offset scope creep."
+    }
+  ]
+};
+
+export const project2Data: ProjectData = {
+  id: "proj-2",
+  projectName: "NextGen Mobile App Suite",
+  projectCode: "MOB-2026",
+  description: "Cross-platform iOS and Android mobile app for field operations, real-time telemetry, and mobile stakeholder updates.",
+  startDate: "2026-07-01",
+  targetEndDate: "2026-12-15",
+  budget: 180000,
+  stakeholders: [...initialProjectData.stakeholders],
+  epics: [],
+  features: [
+    {
+      id: "feat-m1",
+      title: "Mobile Offline Sync & Local Cache",
+      description: "SQLite offline caching and background queue synchronization.",
+      status: "in_progress",
+      priority: "high",
+      targetReleaseDate: "2026-08-30",
+      color: "#3b82f6"
+    },
+    {
+      id: "feat-m2",
+      title: "Biometric Auth & Push Notifications",
+      description: "FaceID/TouchID security and real-time push alert dispatcher.",
+      status: "backlog",
+      priority: "normal",
+      targetReleaseDate: "2026-10-15",
+      color: "#10b981"
+    }
+  ],
+  milestones: [
+    {
+      id: "m-m1",
+      title: "M1: iOS & Android Beta Build",
+      description: "Core mobile navigation and task mapping views available on TestFlight.",
+      dueDate: "2026-09-01",
+      status: "in_progress",
+      baselineCost: 50000,
+      actualCost: 32000
+    }
+  ],
+  tasks: [
+    {
+      id: "task-m201",
+      title: "Develop React Native Navigation Shell",
+      description: "Setup bottom bar navigation and biometric security hook.",
+      status: "done",
+      priority: "high",
+      assigneeIds: ["sh-3", "sh-4"],
+      startDate: "2026-07-01",
+      dueDate: "2026-07-20",
+      estimatedHours: 40,
+      actualHours: 38,
+      plannedCost: 4400,
+      actualCost: 4180,
+      completionPercent: 100,
+      dependencies: [],
+      tags: ["Mobile", "React Native"]
+    },
+    {
+      id: "task-m202",
+      title: "Implement Field Task Progress Update Interface",
+      description: "Touch-optimized task status toggle, voice notes, and photo uploads.",
+      status: "in_progress",
+      priority: "urgent",
+      assigneeIds: ["sh-3", "sh-1"],
+      startDate: "2026-07-21",
+      dueDate: "2026-08-15",
+      estimatedHours: 50,
+      actualHours: 20,
+      plannedCost: 5500,
+      actualCost: 2200,
+      completionPercent: 45,
+      dependencies: ["task-m201:FS"],
+      tags: ["UI", "Mobile"]
+    }
+  ],
+  subtasks: [
+    { id: "sub-m1", taskId: "task-m201", title: "Setup Navigation Container", completed: true, estimatedHours: 10, actualHours: 8 },
+    { id: "sub-m2", taskId: "task-m202", title: "Quick Status Slider Component", completed: true, estimatedHours: 15, actualHours: 12 }
+  ],
+  raidItems: [
+    {
+      id: "raid-m1",
+      type: "risk",
+      title: "App Store Review delays for biometric authentication API",
+      description: "Apple submission guidelines require explicit privacy manifest for FaceID usage.",
+      ownerId: "sh-1",
+      status: "monitoring",
+      probability: "high",
+      impact: "high",
+      riskScore: 12,
+      mitigationStrategy: "Submit early TestFlight build for preliminary Apple App Review.",
+      severity: "high",
+      targetResolutionDate: "2026-08-25"
+    }
+  ],
+  activities: [
+    {
+      id: "act-m1",
+      timestamp: "2026-07-25T01:00:00Z",
+      user: "Marcus Vance",
+      action: "Completed Task",
+      details: "Finished 'Develop React Native Navigation Shell'"
+    }
+  ],
+  widgets: initialProjectData.widgets
+};
+
+export const project3Data: ProjectData = {
+  id: "proj-3",
+  projectName: "Global AI Data Pipeline Engine",
+  projectCode: "PIPE-2026",
+  description: "High-throughput streaming analytics pipeline integrating Gemini AI models, vector search, and real-time EVM anomaly detection.",
+  startDate: "2026-05-15",
+  targetEndDate: "2026-10-31",
+  budget: 320000,
+  stakeholders: [...initialProjectData.stakeholders],
+  epics: [],
+  features: [
+    {
+      id: "feat-p1",
+      title: "Vector Search & Embeddings Engine",
+      description: "High performance semantic vector search pipeline.",
+      status: "completed",
+      priority: "urgent",
+      targetReleaseDate: "2026-07-01",
+      color: "#8b5cf6"
+    }
+  ],
+  milestones: [
+    {
+      id: "m-p1",
+      title: "M1: 100k Events/Sec Benchmark Achieved",
+      description: "Streaming ingest throughput validated.",
+      dueDate: "2026-07-15",
+      status: "achieved",
+      baselineCost: 80000,
+      actualCost: 75000
+    }
+  ],
+  tasks: [
+    {
+      id: "task-p301",
+      title: "Implement Kafka / PubSub Ingestion Cluster",
+      description: "Deploy fault-tolerant message streaming brokers.",
+      status: "done",
+      priority: "urgent",
+      assigneeIds: ["sh-2", "sh-5"],
+      startDate: "2026-05-15",
+      dueDate: "2026-06-30",
+      estimatedHours: 80,
+      actualHours: 82,
+      plannedCost: 10400,
+      actualCost: 10660,
+      completionPercent: 100,
+      dependencies: [],
+      tags: ["Data", "Pipeline"]
+    },
+    {
+      id: "task-p302",
+      title: "Gemini Real-Time Anomaly Predictor Endpoint",
+      description: "Stream tasks and cost spikes into Gemini for proactive risk scoring.",
+      status: "in_progress",
+      priority: "urgent",
+      assigneeIds: ["sh-2", "sh-3"],
+      startDate: "2026-07-01",
+      dueDate: "2026-08-15",
+      estimatedHours: 70,
+      actualHours: 40,
+      plannedCost: 8400,
+      actualCost: 4800,
+      completionPercent: 70,
+      dependencies: ["task-p301:FS"],
+      tags: ["AI", "Gemini", "Streaming"]
+    }
+  ],
+  subtasks: [],
+  raidItems: [],
+  activities: [],
+  widgets: initialProjectData.widgets
+};
+
+export const defaultProjectsMap: Record<string, ProjectData> = {
+  "proj-1": initialProjectData,
+  "proj-2": project2Data,
+  "proj-3": project3Data
+};

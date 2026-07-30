@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix: ApexPM - Enterprise Project Management \u0026 RAID Suite",
+  "description": "ClickUp-style project management with EVM metrics (SPI/CPI), Gantt charts, stakeholder load distribution, RAID tracking system, real-time sync, and offline capabilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

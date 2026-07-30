@@ -1,0 +1,492 @@
+import React, { useState, useEffect } from 'react';
+import { X, Layers, Flag, Bookmark, CheckCircle2, DollarSign, Calendar, Tag, ShieldAlert } from 'lucide-react';
+import { useProject } from '../../context/ProjectContext';
+import { Milestone, Epic, Feature, MilestoneStatus, EpicStatus, FeatureStatus, Priority } from '../../types';
+
+export type HierarchyType = 'milestone' | 'epic' | 'feature';
+
+interface HierarchyItemModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialType?: HierarchyType;
+  initialParentMilestoneId?: string;
+  initialParentEpicId?: string;
+  itemToEdit?: Milestone | Epic | Feature | null;
+}
+
+const COLOR_PRESETS = [
+  '#3b82f6', // Blue
+  '#8b5cf6', // Purple
+  '#f59e0b', // Amber
+  '#10b981', // Emerald
+  '#ef4444', // Red
+  '#06b6d4', // Cyan
+  '#ec4899', // Pink
+];
+
+export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
+  isOpen,
+  onClose,
+  initialType = 'feature',
+  initialParentMilestoneId = '',
+  initialParentEpicId = '',
+  itemToEdit = null
+}) => {
+  const { projectData, saveMilestone, saveEpic, saveFeature, currentUser } = useProject();
+
+  const [itemType, setItemType] = useState<HierarchyType>(initialType);
+
+  // Common fields
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [color, setColor] = useState('#3b82f6');
+
+  // Milestone fields
+  const [dueDate, setDueDate] = useState('');
+  const [milestoneStatus, setMilestoneStatus] = useState<MilestoneStatus>('upcoming');
+  const [baselineCost, setBaselineCost] = useState(15000);
+
+  // Epic fields
+  const [epicMilestoneId, setEpicMilestoneId] = useState('');
+  const [epicStatus, setEpicStatus] = useState<EpicStatus>('in_progress');
+
+  // Feature fields
+  const [featureEpicId, setFeatureEpicId] = useState('');
+  const [featureMilestoneId, setFeatureMilestoneId] = useState('');
+  const [featureStatus, setFeatureStatus] = useState<FeatureStatus>('in_progress');
+  const [featurePriority, setFeaturePriority] = useState<Priority>('normal');
+  const [targetReleaseDate, setTargetReleaseDate] = useState('');
+
+  useEffect(() => {
+    if (itemToEdit) {
+      setTitle(itemToEdit.title || '');
+      setDescription(itemToEdit.description || '');
+
+      if ('dueDate' in itemToEdit && 'baselineCost' in itemToEdit) {
+        setItemType('milestone');
+        setDueDate(itemToEdit.dueDate || '');
+        setMilestoneStatus(itemToEdit.status as MilestoneStatus);
+        setBaselineCost(itemToEdit.baselineCost || 0);
+      } else if ('epicId' in itemToEdit || ('priority' in itemToEdit && 'targetReleaseDate' in itemToEdit)) {
+        setItemType('feature');
+        const feat = itemToEdit as Feature;
+        setFeatureEpicId(feat.epicId || '');
+        setFeatureMilestoneId(feat.milestoneId || '');
+        setFeatureStatus(feat.status);
+        setFeaturePriority(feat.priority);
+        setTargetReleaseDate(feat.targetReleaseDate || '');
+        setColor(feat.color || '#3b82f6');
+      } else {
+        setItemType('epic');
+        const ep = itemToEdit as Epic;
+        setEpicMilestoneId(ep.milestoneId || '');
+        setEpicStatus(ep.status);
+        setColor(ep.color || '#8b5cf6');
+      }
+    } else {
+      setItemType(initialType);
+      setTitle('');
+      setDescription('');
+      setColor(initialType === 'epic' ? '#8b5cf6' : '#3b82f6');
+      setDueDate(new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0]);
+      setMilestoneStatus('upcoming');
+      setBaselineCost(20000);
+
+      setEpicMilestoneId(initialParentMilestoneId);
+      setEpicStatus('in_progress');
+
+      setFeatureEpicId(initialParentEpicId);
+      setFeatureMilestoneId(initialParentMilestoneId);
+      setFeatureStatus('in_progress');
+      setFeaturePriority('normal');
+      setTargetReleaseDate(new Date(Date.now() + 86400000 * 45).toISOString().split('T')[0]);
+    }
+  }, [itemToEdit, initialType, initialParentMilestoneId, initialParentEpicId, isOpen]);
+
+  // When parent epic changes for a feature, auto-suggest parent milestone
+  const handleFeatureEpicChange = (epicId: string) => {
+    setFeatureEpicId(epicId);
+    if (epicId) {
+      const selectedEpic = (projectData.epics || []).find(e => e.id === epicId);
+      if (selectedEpic?.milestoneId) {
+        setFeatureMilestoneId(selectedEpic.milestoneId);
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    if (itemType === 'milestone') {
+      await saveMilestone({
+        id: itemToEdit ? itemToEdit.id : undefined,
+        title,
+        description,
+        dueDate,
+        status: milestoneStatus,
+        baselineCost: Number(baselineCost) || 0
+      });
+    } else if (itemType === 'epic') {
+      await saveEpic({
+        id: itemToEdit ? itemToEdit.id : undefined,
+        title,
+        description,
+        milestoneId: epicMilestoneId || undefined,
+        status: epicStatus,
+        color
+      });
+    } else if (itemType === 'feature') {
+      await saveFeature({
+        id: itemToEdit ? itemToEdit.id : undefined,
+        title,
+        description,
+        epicId: featureEpicId || undefined,
+        milestoneId: featureMilestoneId || undefined,
+        status: featureStatus,
+        priority: featurePriority,
+        targetReleaseDate,
+        color
+      });
+    }
+
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-md p-2 sm:p-4 md:p-6 overflow-hidden">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl h-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] shadow-2xl flex flex-col overflow-hidden">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50 shrink-0">
+          <div className="flex items-center gap-2.5">
+            {itemType === 'milestone' && <Flag className="w-5 h-5 text-amber-400" />}
+            {itemType === 'epic' && <Bookmark className="w-5 h-5 text-purple-400" />}
+            {itemType === 'feature' && <Layers className="w-5 h-5 text-blue-400" />}
+            <h2 className="text-lg font-semibold text-slate-100">
+              {itemToEdit ? `Edit ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}` : `Create New WBS Item`}
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Type selector tabs if creating new */}
+        {!itemToEdit && (
+          <div className="flex border-b border-slate-800 bg-slate-950/40 p-1.5 gap-1">
+            <button
+              type="button"
+              onClick={() => { setItemType('milestone'); setColor('#f59e0b'); }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                itemType === 'milestone'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Flag className="w-3.5 h-3.5" /> Milestone
+            </button>
+            <button
+              type="button"
+              onClick={() => { setItemType('epic'); setColor('#8b5cf6'); }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                itemType === 'epic'
+                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" /> Epic
+            </button>
+            <button
+              type="button"
+              onClick={() => { setItemType('feature'); setColor('#3b82f6'); }}
+              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition ${
+                itemType === 'feature'
+                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" /> Feature
+            </button>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+          
+          {/* Title */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1">
+              {itemType.toUpperCase()} Title <span className="text-rose-400">*</span>
+            </label>
+            <input
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={`e.g. ${
+                itemType === 'milestone'
+                  ? 'M1: Production Readiness Alpha'
+                  : itemType === 'epic'
+                  ? 'Cloud Infrastructure & Security'
+                  : 'User Auth & Role Management'
+              }`}
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-medium text-slate-300 mb-1">
+              Description
+            </label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="High-level objective, deliverables, or acceptance criteria..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3.5 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {/* MILESTONE SPECIFIC FIELDS */}
+          {itemType === 'milestone' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-400" /> Target Due Date
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-slate-400" /> Baseline Budget ($)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={baselineCost}
+                  onChange={(e) => setBaselineCost(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Status
+                </label>
+                <select
+                  value={milestoneStatus}
+                  onChange={(e) => setMilestoneStatus(e.target.value as MilestoneStatus)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="upcoming">Upcoming</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="achieved">Achieved / Completed</option>
+                  <option value="delayed">Delayed</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {/* EPIC SPECIFIC FIELDS */}
+          {itemType === 'epic' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                  <Flag className="w-3.5 h-3.5 text-amber-400" /> Parent Milestone
+                </label>
+                <select
+                  value={epicMilestoneId}
+                  onChange={(e) => setEpicMilestoneId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">-- No Parent Milestone --</option>
+                  {projectData.milestones.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={epicStatus}
+                    onChange={(e) => setEpicStatus(e.target.value as EpicStatus)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="backlog">Backlog</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Theme Color
+                  </label>
+                  <div className="flex items-center gap-2 mt-1">
+                    {COLOR_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setColor(c)}
+                        style={{ backgroundColor: c }}
+                        className={`w-6 h-6 rounded-full transition-transform ${
+                          color === c ? 'ring-2 ring-white scale-110' : 'opacity-70 hover:opacity-100'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* FEATURE SPECIFIC FIELDS */}
+          {itemType === 'feature' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Bookmark className="w-3.5 h-3.5 text-purple-400" /> Parent Epic
+                  </label>
+                  <select
+                    value={featureEpicId}
+                    onChange={(e) => handleFeatureEpicChange(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- No Parent Epic --</option>
+                    {(projectData.epics || []).map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center gap-1.5">
+                    <Flag className="w-3.5 h-3.5 text-amber-400" /> Parent Milestone
+                  </label>
+                  <select
+                    value={featureMilestoneId}
+                    onChange={(e) => setFeatureMilestoneId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- No Parent Milestone --</option>
+                    {projectData.milestones.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={featureStatus}
+                    onChange={(e) => setFeatureStatus(e.target.value as FeatureStatus)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="backlog">Backlog</option>
+                    <option value="in_progress">In Progress</option>
+                    <option value="testing">Testing</option>
+                    <option value="completed">Completed</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Priority
+                  </label>
+                  <select
+                    value={featurePriority}
+                    onChange={(e) => setFeaturePriority(e.target.value as Priority)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="urgent">Urgent</option>
+                    <option value="high">High</option>
+                    <option value="normal">Normal</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Target Release
+                  </label>
+                  <input
+                    type="date"
+                    value={targetReleaseDate}
+                    onChange={(e) => setTargetReleaseDate(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Tag Color
+                </label>
+                <div className="flex items-center gap-2 mt-1">
+                  {COLOR_PRESETS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      style={{ backgroundColor: c }}
+                      className={`w-6 h-6 rounded-full transition-transform ${
+                        color === c ? 'ring-2 ring-white scale-110' : 'opacity-70 hover:opacity-100'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer Actions */}
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800 mt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm font-medium transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-lg shadow-blue-500/20 transition flex items-center gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {itemToEdit ? `Save Changes` : `Create ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}`}
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  );
+};

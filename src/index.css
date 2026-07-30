@@ -1,0 +1,732 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+  --bg-dark-app: #0f0e17;
+  --bg-dark-surface: #171622;
+  --bg-dark-card: #1f1e2e;
+  --border-dark: #2a283d;
+}
+
+html,
+body,
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: #0f0e17;
+  color: #f8fafc;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+/* =========================================================
+   DARK MODE CUSTOM THEME OVERRIDES (Sleek High-Contrast Slate)
+   Matches modern PM Workstation (Linear / Vercel style)
+   ========================================================= */
+html.dark {
+  /* Rich deep dark canvas background */
+  body, .bg-slate-950 {
+    background-color: #090d16 !important;
+  }
+
+  /* Primary Cards & Surfaces */
+  .bg-slate-900,
+  .bg-slate-900\/90,
+  .bg-slate-900\/80,
+  .bg-slate-900\/70 {
+    background-color: #111827 !important;
+  }
+
+  /* Secondary Sub-cards, Inset Cards, Inner Panels */
+  .bg-slate-950\/90,
+  .bg-slate-950\/80,
+  .bg-slate-950\/70,
+  .bg-slate-950\/60,
+  .bg-slate-950\/40,
+  .bg-slate-900\/60,
+  .bg-slate-900\/50,
+  .bg-slate-800,
+  .bg-slate-800\/90,
+  .bg-slate-800\/80,
+  .bg-slate-800\/60,
+  .bg-slate-800\/50,
+  .bg-slate-800\/30 {
+    background-color: #1a2333 !important;
+  }
+
+  /* Sharp, high-contrast borders in dark mode */
+  .border-slate-800,
+  .border-slate-800\/80,
+  .border-slate-800\/60,
+  .border-slate-700,
+  .border-slate-700\/80,
+  .border-slate-700\/60,
+  .border-slate-700\/50 {
+    border-color: #2b3a52 !important;
+  }
+
+  /* High contrast readable text in dark mode */
+  .text-slate-100,
+  .text-slate-200 {
+    color: #ffffff !important;
+  }
+
+  .text-slate-300 {
+    color: #f1f5f9 !important;
+  }
+
+  .text-slate-400 {
+    color: #cbd5e1 !important;
+  }
+
+  .text-slate-500 {
+    color: #94a3b8 !important;
+  }
+
+  /* Table Headers & Highlight Strips */
+  thead,
+  .bg-slate-900.uppercase {
+    background-color: #162032 !important;
+  }
+
+  /* Interactive state hovers in dark mode */
+  .hover\:bg-slate-800:hover,
+  .hover\:bg-slate-800\/80:hover,
+  .hover\:bg-slate-800\/60:hover,
+  .hover\:bg-slate-700:hover,
+  .hover\:bg-slate-700\/80:hover,
+  .hover\:bg-slate-900\/60:hover {
+    background-color: #233147 !important;
+  }
+
+  .hover\:text-white:hover,
+  .hover\:text-slate-100:hover,
+  .hover\:text-slate-200:hover {
+    color: #ffffff !important;
+  }
+}
+
+/* =========================================================
+   DAY MODE (LIGHT THEME) SCOPED OVERRIDES FOR HIGH CONTRAST
+   ========================================================= */
+html:not(.dark) {
+  /* Clean Light Canvas */
+  body,
+  .min-h-screen {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+  }
+
+  /* Primary Cards, Menus, Navbars, Sidebars & Main Containers in Day Mode */
+  .bg-slate-900,
+  .bg-slate-900\/95,
+  .bg-slate-900\/90,
+  .bg-slate-900\/80,
+  .bg-slate-900\/70,
+  .bg-slate-900\/60,
+  .bg-slate-900\/50,
+  header#app-header,
+  aside#app-sidebar {
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05) !important;
+  }
+
+  /* Inner Inset Panels, Inset Controls, Recessed Wrappers & Sub-cards in Day Mode */
+  .bg-slate-950,
+  .bg-slate-950\/90,
+  .bg-slate-950\/80,
+  .bg-slate-950\/70,
+  .bg-slate-950\/60,
+  .bg-slate-950\/50,
+  .bg-slate-950\/40,
+  .bg-slate-800,
+  .bg-slate-800\/90,
+  .bg-slate-800\/80,
+  .bg-slate-800\/70,
+  .bg-slate-800\/60,
+  .bg-slate-800\/50,
+  .bg-slate-800\/40,
+  .bg-slate-800\/30,
+  .bg-slate-800\/20 {
+    background-color: #f1f5f9 !important;
+  }
+
+  /* Outer Crisp Borders in Day Mode */
+  .border-slate-800,
+  .border-slate-800\/90,
+  .border-slate-800\/80,
+  .border-slate-800\/60,
+  .border-slate-700,
+  .border-slate-700\/80,
+  .border-slate-700\/60,
+  .border-slate-700\/50 {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* Body & Heading Text Colors in Day Mode */
+  .text-slate-100,
+  .text-slate-200 {
+    color: #0f172a !important;
+  }
+
+  .text-slate-300,
+  .text-slate-300\/90,
+  .text-slate-300\/80,
+  .text-slate-300\/70 {
+    color: #1e293b !important;
+  }
+
+  .text-slate-400,
+  .text-slate-400\/90,
+  .text-slate-400\/80,
+  .text-slate-400\/70 {
+    color: #334155 !important;
+  }
+
+  .text-slate-500,
+  .text-slate-500\/90,
+  .text-slate-500\/80,
+  .text-slate-500\/70 {
+    color: #475569 !important;
+  }
+
+  ::placeholder,
+  .placeholder-slate-500,
+  .placeholder-slate-400 {
+    color: #64748b !important;
+  }
+
+  /* Table Headers & Distinct Sections in Day Mode */
+  thead,
+  .bg-slate-900.uppercase {
+    background-color: #e2e8f0 !important;
+    color: #1e293b !important;
+  }
+
+  /* Hover States in Day Mode */
+  .hover\:bg-slate-800:hover,
+  .hover\:bg-slate-800\/80:hover,
+  .hover\:bg-slate-800\/70:hover,
+  .hover\:bg-slate-800\/60:hover,
+  .hover\:bg-slate-800\/50:hover,
+  .hover\:bg-slate-700:hover,
+  .hover\:bg-slate-700\/80:hover,
+  .hover\:bg-slate-700\/60:hover,
+  .hover\:bg-slate-900\/60:hover {
+    background-color: #e2e8f0 !important;
+  }
+
+  .hover\:text-white:hover,
+  .hover\:text-slate-100:hover,
+  .hover\:text-slate-200:hover {
+    color: #0f172a !important;
+  }
+
+  /* High Contrast Colored Status Text in Light Mode */
+  .text-teal-100,
+  .text-teal-200,
+  .text-teal-300,
+  .text-teal-400,
+  .text-teal-100\/90,
+  .text-teal-200\/90,
+  .text-teal-300\/90,
+  .text-teal-400\/90,
+  .text-teal-100\/80,
+  .text-teal-200\/80,
+  .text-teal-300\/80,
+  .text-teal-400\/80,
+  .text-teal-100\/70,
+  .text-teal-200\/70,
+  .text-teal-300\/70,
+  .text-teal-400\/70 {
+    color: #115e59 !important;
+  }
+
+  .text-indigo-100,
+  .text-indigo-200,
+  .text-indigo-300,
+  .text-indigo-400,
+  .text-indigo-100\/90,
+  .text-indigo-200\/90,
+  .text-indigo-300\/90,
+  .text-indigo-400\/90,
+  .text-indigo-100\/80,
+  .text-indigo-200\/80,
+  .text-indigo-300\/80,
+  .text-indigo-400\/80,
+  .text-indigo-100\/70,
+  .text-indigo-200\/70,
+  .text-indigo-300\/70,
+  .text-indigo-400\/70 {
+    color: #3730a3 !important;
+  }
+
+  .text-emerald-100,
+  .text-emerald-200,
+  .text-emerald-300,
+  .text-emerald-400,
+  .text-emerald-100\/90,
+  .text-emerald-200\/90,
+  .text-emerald-300\/90,
+  .text-emerald-400\/90,
+  .text-emerald-100\/80,
+  .text-emerald-200\/80,
+  .text-emerald-300\/80,
+  .text-emerald-400\/80,
+  .text-emerald-100\/70,
+  .text-emerald-200\/70,
+  .text-emerald-300\/70,
+  .text-emerald-400\/70 {
+    color: #065f46 !important;
+  }
+
+  .text-rose-100,
+  .text-rose-200,
+  .text-rose-300,
+  .text-rose-400,
+  .text-rose-100\/90,
+  .text-rose-200\/90,
+  .text-rose-300\/90,
+  .text-rose-400\/90,
+  .text-rose-100\/80,
+  .text-rose-200\/80,
+  .text-rose-300\/80,
+  .text-rose-400\/80,
+  .text-rose-100\/70,
+  .text-rose-200\/70,
+  .text-rose-300\/70,
+  .text-rose-400\/70 {
+    color: #9f1239 !important;
+  }
+
+  .text-amber-100,
+  .text-amber-200,
+  .text-amber-300,
+  .text-amber-400,
+  .text-amber-100\/90,
+  .text-amber-200\/90,
+  .text-amber-300\/90,
+  .text-amber-400\/90,
+  .text-amber-100\/80,
+  .text-amber-200\/80,
+  .text-amber-300\/80,
+  .text-amber-400\/80,
+  .text-amber-100\/70,
+  .text-amber-200\/70,
+  .text-amber-300\/70,
+  .text-amber-400\/70 {
+    color: #92400e !important;
+  }
+
+  .text-blue-100,
+  .text-blue-200,
+  .text-blue-300,
+  .text-blue-400,
+  .text-blue-100\/90,
+  .text-blue-200\/90,
+  .text-blue-300\/90,
+  .text-blue-400\/90,
+  .text-blue-100\/80,
+  .text-blue-200\/80,
+  .text-blue-300\/80,
+  .text-blue-400\/80,
+  .text-blue-100\/70,
+  .text-blue-200\/70,
+  .text-blue-300\/70,
+  .text-blue-400\/70 {
+    color: #1e40af !important;
+  }
+
+  .text-purple-100,
+  .text-purple-200,
+  .text-purple-300,
+  .text-purple-400,
+  .text-purple-100\/90,
+  .text-purple-200\/90,
+  .text-purple-300\/90,
+  .text-purple-400\/90,
+  .text-purple-100\/80,
+  .text-purple-200\/80,
+  .text-purple-300\/80,
+  .text-purple-400\/80,
+  .text-purple-100\/70,
+  .text-purple-200\/70,
+  .text-purple-300\/70,
+  .text-purple-400\/70 {
+    color: #6b21a8 !important;
+  }
+
+  .text-cyan-100,
+  .text-cyan-200,
+  .text-cyan-300,
+  .text-cyan-400,
+  .text-cyan-100\/90,
+  .text-cyan-200\/90,
+  .text-cyan-300\/90,
+  .text-cyan-400\/90,
+  .text-cyan-100\/80,
+  .text-cyan-200\/80,
+  .text-cyan-300\/80,
+  .text-cyan-400\/80,
+  .text-cyan-100\/70,
+  .text-cyan-200\/70,
+  .text-cyan-300\/70,
+  .text-cyan-400\/70 {
+    color: #155e75 !important;
+  }
+
+  /* Ensure text-white always stays crisp white on dark buttons, badges, and primary gradient accents */
+  .text-white,
+  .text-white *,
+  button.bg-teal-600,
+  button.bg-indigo-600,
+  button.bg-rose-600,
+  button.bg-purple-600,
+  button.bg-emerald-600,
+  button.bg-amber-600,
+  .bg-teal-600,
+  .bg-indigo-600,
+  .bg-rose-600,
+  .bg-purple-600,
+  .bg-emerald-600,
+  .bg-amber-600,
+  [class*="from-indigo-600"],
+  [class*="from-purple-600"],
+  [class*="from-teal-600"],
+  [class*="from-rose-600"] {
+    color: #ffffff !important;
+  }
+
+  /* Dark Alert & Notification Banners Overrides in Light Mode */
+  .bg-rose-950,
+  .bg-rose-950\/90,
+  .bg-rose-950\/80,
+  .bg-rose-950\/70,
+  .bg-rose-950\/60 {
+    background-color: #ffe4e6 !important;
+    border-color: #fecdd3 !important;
+  }
+
+  .bg-indigo-950,
+  .bg-indigo-950\/90,
+  .bg-indigo-950\/80,
+  .bg-indigo-950\/70,
+  .bg-indigo-950\/60 {
+    background-color: #e0e7ff !important;
+    border-color: #c7d2fe !important;
+  }
+
+  .bg-amber-950,
+  .bg-amber-950\/90,
+  .bg-amber-950\/80,
+  .bg-amber-950\/70,
+  .bg-amber-950\/60 {
+    background-color: #fef3c7 !important;
+    border-color: #fde68a !important;
+  }
+
+  .bg-emerald-950,
+  .bg-emerald-950\/90,
+  .bg-emerald-950\/80,
+  .bg-emerald-950\/70,
+  .bg-emerald-950\/60 {
+    background-color: #d1fae5 !important;
+    border-color: #a7f3d0 !important;
+  }
+
+  .bg-purple-950,
+  .bg-purple-950\/90,
+  .bg-purple-950\/80,
+  .bg-purple-950\/70,
+  .bg-purple-950\/60 {
+    background-color: #f3e8ff !important;
+    border-color: #e9d5ff !important;
+  }
+
+  .bg-rose-900\/60,
+  .bg-rose-900\/80 {
+    background-color: #fecdd3 !important;
+    color: #881337 !important;
+  }
+
+  /* Override dark gradient backgrounds on cards in Light Mode so text is crisp and readable */
+  [class*="bg-gradient-"][class*="from-slate-"],
+  [class*="bg-gradient-"][class*="from-indigo-950"],
+  [class*="bg-gradient-"][class*="from-indigo-900"],
+  [class*="bg-gradient-"][class*="from-purple-950"],
+  [class*="bg-gradient-"][class*="via-indigo-950"],
+  [class*="bg-gradient-"][class*="via-slate-"] {
+    background-image: none !important;
+    background-color: #ffffff !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Soft light amber background for amber warning/notification banners in Light Mode */
+  [class*="bg-gradient-"][class*="from-amber-950"] {
+    background-image: none !important;
+    background-color: #fef3c7 !important;
+    border-color: #fde68a !important;
+  }
+
+  /* High Contrast Badge & Button Translucent Backgrounds in Light Mode */
+  .bg-teal-600\/30,
+  .bg-teal-600\/20,
+  .bg-teal-600\/10,
+  .bg-teal-500\/30,
+  .bg-teal-500\/20,
+  .bg-teal-500\/10 {
+    background-color: #ccfbf1 !important;
+    border-color: #99f6e4 !important;
+  }
+
+  .bg-indigo-600\/30,
+  .bg-indigo-600\/20,
+  .bg-indigo-600\/10,
+  .bg-indigo-500\/30,
+  .bg-indigo-500\/20,
+  .bg-indigo-500\/10 {
+    background-color: #e0e7ff !important;
+    border-color: #c7d2fe !important;
+  }
+
+  .bg-rose-600\/30,
+  .bg-rose-600\/20,
+  .bg-rose-600\/10,
+  .bg-rose-500\/30,
+  .bg-rose-500\/20,
+  .bg-rose-500\/10 {
+    background-color: #ffe4e6 !important;
+    border-color: #fecdd3 !important;
+  }
+
+  .bg-emerald-600\/30,
+  .bg-emerald-600\/20,
+  .bg-emerald-600\/10,
+  .bg-emerald-500\/30,
+  .bg-emerald-500\/20,
+  .bg-emerald-500\/10 {
+    background-color: #d1fae5 !important;
+    border-color: #a7f3d0 !important;
+  }
+
+  .bg-amber-600\/30,
+  .bg-amber-600\/20,
+  .bg-amber-600\/10,
+  .bg-amber-500\/30,
+  .bg-amber-500\/20,
+  .bg-amber-500\/10 {
+    background-color: #fef3c7 !important;
+    border-color: #fde68a !important;
+  }
+
+  .bg-purple-600\/30,
+  .bg-purple-600\/20,
+  .bg-purple-600\/10,
+  .bg-purple-500\/30,
+  .bg-purple-500\/20,
+  .bg-purple-500\/10 {
+    background-color: #f3e8ff !important;
+    border-color: #e9d5ff !important;
+  }
+
+  /* Translucent Tinted Borders in Light Mode */
+  .border-indigo-500\/40,
+  .border-indigo-500\/30,
+  .border-indigo-500\/20,
+  .border-indigo-400 {
+    border-color: #c7d2fe !important;
+  }
+
+  .border-purple-500\/40,
+  .border-purple-500\/30,
+  .border-purple-500\/20,
+  .border-purple-400 {
+    border-color: #e9d5ff !important;
+  }
+
+  .border-rose-500\/40,
+  .border-rose-500\/30,
+  .border-rose-500\/20,
+  .border-rose-400 {
+    border-color: #fecdd3 !important;
+  }
+
+  .border-amber-500\/40,
+  .border-amber-500\/30,
+  .border-amber-500\/20,
+  .border-amber-400 {
+    border-color: #fde68a !important;
+  }
+
+  .border-teal-500\/40,
+  .border-teal-500\/30,
+  .border-teal-500\/20,
+  .border-teal-400 {
+    border-color: #99f6e4 !important;
+  }
+
+  .border-emerald-500\/40,
+  .border-emerald-500\/30,
+  .border-emerald-500\/20,
+  .border-emerald-400 {
+    border-color: #a7f3d0 !important;
+  }
+
+  /* Form Elements: Inputs, Textareas, Selects */
+  input,
+  textarea,
+  select {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: #64748b !important;
+  }
+
+  select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+}
+
+/* Common UI Elements */
+.badge-magenta {
+  background-color: rgba(244, 63, 94, 0.15);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.4);
+}
+
+html:not(.dark) .badge-magenta {
+  background-color: #ffe4e6;
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+}
+
+/* Global Overflow and Word Wrapping Safety Rules for Cards & Tables */
+h1, h2, h3, h4, h5, h6, p, span, td, th, label, div {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* =========================================================
+   CUSTOM AESTHETIC SCROLLBARS (App-wide)
+   Modern, sleek, subtle dark/light responsive scrollbar design
+   ========================================================= */
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5); /* Accent indigo glow on hover */
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+/* Dark mode specific scrollbar thumb tuning */
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.65);
+}
+
+html.dark * {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Dedicated helper class for ultra-sleek scrollable containers like Sidebar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.7);
+}
+
+/* Hide scrollbar for horizontal pill bars and clean carousels */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+/* Prevent cards in grid/flex layouts from expanding beyond container bounds */
+.grid > *,
+.flex > * {
+  min-width: 0;
+}
+
+/* Recharts Tooltip styling for legibility in all themes */
+.recharts-default-tooltip {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+  border-radius: 0.75rem !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3) !important;
+}
+
+.recharts-tooltip-item,
+.recharts-tooltip-label,
+.recharts-tooltip-item-name,
+.recharts-tooltip-item-value {
+  color: #f8fafc !important;
+}
+
