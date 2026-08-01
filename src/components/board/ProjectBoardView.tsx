@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { ProjectBoardItem, ProjectBoardCategory, BoardItemType, BoardItemComment, ProjectChatMessage } from '../../types';
+import { ProjectBoardItem, ProjectBoardCategory, BoardItemType, BoardItemComment, ProjectChatMessage, ViewMode } from '../../types';
 import {
   FolderKanban,
   Plus,
@@ -58,10 +58,15 @@ import {
   Smile,
   Columns,
   Grid,
-  Filter
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 
-export const ProjectBoardView: React.FC = () => {
+interface ProjectBoardViewProps {
+  onNavigate?: (view: ViewMode) => void;
+}
+
+export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }) => {
   const {
     projectData,
     activeProjectId,
@@ -81,10 +86,6 @@ export const ProjectBoardView: React.FC = () => {
   } = useProject();
 
   const isPM = currentUser.role === 'pm';
-
-  // Primary navigation view tab
-  const [activeTab, setActiveTab] = useState<'board' | 'chat' | 'split'>('board');
-  const [sideChatOpen, setSideChatOpen] = useState(false);
 
   // Filtering for Board Items
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -206,6 +207,18 @@ export const ProjectBoardView: React.FC = () => {
     }
   };
 
+  const getCategoryDotColor = (colorName?: string) => {
+    switch (colorName) {
+      case 'purple': return 'bg-purple-400';
+      case 'teal': return 'bg-teal-400';
+      case 'amber': return 'bg-amber-400';
+      case 'rose': return 'bg-rose-400';
+      case 'emerald': return 'bg-emerald-400';
+      case 'blue': return 'bg-blue-400';
+      default: return 'bg-indigo-400';
+    }
+  };
+
   const getFileIcon = (fileType?: string) => {
     const ft = (fileType || '').toLowerCase();
     if (ft.includes('pdf')) return <FileText className="w-5 h-5 text-rose-400" />;
@@ -236,8 +249,8 @@ export const ProjectBoardView: React.FC = () => {
       linkedItemId: item.id,
       linkedItemTitle: item.title
     });
-    // Open chat tab or notify
-    setActiveTab('chat');
+    // Open chat view
+    if (onNavigate) onNavigate('chat');
   };
 
   // Sync viewingItem if comments/edits change
@@ -312,77 +325,44 @@ export const ProjectBoardView: React.FC = () => {
           </div>
         </div>
 
-        {/* VIEW NAVIGATION TABS */}
+        {/* HEADER TOOLBAR & CHAT LINK */}
         <div className="mt-5 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 min-w-0">
-          <div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full min-w-0">
-            <button
-              onClick={() => setActiveTab('board')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'board'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Grid className="w-3.5 h-3.5" />
-              <span>Knowledge Board ({projectItems.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('chat')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'chat'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <MessagesSquare className="w-3.5 h-3.5 text-indigo-300" />
-              <span>Team Discussion ({projectMessages.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('split')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
-                activeTab === 'split'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Columns className="w-3.5 h-3.5 text-purple-300" />
-              <span>Split View</span>
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs font-semibold text-slate-200 flex items-center gap-2">
+              <Grid className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Knowledge Board ({projectItems.length} items)</span>
+            </span>
           </div>
 
-          {/* SIDE CHAT TOGGLE BUTTON WHEN IN BOARD VIEW */}
-          {activeTab === 'board' && (
+          {onNavigate && (
             <button
-              onClick={() => setSideChatOpen(!sideChatOpen)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer shrink-0 ${
-                sideChatOpen
-                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40'
-                  : 'bg-slate-950/80 text-slate-300 border-slate-800 hover:border-slate-700'
-              }`}
+              onClick={() => onNavigate('chat')}
+              className="px-3.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-md"
+              title="Open full-screen Team Chat & Discussion"
             >
-              <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-              <span>{sideChatOpen ? 'Close Chat Panel' : 'Side Chat Panel'}</span>
+              <MessagesSquare className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Open Team Chat ({projectMessages.length})</span>
+              <ArrowRight className="w-3.5 h-3.5 text-indigo-400" />
             </button>
           )}
         </div>
 
-        {/* CATEGORY NAV / PILLS (Visible in Board or Split View) */}
-        {(activeTab === 'board' || activeTab === 'split') && (
-          <div className="mt-4 flex flex-wrap items-center gap-2 max-w-full min-w-0">
-            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1 shrink-0">Category:</span>
+        {/* CATEGORY NAV / PILLS */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 max-w-full min-w-0">
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider mr-1 shrink-0">Category:</span>
             
             <button
               onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
                 selectedCategory === 'all'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-950/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
+                  : 'bg-slate-950/90 text-slate-200 hover:bg-slate-800 border border-slate-800/80'
               }`}
             >
-              <span>All Items</span>
-              <span className="px-1.5 py-0.2 text-[10px] bg-slate-900/80 rounded-full font-mono">
+              <span className="whitespace-nowrap">All Items</span>
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono font-bold ${
+                selectedCategory === 'all' ? 'bg-indigo-500/40 text-white' : 'bg-slate-900 text-slate-300 border border-slate-800'
+              }`}>
                 {projectItems.length}
               </span>
             </button>
@@ -394,15 +374,17 @@ export const ProjectBoardView: React.FC = () => {
                 <button
                   key={cat.id}
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
                     isSelected
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'bg-slate-950/80 text-slate-300 hover:bg-slate-800 border border-slate-800'
+                      : 'bg-slate-950/90 text-slate-200 hover:bg-slate-800 border border-slate-800/80'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full bg-${cat.color}-400 shrink-0`} />
-                  <span className="truncate max-w-[160px]">{cat.name}</span>
-                  <span className="px-1.5 py-0.2 text-[10px] bg-slate-900/80 rounded-full font-mono text-slate-400 shrink-0">
+                  <span className={`w-2 h-2 rounded-full ${getCategoryDotColor(cat.color)} shrink-0`} />
+                  <span className="whitespace-nowrap">{cat.name}</span>
+                  <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono font-bold shrink-0 ${
+                    isSelected ? 'bg-indigo-500/40 text-white' : 'bg-slate-900 text-slate-300 border border-slate-800'
+                  }`}>
                     {count}
                   </span>
                 </button>
@@ -411,24 +393,25 @@ export const ProjectBoardView: React.FC = () => {
 
             <button
               onClick={() => setSelectedCategory('uncategorized')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-2 ${
                 selectedCategory === 'uncategorized'
                   ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-950/80 text-slate-400 hover:bg-slate-800 border border-slate-800'
+                  : 'bg-slate-950/90 text-slate-200 hover:bg-slate-800 border border-slate-800/80'
               }`}
             >
-              <span>Uncategorized</span>
-              <span className="px-1.5 py-0.2 text-[10px] bg-slate-900/80 rounded-full font-mono">
+              <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+              <span className="whitespace-nowrap">Uncategorized</span>
+              <span className={`px-2 py-0.5 text-[10px] rounded-full font-mono font-bold shrink-0 ${
+                selectedCategory === 'uncategorized' ? 'bg-indigo-500/40 text-white' : 'bg-slate-900 text-slate-300 border border-slate-800'
+              }`}>
                 {projectItems.filter(i => !i.categoryId).length}
               </span>
             </button>
           </div>
-        )}
       </div>
 
-      {/* SEARCH AND FILTERS BAR (For Board View) */}
-      {(activeTab === 'board' || activeTab === 'split') && (
-        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-lg flex flex-col xl:flex-row xl:items-center justify-between gap-3 min-w-0">
+      {/* SEARCH AND FILTERS BAR */}
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-4 shadow-lg flex flex-col xl:flex-row xl:items-center justify-between gap-3 min-w-0">
           {/* TYPE TABS */}
           <div className="flex flex-wrap items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800/80 max-w-full min-w-0">
             <button
@@ -525,15 +508,10 @@ export const ProjectBoardView: React.FC = () => {
             </select>
           </div>
         </div>
-      )}
 
-      {/* MAIN CONTENT DISPLAY AREA (BOARD, CHAT, OR SPLIT) */}
-      <div className={activeTab === 'split' || (activeTab === 'board' && sideChatOpen) ? 'grid grid-cols-1 lg:grid-cols-12 gap-6 items-start min-w-0' : ''}>
-        
-        {/* BOARD CARDS COLUMN */}
-        {(activeTab === 'board' || activeTab === 'split') && (
-          <div className={activeTab === 'split' || sideChatOpen ? 'lg:col-span-7 space-y-4' : 'space-y-4'}>
-            {filteredItems.length === 0 ? (
+      {/* MAIN BOARD CONTENT DISPLAY AREA */}
+      <div className="space-y-4">
+        {filteredItems.length === 0 ? (
               <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-12 text-center space-y-3">
                 <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400">
                   <FolderKanban className="w-6 h-6" />
@@ -566,7 +544,7 @@ export const ProjectBoardView: React.FC = () => {
                 </div>
               </div>
             ) : (
-              <div className={`grid grid-cols-1 ${activeTab === 'split' || sideChatOpen ? 'md:grid-cols-1 xl:grid-cols-2' : 'md:grid-cols-2 lg:grid-cols-3'} gap-4`}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredItems.map(item => {
                   const canEdit = canEditItem(item);
                   const category = projectCategories.find(c => c.id === item.categoryId);
@@ -818,28 +796,6 @@ export const ProjectBoardView: React.FC = () => {
                 })}
               </div>
             )}
-          </div>
-        )}
-
-        {/* CHAT / DISCUSSION COLUMN (For Chat Tab, Split View, or Side Panel) */}
-        {(activeTab === 'chat' || activeTab === 'split' || (activeTab === 'board' && sideChatOpen)) && (
-          <div className={activeTab === 'chat' ? 'w-full min-w-0' : 'lg:col-span-5 lg:sticky lg:top-20 min-w-0 z-10'}>
-            <TeamChatView
-              projectMessages={projectMessages}
-              projectItems={projectItems}
-              currentUser={currentUser}
-              onSendMessage={addProjectChatMessage}
-              onDeleteMessage={deleteProjectChatMessage}
-              onToggleReaction={toggleProjectChatMessageReaction}
-              onTogglePin={togglePinProjectChatMessage}
-              onViewBoardItem={(itemId) => {
-                const found = projectItems.find(i => i.id === itemId);
-                if (found) setViewingItem(found);
-              }}
-            />
-          </div>
-        )}
-
       </div>
 
       {/* VIEW BOARD ITEM DETAILS & COMMENT THREAD MODAL */}
@@ -1297,9 +1253,9 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
   };
 
   return (
-    <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col space-y-4 max-w-full min-w-0 overflow-hidden">
+    <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col space-y-3 max-w-full min-w-0 overflow-hidden h-full">
       {/* CHAT HEADER & FILTERS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3 min-w-0 shrink-0">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="p-2 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl shrink-0">
             <MessagesSquare className="w-5 h-5" />
@@ -1324,7 +1280,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
       </div>
 
       {/* FILTER TABS */}
-      <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
+      <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0 shrink-0">
         <button
           onClick={() => setFilterType('all')}
           className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
@@ -1372,7 +1328,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
       </div>
 
       {/* MESSAGES STREAM LIST */}
-      <div className="space-y-3 min-h-[280px] max-h-[480px] sm:max-h-[520px] overflow-y-auto pr-1 min-w-0">
+      <div className="space-y-3 flex-1 min-h-[220px] overflow-y-auto pr-1 min-w-0 my-1">
         {filteredMessages.length === 0 ? (
           <div className="bg-slate-950 p-8 rounded-2xl border border-slate-800 text-center space-y-2">
             <MessageSquare className="w-8 h-8 text-slate-600 mx-auto" />
@@ -1522,7 +1478,7 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
       </div>
 
       {/* COMPOSER BAR */}
-      <form onSubmit={handleSend} className="space-y-2 pt-2 border-t border-slate-800 min-w-0">
+      <form onSubmit={handleSend} className="space-y-2 pt-2 border-t border-slate-800 min-w-0 shrink-0">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           {/* TYPE SELECTOR */}
           <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 max-w-full overflow-x-auto no-scrollbar shrink-0">

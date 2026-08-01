@@ -14,6 +14,7 @@ import { ReportsView } from './components/reports/ReportsView';
 import { AuditTrailView } from './components/audit/AuditTrailView';
 import { ChangeManagementView } from './components/change/ChangeManagementView';
 import { ProjectBoardView } from './components/board/ProjectBoardView';
+import { ProjectChatView } from './components/chat/ProjectChatView';
 
 import { TaskModal } from './components/modals/TaskModal';
 import { RaidModal } from './components/modals/RaidModal';
@@ -160,7 +161,11 @@ function MainLayout() {
           )}
 
           {currentView === 'project_board' && (
-            <ProjectBoardView />
+            <ProjectBoardView onNavigate={setCurrentView} />
+          )}
+
+          {currentView === 'chat' && (
+            <ProjectChatView onNavigate={setCurrentView} />
           )}
 
           {currentView === 'reports' && (

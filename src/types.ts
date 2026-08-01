@@ -319,7 +319,7 @@ export interface ProjectData {
   statusPercentages?: Record<TaskStatus, number>;
 }
 
-export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board';
+export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board' | 'chat';
 
 export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'custom';
 

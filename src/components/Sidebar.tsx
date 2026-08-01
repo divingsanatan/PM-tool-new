@@ -24,7 +24,8 @@ import {
   ShieldCheck,
   Briefcase,
   Key,
-  Sparkles
+  Sparkles,
+  MessagesSquare
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -147,6 +148,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Users className="w-4 h-4 shrink-0" />
     },
     {
+      id: 'chat',
+      label: 'Team Chat',
+      shortLabel: 'Chat',
+      category: 'team',
+      icon: <MessagesSquare className="w-4 h-4 shrink-0" />,
+      badge: (projectData.boardMessages || []).length > 0 ? (projectData.boardMessages || []).length : undefined,
+      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+    },
+    {
       id: 'raid',
       label: 'RAID Management',
       shortLabel: 'RAID',
@@ -157,7 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'change',
-      label: 'Change Control (PMI)',
+      label: 'Change Control',
       shortLabel: 'Change',
       category: 'governance',
       icon: <GitPullRequest className="w-4 h-4 shrink-0" />,
@@ -166,14 +176,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'reports',
-      label: 'Reports & AI Advisor',
+      label: 'AI Reports & Advisor',
       shortLabel: 'Reports',
       category: 'analytics',
       icon: <FileText className="w-4 h-4 shrink-0" />
     },
     {
       id: 'audit',
-      label: 'Audit Trail & Logs',
+      label: 'Audit Trail',
       shortLabel: 'Audit',
       category: 'analytics',
       icon: <History className="w-4 h-4 shrink-0" />
