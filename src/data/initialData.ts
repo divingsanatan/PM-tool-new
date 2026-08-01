@@ -265,6 +265,7 @@ export const initialProjectData: ProjectData = {
       actualCost: 3800,
       completionPercent: 80,
       dependencies: ["task-101:FS"],
+      linkedBugIds: ["task-bug-1"],
       tags: ["EVM", "Analytics", "Engine"]
     },
     {
@@ -396,6 +397,60 @@ export const initialProjectData: ProjectData = {
       completionPercent: 0,
       dependencies: ["task-103:FS", "task-106:SS"],
       tags: ["AI", "Gemini", "Reporting"]
+    },
+    {
+      id: "task-bug-1",
+      type: "bug",
+      title: "SPI Calculation Overflow on Zero-Cost Tasks",
+      description: "Division by zero occurs in EVM engine when task baseline cost is 0 and SPI calculation runs.",
+      epicId: "epic-2",
+      featureId: "feat-2",
+      milestoneId: "m-2",
+      status: "in_progress",
+      priority: "urgent",
+      assigneeIds: ["sh-3"],
+      raci: {
+        responsible: ["sh-3"],
+        accountable: ["sh-1"],
+        consulted: ["sh-2"],
+        informed: ["sh-4"]
+      },
+      startDate: "2026-07-15",
+      dueDate: "2026-07-30",
+      estimatedHours: 8,
+      actualHours: 4,
+      plannedCost: 720,
+      actualCost: 360,
+      completionPercent: 50,
+      dependencies: [],
+      tags: ["Bug", "EVM", "Defect"]
+    },
+    {
+      id: "task-bug-2",
+      type: "bug",
+      title: "Gantt Timeline Drag Snap Offset on Retina Screens",
+      description: "Dragging a task bar on high-DPI monitors causes a 2-day date alignment error.",
+      epicId: "epic-2",
+      featureId: "feat-2",
+      milestoneId: "m-2",
+      status: "todo",
+      priority: "high",
+      assigneeIds: ["sh-4"],
+      raci: {
+        responsible: ["sh-4"],
+        accountable: ["sh-3"],
+        consulted: ["sh-2"],
+        informed: ["sh-1"]
+      },
+      startDate: "2026-07-20",
+      dueDate: "2026-08-05",
+      estimatedHours: 12,
+      actualHours: 0,
+      plannedCost: 1020,
+      actualCost: 0,
+      completionPercent: 0,
+      dependencies: [],
+      tags: ["Bug", "Gantt", "UI"]
     }
   ],
   subtasks: [
@@ -638,6 +693,241 @@ export const initialProjectData: ProjectData = {
       scopeImpactDescription: "Adds Stripe webhooks, invoice generation queue, and billing settings tab.",
       justification: "Client request from recent steering committee review.",
       proposedSolution: "De-prioritize non-critical reporting export widgets to offset scope creep."
+    }
+  ],
+  boardCategories: [
+    {
+      id: "cat-1",
+      projectId: "proj-1",
+      name: "Architecture & Specs",
+      description: "Technical design blueprints, DB schemas, and system specs",
+      color: "indigo"
+    },
+    {
+      id: "cat-2",
+      projectId: "proj-1",
+      name: "Design & UX Assets",
+      description: "Figma wireframes, UI kits, and design system tokens",
+      color: "purple"
+    },
+    {
+      id: "cat-3",
+      projectId: "proj-1",
+      name: "Dev Links & Environments",
+      description: "Grafana dashboards, API endpoints, and staging links",
+      color: "teal"
+    },
+    {
+      id: "cat-4",
+      projectId: "proj-1",
+      name: "Onboarding & Guidelines",
+      description: "Developer setup guides, coding standards, and RACI rules",
+      color: "amber"
+    }
+  ],
+  boardItems: [
+    {
+      id: "board-item-1",
+      projectId: "proj-1",
+      categoryId: "cat-1",
+      type: "note",
+      title: "Real-Time WebSocket & EVM Calculation Engine Spec",
+      content: `<h2 style="color: #818cf8; font-size: 18px; font-weight: 700; margin-bottom: 8px;">System Architecture Summary</h2>
+<p style="color: #cbd5e1; line-height: 1.6;">The <strong>Apex PM Platform</strong> utilizes a server-authoritative Earned Value Management (EVM) calculation engine. All task status changes trigger an instant recalculation of <em>Planned Value (PV)</em>, <em>Earned Value (EV)</em>, and <em>Actual Cost (AC)</em>.</p>
+<hr style="border-color: #334155; margin: 12px 0;" />
+<h3 style="color: #94a3b8; font-size: 14px; font-weight: 600; margin-bottom: 6px;">Key Calculation Rules:</h3>
+<ul style="color: #cbd5e1; padding-left: 20px; list-style-type: disc;">
+  <li><strong>PV (Planned Value):</strong> Baseline budget &times; Scheduled Completion %</li>
+  <li><strong>EV (Earned Value):</strong> Baseline budget &times; Actual Completion %</li>
+  <li><strong>AC (Actual Cost):</strong> Sum of logged stakeholder labor costs and overhead.</li>
+</ul>
+<pre style="background: #0f172a; padding: 12px; border-radius: 8px; font-family: monospace; color: #38bdf8; margin-top: 10px; border: 1px solid #1e293b;">
+// Example EVM formulas in TypeScript
+const SPI = EV / PV;
+const CPI = EV / AC;
+const EAC = BAC / CPI;
+</pre>`,
+      tags: ["Architecture", "EVM", "Specs"],
+      color: "indigo",
+      createdBy: "user-pm-1",
+      createdByName: "Alex Morgan",
+      createdByEmail: "alex.m@apex.io",
+      createdAt: "2026-07-10T10:00:00Z",
+      updatedAt: "2026-07-28T14:30:00Z",
+      isPinned: true,
+      comments: [
+        {
+          id: "cmt-101",
+          itemId: "board-item-1",
+          userId: "user-sh-2",
+          userName: "Dr. Elena Rostova",
+          userEmail: "elena.r@apex.io",
+          userAvatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150",
+          userRole: "Principal Architect",
+          content: "I reviewed the EVM calculation formulas. Looks solid! Make sure we cache EAC calculations for large projects with >500 tasks.",
+          createdAt: "2026-07-28T15:10:00Z",
+          reactions: { "👍": ["Alex Morgan", "Marcus Vance"], "💡": ["Priya Sharma"] }
+        },
+        {
+          id: "cmt-102",
+          itemId: "board-item-1",
+          userId: "user-sh-3",
+          userName: "Marcus Vance",
+          userEmail: "marcus.v@apex.io",
+          userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+          userRole: "Senior Engineer",
+          content: "Added unit test coverage for SPI/CPI edge cases when actual cost (AC) is zero.",
+          createdAt: "2026-07-28T16:45:00Z",
+          reactions: { "🚀": ["Alex Morgan"] }
+        }
+      ]
+    },
+    {
+      id: "board-item-2",
+      projectId: "proj-1",
+      categoryId: "cat-2",
+      type: "link",
+      title: "Figma UI Kit & Dark Luxury Design System",
+      content: "Official Figma board containing high-fidelity desktop and tablet screens, color tokens, and Gantt chart drag-and-drop interactions.",
+      url: "https://figma.com/file/apex-pm-v2-design-system",
+      tags: ["Figma", "Design", "UI"],
+      color: "purple",
+      createdBy: "user-sh-4",
+      createdByName: "Priya Sharma",
+      createdByEmail: "priya.s@apex.io",
+      createdAt: "2026-07-12T11:20:00Z",
+      updatedAt: "2026-07-12T11:20:00Z",
+      isPinned: true,
+      comments: [
+        {
+          id: "cmt-103",
+          itemId: "board-item-2",
+          userId: "user-pm-1",
+          userName: "Alex Morgan",
+          userEmail: "alex.m@apex.io",
+          userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
+          userRole: "Project Manager",
+          content: "Please ensure contrast ratios pass WCAG AA standards for the Gantt chart status badges.",
+          createdAt: "2026-07-13T09:00:00Z",
+          reactions: { "👍": ["Priya Sharma"] }
+        }
+      ]
+    },
+    {
+      id: "board-item-3",
+      projectId: "proj-1",
+      categoryId: "cat-3",
+      type: "link",
+      title: "Grafana Production Telemetry & Latency Dashboard",
+      content: "Real-time Grafana dashboard monitoring WebSocket packet throughput, database IOPS, and API latency metrics across US-East and EU-West regions.",
+      url: "https://grafana.apex.io/d/evm-realtime-metrics",
+      tags: ["Monitoring", "Grafana", "DevOps"],
+      color: "teal",
+      createdBy: "user-sh-5",
+      createdByName: "David Chen",
+      createdByEmail: "david.c@apex.io",
+      createdAt: "2026-07-15T09:15:00Z",
+      updatedAt: "2026-07-20T16:00:00Z"
+    },
+    {
+      id: "board-item-4",
+      projectId: "proj-1",
+      categoryId: "cat-1",
+      type: "file",
+      title: "Apex_Platform_Technical_Specification_v2.4.pdf",
+      content: "Comprehensive engineering blueprint describing RACI matrix propagation, change management workflows, and audit logging structures.",
+      fileName: "Apex_Platform_Technical_Specification_v2.4.pdf",
+      fileSize: "4.8 MB",
+      fileType: "PDF",
+      url: "https://assets.apex.io/docs/Apex_Platform_Technical_Specification_v2.4.pdf",
+      tags: ["PDF", "Blueprint", "Spec"],
+      color: "slate",
+      createdBy: "user-sh-2",
+      createdByName: "Dr. Elena Rostova",
+      createdByEmail: "elena.r@apex.io",
+      createdAt: "2026-07-18T14:45:00Z",
+      updatedAt: "2026-07-18T14:45:00Z"
+    },
+    {
+      id: "board-item-5",
+      projectId: "proj-1",
+      categoryId: "cat-4",
+      type: "note",
+      title: "Team Onboarding & Coding Standards Checklist",
+      content: `<h3 style="color: #f59e0b; font-size: 16px; font-weight: 600;">Quick Start Guide for New Engineers</h3>
+<p style="color: #cbd5e1; line-height: 1.6;">Welcome to the Apex PM core development team! Before submitting pull requests, please complete these steps:</p>
+<ol style="color: #cbd5e1; padding-left: 20px; margin-top: 8px;">
+  <li>Clone repository & copy <code>.env.example</code> to <code>.env</code>.</li>
+  <li>Run <code>npm install</code> and verify linting with <code>npm run lint</code>.</li>
+  <li>Ensure all new state methods in <code>ProjectContext</code> update audit trails.</li>
+</ol>
+<div style="background: rgba(245, 158, 11, 0.1); padding: 10px; border-left: 3px solid #f59e0b; border-radius: 6px; margin-top: 12px; color: #fde68a;">
+  <strong>Note:</strong> Always link work items to relevant epics and RACI stakeholders before marking tasks complete.
+</div>`,
+      tags: ["Onboarding", "Standards", "Process"],
+      color: "amber",
+      createdBy: "user-sh-3",
+      createdByName: "Marcus Vance",
+      createdByEmail: "marcus.v@apex.io",
+      createdAt: "2026-07-22T08:30:00Z",
+      updatedAt: "2026-07-22T08:30:00Z"
+    }
+  ],
+  boardMessages: [
+    {
+      id: "msg-101",
+      projectId: "proj-1",
+      userId: "user-pm-1",
+      userName: "Alex Morgan",
+      userEmail: "alex.m@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
+      userRole: "Project Manager",
+      content: "📢 Welcome to the Project Board & Team Discussion Hub! Feel free to add technical notes, Figma links, or spec PDFs and ask questions directly on cards or right here in chat.",
+      createdAt: "2026-07-28T10:00:00Z",
+      type: "announcement",
+      isPinned: true,
+      reactions: { "🚀": ["Marcus Vance", "Dr. Elena Rostova", "Priya Sharma"], "👍": ["David Chen"] }
+    },
+    {
+      id: "msg-102",
+      projectId: "proj-1",
+      userId: "user-sh-3",
+      userName: "Marcus Vance",
+      userEmail: "marcus.v@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150",
+      userRole: "Senior Engineer",
+      content: "Hey team! I updated the WebSocket & EVM Calculation Note on the board with unit testing formulas. Let me know if you need edge case coverage.",
+      createdAt: "2026-07-28T14:35:00Z",
+      type: "item_reference",
+      linkedItemId: "board-item-1",
+      linkedItemTitle: "Real-Time WebSocket & EVM Calculation Engine Spec",
+      reactions: { "👍": ["Alex Morgan", "Dr. Elena Rostova"] }
+    },
+    {
+      id: "msg-103",
+      projectId: "proj-1",
+      userId: "user-sh-2",
+      userName: "Dr. Elena Rostova",
+      userEmail: "elena.r@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150",
+      userRole: "Principal Architect",
+      content: "Are we confirming the Sprint 3 Architecture Review for Thursday 2:00 PM EST?",
+      createdAt: "2026-07-29T09:15:00Z",
+      type: "question",
+      reactions: { "❓": ["David Chen"] }
+    },
+    {
+      id: "msg-104",
+      projectId: "proj-1",
+      userId: "user-pm-1",
+      userName: "Alex Morgan",
+      userEmail: "alex.m@apex.io",
+      userAvatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
+      userRole: "Project Manager",
+      content: "Yes, Thursday 2:00 PM EST confirmed! I've added the calendar invite link to the Dev Links category.",
+      createdAt: "2026-07-29T09:20:00Z",
+      type: "chat",
+      reactions: { "🎉": ["Dr. Elena Rostova", "Priya Sharma"] }
     }
   ]
 };

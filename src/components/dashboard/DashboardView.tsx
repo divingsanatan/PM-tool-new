@@ -150,11 +150,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
   const achievedMilestones = projectData.milestones.filter(m => m.status === 'achieved').length;
 
-  // 1. Calculate Effort / SP Ratio
-  const totalEstimatedHours = projectData.tasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) +
-    projectData.subtasks.reduce((sum, st) => sum + (st.estimatedHours || 0), 0);
-  const totalActualHours = projectData.tasks.reduce((sum, t) => sum + (t.actualHours || 0), 0) +
-    projectData.subtasks.reduce((sum, st) => sum + (st.actualHours || 0), 0);
+  // 1. Calculate Effort / SP Ratio (excluding 'on_hold' tasks)
+  const activeTasksForEffort = projectData.tasks.filter(t => t.status !== 'on_hold');
+  const activeTaskIds = new Set(activeTasksForEffort.map(t => t.id));
+  const activeSubtasksForEffort = projectData.subtasks.filter(st => activeTaskIds.has(st.taskId));
+
+  const totalEstimatedHours = activeTasksForEffort.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) +
+    activeSubtasksForEffort.reduce((sum, st) => sum + (st.estimatedHours || 0), 0);
+  const totalActualHours = activeTasksForEffort.reduce((sum, t) => sum + (t.actualHours || 0), 0) +
+    activeSubtasksForEffort.reduce((sum, st) => sum + (st.actualHours || 0), 0);
   const effortRatio = totalEstimatedHours > 0 ? totalActualHours / totalEstimatedHours : 1.0;
 
   // 2. Identify Dependency Schedule Conflicts
@@ -204,7 +208,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // --- Feature-Level EVM Metrics ---
   const featurePerformanceList = projectData.features.map(feature => {
-    const featureTasks = projectData.tasks.filter(t => t.featureId === feature.id);
+    const featureTasks = projectData.tasks.filter(t => t.featureId === feature.id && t.status !== 'on_hold');
     const featureBAC = featureTasks.reduce((sum, t) => sum + (t.plannedCost || 0), 0);
     const featureAC = featureTasks.reduce((sum, t) => sum + (t.actualCost || 0), 0);
     const featureEV = featureTasks.reduce((sum, t) => sum + ((t.plannedCost || 0) * ((t.completionPercent || 0) / 100)), 0);
@@ -1824,7 +1828,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>Executive Performance Takeaways & Strategic Summary</span>
           </span>
           <p className="text-slate-400 leading-relaxed">
-            Project <span className="text-slate-200 font-semibold">{projectData.projectName} ({projectData.projectCode})</span> is currently tracking with an Earned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.earnedValue)}</span> against a Planned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.plannedValue)}</span>. Overall SPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.spi.toFixed(2)}</span> and CPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.cpi.toFixed(2)}</span>. To ensure on-time delivery by <span className="text-slate-200 font-mono">{projectData.targetEndDate}</span>, monitor active RAID items and stakeholder capacity limits in the dedicated view modules.
+            Project <span className="text-slate-200 font-semibold">{projectData.projectName} ({projectData.projectCode})</span> is currently tracking with an Earned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.earnedValue)}</span> against a Planned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.plannedValue)}</span>. Overall SPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.spi.toFixed(2)}</span> and CPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.cpi.toFixed(2)}</span> <span className="text-slate-500 font-normal text-[11px]">(Note: "On Hold" work items are excluded from schedule/EVM performance metrics to prevent timeline distortion)</span>. To ensure on-time delivery by <span className="text-slate-200 font-mono">{projectData.targetEndDate}</span>, monitor active RAID items and stakeholder capacity limits in the dedicated view modules.
           </p>
         </div>
 

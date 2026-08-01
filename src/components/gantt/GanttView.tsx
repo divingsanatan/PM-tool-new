@@ -420,7 +420,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                       className={`w-2.5 h-2.5 rounded-full shrink-0 ${
                         task.status === 'done' ? 'bg-emerald-400 ring-2 ring-emerald-400/20' :
                         task.status === 'in_progress' ? 'bg-indigo-400 ring-2 ring-indigo-400/20' :
+                        task.status === 'demoable' ? 'bg-teal-400 ring-2 ring-teal-400/20' :
                         task.status === 'review' ? 'bg-purple-400 ring-2 ring-purple-400/20' :
+                        task.status === 'on_hold' ? 'bg-amber-400 ring-2 ring-amber-400/20' :
                         task.status === 'blocked' ? 'bg-rose-500 ring-2 ring-rose-500/20' : 'bg-slate-500'
                       }`}
                       title={`Status: ${task.status.replace('_', ' ')}`}
@@ -579,6 +581,8 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                           ? 'bg-rose-600/90 border-rose-400 shadow-rose-950/50 hover:bg-rose-500'
                           : task.status === 'done'
                           ? 'bg-emerald-600/90 border-emerald-400 shadow-emerald-950/50 hover:bg-emerald-500'
+                          : task.status === 'demoable'
+                          ? 'bg-teal-600/90 border-teal-400 shadow-teal-950/50 hover:bg-teal-500'
                           : task.status === 'blocked'
                           ? 'bg-rose-700/90 border-rose-400'
                           : 'bg-indigo-600/90 border-indigo-400 shadow-indigo-950/50 hover:bg-indigo-500'

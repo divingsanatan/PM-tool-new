@@ -1,28 +1,33 @@
 import { Task, Subtask, Stakeholder, Feature, Milestone, Epic, TaskStatus } from '../types';
 
+export const DEFAULT_STATUS_PERCENTAGES: Record<TaskStatus, number> = {
+  todo: 0,
+  in_progress: 40,
+  on_hold: 0,
+  blocked: 50,
+  demoable: 80,
+  review: 80,
+  done: 100
+};
+
 /**
- * Returns completion percentage based strictly on status:
+ * Returns completion percentage based on status and configurable PM thresholds:
  * - todo (Not Started): 0%
  * - in_progress: 40%
- * - blocked: 20%
+ * - on_hold: 0%
+ * - blocked: 50%
+ * - demoable (Demo-able): 80%
  * - review (In Testing/Review): 80%
  * - done (Completed): 100%
  */
-export function getStatusProgress(status: TaskStatus): number {
-  switch (status) {
-    case 'todo':
-      return 0;
-    case 'blocked':
-      return 20;
-    case 'in_progress':
-      return 40;
-    case 'review':
-      return 80;
-    case 'done':
-      return 100;
-    default:
-      return 0;
+export function getStatusProgress(
+  status: TaskStatus,
+  customPercentages?: Partial<Record<TaskStatus, number>>
+): number {
+  if (customPercentages && typeof customPercentages[status] === 'number') {
+    return customPercentages[status]!;
   }
+  return DEFAULT_STATUS_PERCENTAGES[status] ?? 0;
 }
 
 /**
@@ -150,7 +155,8 @@ export interface TaskEffectiveValues {
 export function getTaskEffectiveValues(
   task: Task,
   subtasks: Subtask[] = [],
-  stakeholders: Stakeholder[] = []
+  stakeholders: Stakeholder[] = [],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ): TaskEffectiveValues {
   const taskSubtasks = subtasks.filter(st => st.taskId === task.id);
   const allAssigneeIds = getTaskAllAssigneeIds(task, taskSubtasks);
@@ -207,7 +213,7 @@ export function getTaskEffectiveValues(
     const actH = task.actualHours || 0;
     const plannedCost = Math.round(estH * avgHourlyRate);
     const actualCost = Math.round(actH * avgHourlyRate);
-    const completionPercent = getStatusProgress(task.status);
+    const completionPercent = getStatusProgress(task.status, statusPercentages);
 
     return {
       estimatedHours: estH,
@@ -222,6 +228,109 @@ export function getTaskEffectiveValues(
       assigneeIds: allAssigneeIds
     };
   }
+}
+
+/**
+ * Calculates task actual hours based on status timestamps:
+ * - inProgressAt: when status moved to 'in_progress'
+ * - demoableAt: when status moved to 'demoable' (or completed)
+ */
+export function calculateTimestampActualHours(
+  task: Partial<Task>,
+  existingTask?: Task
+): { actualHours: number; inProgressAt?: string; demoableAt?: string } {
+  let inProgressAt = task.inProgressAt || existingTask?.inProgressAt;
+  let demoableAt = task.demoableAt || existingTask?.demoableAt;
+  const status = task.status || existingTask?.status || 'todo';
+
+  const isNowInProgress = status === 'in_progress';
+  const isNowDemoableOrPast = status === 'demoable' || status === 'review' || status === 'done';
+
+  // Record timestamp when status changes to in_progress
+  if (isNowInProgress && !inProgressAt) {
+    inProgressAt = new Date().toISOString();
+  }
+
+  // Record timestamp when status changes to demoable or beyond
+  if (isNowDemoableOrPast && !demoableAt) {
+    demoableAt = new Date().toISOString();
+    if (!inProgressAt) {
+      if (existingTask?.startDate) {
+        inProgressAt = new Date(existingTask.startDate + 'T09:00:00').toISOString();
+      } else if (task.startDate) {
+        inProgressAt = new Date(task.startDate + 'T09:00:00').toISOString();
+      } else {
+        const estH = task.estimatedHours || existingTask?.estimatedHours || 8;
+        inProgressAt = new Date(Date.now() - estH * 3600000).toISOString();
+      }
+    }
+  }
+
+  let actualHours = task.actualHours ?? existingTask?.actualHours ?? 0;
+
+  if (inProgressAt && demoableAt) {
+    const startMs = new Date(inProgressAt).getTime();
+    const endMs = new Date(demoableAt).getTime();
+    if (!isNaN(startMs) && !isNaN(endMs) && endMs >= startMs) {
+      const diffHours = (endMs - startMs) / (1000 * 60 * 60);
+      actualHours = Math.max(0.1, Math.round(diffHours * 10) / 10);
+    }
+  } else if (inProgressAt && isNowInProgress) {
+    const startMs = new Date(inProgressAt).getTime();
+    const nowMs = Date.now();
+    if (!isNaN(startMs) && nowMs >= startMs) {
+      const diffHours = (nowMs - startMs) / (1000 * 60 * 60);
+      actualHours = Math.max(0.1, Math.round(diffHours * 10) / 10);
+    }
+  } else if (status === 'todo' && task.actualHours === undefined && !existingTask?.actualHours) {
+    actualHours = 0;
+  }
+
+  return { actualHours, inProgressAt, demoableAt };
+}
+
+/**
+ * Computes Epic Effective Values by aggregating its child features and tasks
+ */
+export function getEpicEffectiveValues(
+  epicOrId: Epic | string,
+  features: Feature[],
+  tasks: Task[],
+  subtasks: Subtask[],
+  stakeholders: Stakeholder[]
+) {
+  const eId = typeof epicOrId === 'string' ? epicOrId : epicOrId.id;
+  const epicFeatureIds = new Set(features.filter(f => f.epicId === eId).map(f => f.id));
+  const epicTasks = tasks.filter(t => t.epicId === eId || (t.featureId && epicFeatureIds.has(t.featureId)));
+  const allAssigneeIds = getEpicAllAssigneeIds(eId, features, tasks, subtasks);
+
+  let totalEstHours = 0;
+  let totalActHours = 0;
+  let totalPlannedCost = 0;
+  let totalActualCost = 0;
+  let sumCompletion = 0;
+
+  epicTasks.forEach(task => {
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    totalEstHours += eff.estimatedHours;
+    totalActHours += eff.actualHours;
+    totalPlannedCost += eff.plannedCost;
+    totalActualCost += eff.actualCost;
+    sumCompletion += eff.completionPercent;
+  });
+
+  const completion = epicTasks.length > 0 ? Math.round(sumCompletion / epicTasks.length) : 0;
+
+  return {
+    taskCount: epicTasks.length,
+    totalTasks: epicTasks.length,
+    estimatedHours: totalEstHours,
+    actualHours: totalActHours,
+    plannedCost: totalPlannedCost,
+    actualCost: totalActualCost,
+    completionPercent: completion,
+    assigneeIds: allAssigneeIds
+  };
 }
 
 /**

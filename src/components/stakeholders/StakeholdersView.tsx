@@ -64,10 +64,10 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
     <div id="stakeholders-view" className="space-y-6">
       {/* Top Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 border border-slate-800 p-5 rounded-2xl">
-        <div>
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-teal-400" />
-            <h2 className="text-xl font-bold text-slate-100">Project Stakeholders & Team Directory</h2>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2.5">
+            <Users className="w-5 h-5 text-teal-400 shrink-0" />
+            <h2 className="text-xl font-bold text-slate-100 min-w-0 truncate sm:whitespace-normal">Project Stakeholders & Team Directory</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
             Manage team roles, internal & external categories, capacity limits, billable rates, and skills.
@@ -75,7 +75,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
         </div>
 
         {isPM && (
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {onOpenInviteModal && (
               <button
                 onClick={() => onOpenInviteModal()}
@@ -98,7 +98,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
 
       {/* ClickUp Style Quick Add Member Bar (PM Only) */}
       {isPM ? (
-        <div id="quick-stakeholder-bar" className="bg-slate-900 border border-teal-500/40 p-3.5 rounded-2xl shadow-lg relative space-y-2">
+        <div id="quick-stakeholder-bar" className="bg-slate-900 border border-teal-500/40 p-3.5 rounded-2xl shadow-lg relative space-y-2.5">
           {toastMessage && (
             <div className="absolute top-2 right-4 bg-emerald-500 text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-md animate-bounce flex items-center gap-1 z-20">
               <Zap className="w-3.5 h-3.5" />
@@ -113,7 +113,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2">
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
             <input
               type="text"
               placeholder="Full Name and press Enter... (e.g. Alex Morgan)"
@@ -125,10 +125,10 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                   handleQuickAddStakeholder();
                 }
               }}
-              className="flex-1 bg-slate-950 border border-slate-700 focus:border-teal-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none shadow-inner min-h-[40px]"
+              className="flex-1 min-w-[220px] bg-slate-950 border border-slate-700 focus:border-teal-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none shadow-inner min-h-[40px]"
             />
 
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
               {/* Category Dropdown */}
               <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl min-h-[40px]">
                 <select

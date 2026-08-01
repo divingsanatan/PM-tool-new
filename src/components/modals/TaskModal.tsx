@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { Task, Priority, TaskStatus } from '../../types';
-import { X, CheckSquare, DollarSign, Clock, Calendar, Users, Calculator, ShieldCheck, Link2, Plus, AlertTriangle, Trash2, Flag, Bookmark, Layers } from 'lucide-react';
+import { Task, Priority, TaskStatus, WorkItemType } from '../../types';
+import { X, CheckSquare, DollarSign, Clock, Calendar, Users, Calculator, ShieldCheck, Link2, Plus, AlertTriangle, Trash2, Flag, Bookmark, Layers, Bug } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from './HierarchyItemModal';
 import { getAvgHourlyRate, getStatusProgress } from '../../utils/taskCalculations';
 import {
@@ -56,6 +56,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     return match ? match.name : 'another team member';
   }, [taskToEdit, projectData.stakeholders]);
 
+  const [type, setType] = useState<WorkItemType>('task');
+  const [linkedBugIds, setLinkedBugIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>(defaultStatus || 'todo');
@@ -82,8 +84,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [selectedDepTaskId, setSelectedDepTaskId] = useState<string>('');
   const [selectedDepType, setSelectedDepType] = useState<DependencyType>('FS');
 
+  const availableBugs = useMemo(() => {
+    return projectData.tasks.filter(t => t.type === 'bug' && t.id !== taskToEdit?.id);
+  }, [projectData.tasks, taskToEdit]);
+
   useEffect(() => {
     if (taskToEdit) {
+      setType(taskToEdit.type || 'task');
+      setLinkedBugIds(taskToEdit.linkedBugIds || []);
       setTitle(taskToEdit.title);
       setDescription(taskToEdit.description || '');
       setStatus(taskToEdit.status);
@@ -105,6 +113,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setActualHours(taskToEdit.actualHours);
       setDependencies(taskToEdit.dependencies || []);
     } else {
+      setType('task');
+      setLinkedBugIds([]);
       setTitle('');
       if (defaultStatus) setStatus(defaultStatus);
       setDescription('');
@@ -179,7 +189,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const livePlannedCost = Math.round(estimatedHours * avgHourlyRate);
   const liveActualCost = Math.round(actualHours * avgHourlyRate);
-  const liveCompletionPercent = getStatusProgress(status);
+  const liveCompletionPercent = getStatusProgress(status, projectData.statusPercentages);
 
   if (!isOpen) return null;
 
@@ -187,6 +197,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     e.preventDefault();
     await saveTask({
       id: taskToEdit?.id,
+      type,
       title,
       description,
       status,
@@ -208,7 +219,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       plannedCost: livePlannedCost,
       actualCost: liveActualCost,
       completionPercent: liveCompletionPercent,
-      dependencies
+      dependencies,
+      linkedBugIds
     });
     onClose();
   };
@@ -284,6 +296,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Work Item Type Selector */}
+          <div>
+            <label className="block text-slate-300 font-semibold mb-1.5">Work Item Type *</label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setType('task')}
+                className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  type === 'task'
+                    ? 'bg-indigo-600/20 border-indigo-500 text-indigo-300 shadow-sm'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <CheckSquare className="w-4 h-4 text-indigo-400" />
+                <span>Task (Feature / Work Item)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('bug')}
+                className={`flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer ${
+                  type === 'bug'
+                    ? 'bg-rose-600/20 border-rose-500 text-rose-300 shadow-sm'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Bug className="w-4 h-4 text-rose-400" />
+                <span>Bug (Defect / Issue)</span>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-slate-300 font-semibold mb-1">Work Item Title *</label>
             <input
@@ -291,7 +334,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Design Real-Time Dashboard UI"
+              placeholder={type === 'bug' ? "e.g., Fix WebSocket Reconnection Memory Leak" : "e.g., Design Real-Time Dashboard UI"}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-indigo-500 text-sm"
             />
           </div>
@@ -313,13 +356,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none font-medium text-indigo-300"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none font-medium text-indigo-300 cursor-pointer"
               >
-                <option value="todo">To Do (0% Progress)</option>
-                <option value="in_progress">In Progress (40% Progress)</option>
-                <option value="review">Under Review / Testing (80% Progress)</option>
-                <option value="blocked">Blocked (20% Progress)</option>
-                <option value="done">Completed (100% Progress)</option>
+                <option value="todo">To Do ({getStatusProgress('todo', projectData.statusPercentages)}% Progress)</option>
+                <option value="in_progress">In Progress ({getStatusProgress('in_progress', projectData.statusPercentages)}% Progress)</option>
+                <option value="demoable">Demo-able ({getStatusProgress('demoable', projectData.statusPercentages)}% Progress)</option>
+                <option value="review">Under Review / Testing ({getStatusProgress('review', projectData.statusPercentages)}% Progress)</option>
+                <option value="on_hold">On Hold ({getStatusProgress('on_hold', projectData.statusPercentages)}% Progress)</option>
+                <option value="blocked">Blocked ({getStatusProgress('blocked', projectData.statusPercentages)}% Progress)</option>
+                <option value="done">Completed ({getStatusProgress('done', projectData.statusPercentages)}% Progress)</option>
               </select>
             </div>
 
@@ -396,13 +441,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
             <div>
               <label className="block text-slate-300 font-semibold mb-1">Actual Hours</label>
-              <input
-                type="number"
-                min="0"
-                value={actualHours}
-                onChange={(e) => setActualHours(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1.5 text-slate-100 outline-none"
-              />
+              <div className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-slate-100 flex items-center justify-between text-xs min-h-[38px]">
+                <span className="font-mono font-semibold text-amber-400">{actualHours || 0} hrs</span>
+                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                  <Clock className="w-3 h-3 text-indigo-400" />
+                  <span>Auto-captured (In Progress → Demo-able)</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -649,6 +694,73 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Link</span>
               </button>
+            </div>
+          </div>
+
+          {/* Linked Bugs (Optional) */}
+          <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-200 font-semibold flex items-center gap-2">
+                <Bug className="w-4 h-4 text-rose-400" />
+                <span>Linked Bugs (Optional)</span>
+              </label>
+              <span className="text-[11px] text-slate-400">
+                {linkedBugIds.length} {linkedBugIds.length === 1 ? 'bug' : 'bugs'} linked
+              </span>
+            </div>
+            
+            <p className="text-[11px] text-slate-400">
+              Link this work item to related bugs/defects to track defect remediation.
+            </p>
+
+            {/* Current Linked Bugs list */}
+            {linkedBugIds.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {linkedBugIds.map(bId => {
+                  const bObj = projectData.tasks.find(t => t.id === bId);
+                  if (!bObj) return null;
+                  return (
+                    <div
+                      key={bId}
+                      className="flex items-center gap-1.5 bg-rose-950/40 border border-rose-500/30 text-rose-200 px-2.5 py-1 rounded-xl text-xs font-medium"
+                    >
+                      <Bug className="w-3 h-3 text-rose-400 shrink-0" />
+                      <span className="truncate max-w-[200px]">{bObj.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => setLinkedBugIds(prev => prev.filter(id => id !== bId))}
+                        className="text-rose-400 hover:text-rose-200 ml-1 rounded p-0.5 hover:bg-rose-900/40 cursor-pointer"
+                        title="Unlink bug"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Dropdown to select bug to link */}
+            <div className="flex items-center gap-2 pt-1">
+              <select
+                value=""
+                onChange={(e) => {
+                  const selectedId = e.target.value;
+                  if (selectedId && !linkedBugIds.includes(selectedId)) {
+                    setLinkedBugIds(prev => [...prev, selectedId]);
+                  }
+                }}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none cursor-pointer"
+              >
+                <option value="">+ Select a Bug to Link (Optional)...</option>
+                {availableBugs
+                  .filter(b => !linkedBugIds.includes(b.id))
+                  .map(b => (
+                    <option key={b.id} value={b.id}>
+                      🐛 {b.title} [{b.status.toUpperCase()}]
+                    </option>
+                  ))}
+              </select>
             </div>
           </div>
 

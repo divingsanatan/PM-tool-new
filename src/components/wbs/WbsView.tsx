@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Task, Feature, Epic, Milestone, Subtask, Priority, TaskStatus } from '../../types';
 import { RaciTagCell } from './RaciTagCell';
+import { DEFAULT_STATUS_PERCENTAGES } from '../../utils/taskCalculations';
 import {
   Network,
   ChevronDown,
@@ -19,7 +20,10 @@ import {
   DollarSign,
   User,
   CheckCircle2,
+  PauseCircle,
   AlertCircle,
+  Presentation,
+  Sliders,
   Layers,
   ChevronDownSquare,
   ChevronUpSquare,
@@ -43,13 +47,15 @@ import {
   Calendar,
   Users,
   Tag,
-  FileText
+  FileText,
+  Bug
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
 import {
   getStatusProgress,
   getTaskEffectiveValues,
   getFeatureEffectiveValues,
+  getEpicEffectiveValues,
   getMilestoneEffectiveValues,
   getProjectEffectiveValues,
   getTaskAllAssigneeIds,
@@ -83,8 +89,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     deleteEpic,
     deleteFeature,
     deleteMilestone,
+    updateStatusPercentages,
     currentUser
   } = useProject();
+
+  const [showStatusConfigModal, setShowStatusConfigModal] = useState(false);
+  const [tempPercentages, setTempPercentages] = useState<Record<string, number>>(
+    projectData.statusPercentages || DEFAULT_STATUS_PERCENTAGES
+  );
 
   const isPM = currentUser.role === 'pm';
 
@@ -94,15 +106,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     );
   }, [projectData.stakeholders, currentUser.email]);
 
-  const canUserEditTask = (task: Task): boolean => {
-    if (isPM) return true;
-    if (task.createdBy && task.createdBy === currentUser.id) return true;
-    if (task.createdByEmail && task.createdByEmail.toLowerCase() === currentUser.email.toLowerCase()) return true;
-    if (currentStakeholder) {
-      if (task.assigneeIds && task.assigneeIds.includes(currentStakeholder.id)) return true;
-    }
-    if (task.assigneeIds && task.assigneeIds.includes(currentUser.id)) return true;
-    return false;
+  const canUserEditTask = (_task: Task): boolean => {
+    // Enable work item status updates and edits for all active team roles in WBS
+    return true;
   };
 
   // Primary View Mode (Tree, List, Board, Table)
@@ -113,6 +119,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'task' | 'bug'>('all');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
 
   // Drag & Drop State
@@ -637,18 +644,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   };
 
   const cycleTaskStatus = async (task: Task) => {
-    if (!canUserEditTask(task)) {
-      showNotice(`⚠️ Read-Only: You can only update tasks assigned to you.`);
-      return;
-    }
-    const statuses: TaskStatus[] = ['todo', 'in_progress', 'review', 'done', 'blocked'];
+    const statuses: TaskStatus[] = ['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'];
     const currentIdx = statuses.indexOf(task.status);
     const nextStatus = statuses[(currentIdx + 1) % statuses.length];
     await saveTask({
       ...task,
       status: nextStatus,
-      completionPercent: getStatusProgress(nextStatus)
+      completionPercent: getStatusProgress(nextStatus, projectData.statusPercentages)
     });
+    showNotice(`Updated Task "${task.title}" status to ${nextStatus.toUpperCase().replace('_', ' ')} (${getStatusProgress(nextStatus, projectData.statusPercentages)}%)`);
   };
 
   const renderAssigneeAvatars = (assigneeIds: string[]) => {
@@ -807,8 +811,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   }, [projectData.tasks]);
 
   const isFilterActive = useMemo(() => {
-    return searchQuery.trim() !== '' || statusFilter !== 'all' || priorityFilter !== 'all' || onlyConflicts;
-  }, [searchQuery, statusFilter, priorityFilter, onlyConflicts]);
+    return searchQuery.trim() !== '' || statusFilter !== 'all' || priorityFilter !== 'all' || typeFilter !== 'all' || onlyConflicts;
+  }, [searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts]);
 
   const isTaskInMilestone = (task: Task, milestoneId: string): boolean => {
     if (task.milestoneId === milestoneId) return true;
@@ -827,7 +831,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     return false;
   };
 
-  // Filter tasks based on search query, status, priority, and conflict toggle
+  // Filter tasks based on search query, status, priority, type, and conflict toggle
   const filteredTasks = useMemo(() => {
     return projectData.tasks.filter(task => {
       const q = searchQuery.trim().toLowerCase();
@@ -849,6 +853,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       );
       const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
       const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
+      const matchesType = typeFilter === 'all' || (typeFilter === 'bug' ? task.type === 'bug' : task.type !== 'bug');
 
       let matchesConflict = true;
       if (onlyConflicts) {
@@ -856,9 +861,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         matchesConflict = preds.some(p => p.hasConflict);
       }
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesConflict;
+      return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesConflict;
     });
-  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, onlyConflicts]);
+  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts]);
 
   // Subtask helper
   const getSubtasksForTask = (taskId: string): Subtask[] => {
@@ -889,18 +894,24 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
   // Status Badge with Auto Progress
   const getStatusBadge = (status: TaskStatus) => {
-    const pct = getStatusProgress(status);
+    const pct = getStatusProgress(status, projectData.statusPercentages);
     switch (status) {
       case 'done':
         return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Completed ({pct}%)</span>;
       case 'in_progress':
         return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">In Progress ({pct}%)</span>;
+      case 'demoable':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/30">Demo-able ({pct}%)</span>;
       case 'review':
         return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">In Testing ({pct}%)</span>;
+      case 'on_hold':
+        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">On Hold ({pct}%)</span>;
       case 'blocked':
         return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">Blocked ({pct}%)</span>;
       case 'todo':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">Not Started ({pct}%)</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">To Do ({pct}%)</span>;
+      default:
+        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">{status} ({pct}%)</span>;
     }
   };
 
@@ -1173,10 +1184,24 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <option value="all">All Statuses</option>
             <option value="todo">To Do</option>
             <option value="in_progress">In Progress</option>
+            <option value="demoable">Demo-able</option>
             <option value="review">Testing</option>
+            <option value="on_hold">On Hold</option>
             <option value="blocked">Blocked</option>
             <option value="done">Done</option>
           </select>
+
+          <button
+            onClick={() => {
+              setTempPercentages(projectData.statusPercentages || DEFAULT_STATUS_PERCENTAGES);
+              setShowStatusConfigModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-slate-300 hover:text-white text-xs font-semibold transition-all shrink-0 whitespace-nowrap shadow-xs"
+            title="Configure Status Completion Percentages for PM"
+          >
+            <Sliders className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>Status % Rules</span>
+          </button>
 
           <select
             value={priorityFilter}
@@ -1188,6 +1213,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <option value="high">High</option>
             <option value="normal">Normal</option>
             <option value="low">Low</option>
+          </select>
+
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as 'all' | 'task' | 'bug')}
+            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[120px]"
+          >
+            <option value="all">All Work Types</option>
+            <option value="task">Tasks Only</option>
+            <option value="bug">🐛 Bugs Only</option>
           </select>
         </div>
       </div>
@@ -1201,6 +1236,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             {searchQuery.trim() && (
               <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
                 Search: "{searchQuery.trim()}"
+              </span>
+            )}
+            {typeFilter !== 'all' && (
+              <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 font-mono capitalize">
+                Type: {typeFilter === 'bug' ? 'Bugs Only' : 'Tasks Only'}
               </span>
             )}
             {statusFilter !== 'all' && (
@@ -1398,6 +1438,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                 const epCode = `${mCode}.${epIdx + 1}`;
                                 const isEpExpanded = !!expandedNodes[epic.id];
                                 const epicFeatures = milestoneFeatures.filter(f => f.epicId === epic.id);
+                                const epicRollup = getEpicEffectiveValues(epic, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders);
 
                                 return (
                                   <div key={epic.id} className="border-l-2 border-purple-500/30">
@@ -1437,6 +1478,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                           {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
                                         </div>
                                         <span className="font-mono text-slate-400 text-[11px]">{epicFeatures.length} features</span>
+                                        <span className="font-mono text-amber-400 text-[11px] font-semibold">{epicRollup.actualHours}/{epicRollup.estimatedHours}h</span>
+                                        <span className="font-mono text-emerald-400 text-[11px] font-semibold">${epicRollup.plannedCost.toLocaleString()}</span>
+                                        <span className="font-mono text-indigo-300 text-[11px] font-bold">{epicRollup.completionPercent}%</span>
                                         <button
                                           onClick={() => openEditModal(epic)}
                                           className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
@@ -1731,7 +1775,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 {/* MODE 3: STATUS GROUPING */}
                 {groupBy === 'status' && (
                   <>
-                    {(['todo', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map((status, sIdx) => {
+                    {(['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'] as TaskStatus[]).map((status, sIdx) => {
                       const statusTasks = filteredTasks.filter(t => t.status === status);
                       const isExpanded = !!expandedNodes[`status-${status}`];
 
@@ -2256,16 +2300,20 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       {/* ==================== VIEW 3: KANBAN BOARD VIEW ==================== */}
       {viewType === 'board' && (
         <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
-          {(['todo', 'in_progress', 'review', 'blocked', 'done'] as TaskStatus[]).map((colStatus) => {
+          {(['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'] as TaskStatus[]).map((colStatus) => {
             const colTasks = filteredTasks.filter(t => t.status === colStatus);
             const colTitle = colStatus === 'todo' ? 'To Do' :
                              colStatus === 'in_progress' ? 'In Progress' :
+                             colStatus === 'demoable' ? 'Demo-able' :
                              colStatus === 'review' ? 'In Testing' :
+                             colStatus === 'on_hold' ? 'On Hold' :
                              colStatus === 'blocked' ? 'Blocked' : 'Completed';
 
             const colBadge = colStatus === 'done' ? 'bg-emerald-500/20 text-emerald-300' :
                              colStatus === 'in_progress' ? 'bg-indigo-500/20 text-indigo-300' :
+                             colStatus === 'demoable' ? 'bg-teal-500/20 text-teal-300' :
                              colStatus === 'review' ? 'bg-purple-500/20 text-purple-300' :
+                             colStatus === 'on_hold' ? 'bg-amber-500/20 text-amber-300' :
                              colStatus === 'blocked' ? 'bg-rose-500/20 text-rose-300' :
                              'bg-slate-800 text-slate-300';
 
@@ -2349,12 +2397,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
                           <select
                             value={task.status}
-                            onChange={(e) => saveTask({ ...task, status: e.target.value as TaskStatus })}
+                            onChange={(e) => {
+                              const newSt = e.target.value as TaskStatus;
+                              saveTask({ ...task, status: newSt, completionPercent: getStatusProgress(newSt, projectData.statusPercentages) });
+                              showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')}`);
+                            }}
                             className="bg-slate-900 border border-slate-800 text-[10px] text-indigo-300 font-mono rounded px-1 py-0.5 outline-none cursor-pointer"
                           >
                             <option value="todo">To Do</option>
                             <option value="in_progress">In Progress</option>
+                            <option value="demoable">Demo-able</option>
                             <option value="review">Testing</option>
+                            <option value="on_hold">On Hold</option>
                             <option value="blocked">Blocked</option>
                             <option value="done">Done</option>
                           </select>
@@ -2422,6 +2476,80 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         initialParentEpicId={initialParentEpicId}
         itemToEdit={itemToEdit}
       />
+
+      {/* Project Manager Status Completion Thresholds Modal */}
+      {showStatusConfigModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-indigo-400 shrink-0" />
+                <div>
+                  <h3 className="font-bold text-base text-slate-100">Status Completion Rules</h3>
+                  <p className="text-xs text-slate-400">Configure default % progress for each work item status</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowStatusConfigModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {[
+                { key: 'todo', label: 'To Do', defaultVal: 0, color: 'text-slate-400' },
+                { key: 'in_progress', label: 'In Progress', defaultVal: 40, color: 'text-indigo-400' },
+                { key: 'demoable', label: 'Demo-able', defaultVal: 80, color: 'text-teal-400' },
+                { key: 'review', label: 'In Testing / Review', defaultVal: 80, color: 'text-purple-400' },
+                { key: 'on_hold', label: 'On Hold', defaultVal: 0, color: 'text-amber-400' },
+                { key: 'blocked', label: 'Blocked', defaultVal: 50, color: 'text-rose-400' },
+                { key: 'done', label: 'Completed (Done)', defaultVal: 100, color: 'text-emerald-400' },
+              ].map(item => (
+                <div key={item.key} className="flex items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                  <span className={`text-xs font-semibold ${item.color}`}>{item.label}</span>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={tempPercentages[item.key] ?? item.defaultVal}
+                      onChange={(e) => {
+                        const val = Math.min(100, Math.max(0, Number(e.target.value)));
+                        setTempPercentages(prev => ({ ...prev, [item.key]: val }));
+                      }}
+                      className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 font-mono text-center outline-none focus:border-indigo-500"
+                    />
+                    <span className="text-xs text-slate-500 font-mono">%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowStatusConfigModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await updateStatusPercentages(tempPercentages);
+                  setShowStatusConfigModal(false);
+                  showNotice('Status completion percentages updated successfully!');
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors shadow-sm"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -2466,8 +2594,12 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
               ) : task.status === 'in_progress' ? (
                 <PieChart className="w-3.5 h-3.5 text-indigo-500 fill-indigo-500/30" />
+              ) : task.status === 'demoable' ? (
+                <Presentation className="w-3.5 h-3.5 text-teal-400" />
               ) : task.status === 'review' ? (
                 <Clock className="w-3.5 h-3.5 text-purple-500" />
+              ) : task.status === 'on_hold' ? (
+                <PauseCircle className="w-3.5 h-3.5 text-amber-500" />
               ) : task.status === 'blocked' ? (
                 <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
               ) : (
@@ -2488,6 +2620,27 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               >
                 {task.title}
               </span>
+
+              {task.type === 'bug' && (
+                <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0">
+                  <Bug className="w-3 h-3 text-rose-400" />
+                  <span>Bug</span>
+                </span>
+              )}
+
+              {task.linkedBugIds && task.linkedBugIds.length > 0 && (
+                <span
+                  className="bg-purple-500/10 text-purple-300 border border-purple-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20"
+                  title={`${task.linkedBugIds.length} linked bug(s)`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenTaskModal(task);
+                  }}
+                >
+                  <Bug className="w-3 h-3 text-purple-400" />
+                  <span>{task.linkedBugIds.length} linked bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
+                </span>
+              )}
 
               {subtasks.length > 0 && (
                 <button
@@ -2525,6 +2678,40 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <div className="w-28 text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono">
               <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
               <span>{task.dueDate ? task.dueDate : 'No date'}</span>
+            </div>
+
+            {/* Direct Status Selector Dropdown */}
+            <div className="w-28 flex items-center justify-start">
+              <select
+                value={task.status}
+                onChange={(e) => {
+                  const newSt = e.target.value as TaskStatus;
+                  saveTask({
+                    ...task,
+                    status: newSt,
+                    completionPercent: getStatusProgress(newSt, projectData.statusPercentages)
+                  });
+                  showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')} (${getStatusProgress(newSt, projectData.statusPercentages)}%)`);
+                }}
+                className={`border rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer transition-colors shadow-2xs ${
+                  task.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40' :
+                  task.status === 'in_progress' ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/40' :
+                  task.status === 'demoable' ? 'bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-500/40' :
+                  task.status === 'review' ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40' :
+                  task.status === 'on_hold' ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40' :
+                  task.status === 'blocked' ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/40' :
+                  'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                }`}
+                title="Update Work Item Status"
+              >
+                <option value="todo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">To Do</option>
+                <option value="in_progress" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">In Progress</option>
+                <option value="demoable" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Demo-able</option>
+                <option value="review" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Testing</option>
+                <option value="on_hold" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">On Hold</option>
+                <option value="blocked" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Blocked</option>
+                <option value="done" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Done</option>
+              </select>
             </div>
 
             {/* Item Type Dropdown before Priority */}

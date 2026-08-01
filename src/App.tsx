@@ -13,6 +13,7 @@ import { RaidView } from './components/raid/RaidView';
 import { ReportsView } from './components/reports/ReportsView';
 import { AuditTrailView } from './components/audit/AuditTrailView';
 import { ChangeManagementView } from './components/change/ChangeManagementView';
+import { ProjectBoardView } from './components/board/ProjectBoardView';
 
 import { TaskModal } from './components/modals/TaskModal';
 import { RaidModal } from './components/modals/RaidModal';
@@ -133,10 +134,14 @@ function MainLayout() {
           )}
 
           {currentView === 'workload' && (
-            <WorkloadView
-              onOpenStakeholderModal={handleOpenStakeholderModal}
-              onOpenInviteModal={handleOpenInviteModal}
-            />
+            isPM ? (
+              <WorkloadView
+                onOpenStakeholderModal={handleOpenStakeholderModal}
+                onOpenInviteModal={handleOpenInviteModal}
+              />
+            ) : (
+              <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'stakeholders' && (
@@ -152,6 +157,10 @@ function MainLayout() {
 
           {currentView === 'change' && (
             <ChangeManagementView />
+          )}
+
+          {currentView === 'project_board' && (
+            <ProjectBoardView />
           )}
 
           {currentView === 'reports' && (

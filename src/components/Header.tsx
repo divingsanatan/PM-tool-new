@@ -21,6 +21,7 @@ import {
   ArrowRight,
   ChevronDown,
   FolderKanban,
+  GanttChart,
   UserCheck,
   Zap,
   LogOut,
@@ -307,12 +308,22 @@ export const Header: React.FC<HeaderProps> = ({
                           </button>
                           <button
                             onClick={() => {
+                              onSelectView('project_board');
+                              setIsSearchFocused(false);
+                            }}
+                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                          >
+                            <FolderKanban className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                            <span className="truncate">Project Board</span>
+                          </button>
+                          <button
+                            onClick={() => {
                               onSelectView('gantt');
                               setIsSearchFocused(false);
                             }}
                             className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
                           >
-                            <FolderKanban className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <GanttChart className="w-3.5 h-3.5 text-purple-400 shrink-0" />
                             <span className="truncate">Gantt Schedule</span>
                           </button>
                         </>

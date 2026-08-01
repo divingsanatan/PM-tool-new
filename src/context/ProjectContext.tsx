@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig } from '../types';
+import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage } from '../types';
 import { initialProjectData } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
-import { getTaskEffectiveValues } from '../utils/taskCalculations';
+import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours } from '../utils/taskCalculations';
 
 export const DEFAULT_USERS: UserProfile[] = [
   {
@@ -88,8 +88,21 @@ interface ProjectContextType {
   saveChangeRequest: (cr: Partial<ChangeRequest>) => Promise<void>;
   deleteChangeRequest: (crId: string) => Promise<void>;
   updateChangeRequestStatus: (crId: string, status: ChangeRequestStatus, ccbNotes?: string, fastTrack?: boolean) => Promise<void>;
+  saveBoardCategory: (category: Partial<ProjectBoardCategory>) => Promise<void>;
+  deleteBoardCategory: (categoryId: string) => Promise<void>;
+  saveBoardItem: (item: Partial<ProjectBoardItem>) => Promise<void>;
+  deleteBoardItem: (itemId: string) => Promise<void>;
+  togglePinBoardItem: (itemId: string) => Promise<void>;
+  addBoardItemComment: (itemId: string, content: string) => Promise<void>;
+  deleteBoardItemComment: (itemId: string, commentId: string) => Promise<void>;
+  toggleBoardItemCommentReaction: (itemId: string, commentId: string, emoji: string) => Promise<void>;
+  addProjectChatMessage: (message: Partial<ProjectChatMessage>) => Promise<void>;
+  deleteProjectChatMessage: (messageId: string) => Promise<void>;
+  toggleProjectChatMessageReaction: (messageId: string, emoji: string) => Promise<void>;
+  togglePinProjectChatMessage: (messageId: string) => Promise<void>;
   resetToDefault: () => Promise<void>;
   updateWidgets: (widgets: ProjectData['widgets']) => Promise<void>;
+  updateStatusPercentages: (percentages: Record<string, number>) => Promise<void>;
   addAuditNote: (action: string, details: string, category?: ActivityLog['category']) => void;
   clearAuditLogs: () => void;
   customAiConfig: CustomAiConfig;
@@ -106,15 +119,19 @@ const USERS_LIST_KEY = 'apex_pm_all_users';
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [projectData, setProjectData] = useState<ProjectData>(() => {
+    let baseData: ProjectData = { ...initialProjectData, id: 'proj-1' };
     try {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (cached) {
-        return JSON.parse(cached);
+        baseData = JSON.parse(cached);
       }
     } catch (e) {
       console.warn('Failed to read cached project data:', e);
     }
-    return { ...initialProjectData, id: 'proj-1' };
+    return {
+      ...baseData,
+      statusPercentages: { ...DEFAULT_STATUS_PERCENTAGES, ...(baseData.statusPercentages || {}) }
+    };
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string>(projectData.id || 'proj-1');
@@ -528,8 +545,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (ep?.milestoneId) resolvedMilestoneId = ep.milestoneId;
     }
 
+    const taskId = task.id || 'task-' + Date.now();
+    const existingTask = projectData.tasks.find(t => t.id === taskId);
+    const timestampCalc = calculateTimestampActualHours(task, existingTask);
+
     const tempTask: Task = {
-      id: task.id || 'task-' + Date.now(),
+      id: taskId,
+      type: task.type || existingTask?.type || 'task',
       title: task.title || 'Untitled Task',
       description: task.description || '',
       epicId: resolvedEpicId,
@@ -541,11 +563,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       startDate: task.startDate || new Date().toISOString().split('T')[0],
       dueDate: task.dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
       estimatedHours: task.estimatedHours || 10,
-      actualHours: task.actualHours || 0,
+      actualHours: timestampCalc.actualHours,
+      inProgressAt: timestampCalc.inProgressAt,
+      demoableAt: timestampCalc.demoableAt,
       plannedCost: 0,
       actualCost: 0,
       completionPercent: task.completionPercent ?? 0,
       dependencies: task.dependencies || [],
+      linkedBugIds: task.linkedBugIds || existingTask?.linkedBugIds || [],
       tags: task.tags || []
     };
 
@@ -966,6 +991,19 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     broadcastLocalTabSync(updated);
   };
 
+  const updateStatusPercentages = async (percentages: Record<string, number>) => {
+    const newPercentages = { ...DEFAULT_STATUS_PERCENTAGES, ...percentages };
+    const updatedTasks = projectData.tasks.map(task => {
+      const newPct = newPercentages[task.status as TaskStatus] ?? task.completionPercent;
+      return { ...task, completionPercent: newPct };
+    });
+    await updateProjectDetails({
+      statusPercentages: newPercentages as Record<TaskStatus, number>,
+      tasks: updatedTasks
+    });
+    addAuditNote('Status Percentages Updated', 'Project Manager updated task completion thresholds.', 'wbs');
+  };
+
   const resetToDefault = async () => {
     try {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -1165,6 +1203,273 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     broadcastLocalTabSync(updated);
   };
 
+  const saveBoardCategory = async (categoryData: Partial<ProjectBoardCategory>) => {
+    const categories = projectData.boardCategories || [];
+    const id = categoryData.id || 'cat-' + Date.now();
+    const newCategory: ProjectBoardCategory = {
+      id,
+      projectId: categoryData.projectId || activeProjectId,
+      name: categoryData.name || 'New Category',
+      description: categoryData.description || '',
+      color: categoryData.color || 'indigo'
+    };
+
+    const existingIdx = categories.findIndex(c => c.id === id);
+    let updatedCategories = [...categories];
+    if (existingIdx >= 0) {
+      updatedCategories[existingIdx] = newCategory;
+    } else {
+      updatedCategories.push(newCategory);
+    }
+
+    const updated = { ...projectData, boardCategories: updatedCategories };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+    addAuditNote(
+      existingIdx >= 0 ? 'Updated Board Category' : 'Created Board Category',
+      `Category "${newCategory.name}" saved on Project Board.`,
+      'audit'
+    );
+  };
+
+  const deleteBoardCategory = async (categoryId: string) => {
+    const categories = projectData.boardCategories || [];
+    const catToDelete = categories.find(c => c.id === categoryId);
+    const updatedCategories = categories.filter(c => c.id !== categoryId);
+    const items = projectData.boardItems || [];
+    const updatedItems = items.map(item => item.categoryId === categoryId ? { ...item, categoryId: undefined } : item);
+
+    const updated = { ...projectData, boardCategories: updatedCategories, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+    if (catToDelete) {
+      addAuditNote('Deleted Board Category', `Category "${catToDelete.name}" removed from Project Board.`, 'audit');
+    }
+  };
+
+  const saveBoardItem = async (itemData: Partial<ProjectBoardItem>) => {
+    const items = projectData.boardItems || [];
+    const id = itemData.id || 'board-item-' + Date.now();
+    const existingIdx = items.findIndex(i => i.id === id);
+
+    const newItem: ProjectBoardItem = {
+      id,
+      projectId: itemData.projectId || activeProjectId,
+      categoryId: itemData.categoryId,
+      type: itemData.type || 'note',
+      title: itemData.title || 'Untitled Board Item',
+      content: itemData.content || '',
+      url: itemData.url || '',
+      fileName: itemData.fileName,
+      fileSize: itemData.fileSize,
+      fileType: itemData.fileType,
+      tags: itemData.tags || [],
+      color: itemData.color || 'indigo',
+      createdBy: existingIdx >= 0 ? items[existingIdx].createdBy : (itemData.createdBy || currentUser.id),
+      createdByName: existingIdx >= 0 ? items[existingIdx].createdByName : (itemData.createdByName || currentUser.name),
+      createdByEmail: existingIdx >= 0 ? items[existingIdx].createdByEmail : (itemData.createdByEmail || currentUser.email),
+      createdAt: existingIdx >= 0 ? items[existingIdx].createdAt : new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      isPinned: itemData.isPinned ?? (existingIdx >= 0 ? items[existingIdx].isPinned : false)
+    };
+
+    let updatedItems = [...items];
+    if (existingIdx >= 0) {
+      updatedItems[existingIdx] = newItem;
+    } else {
+      updatedItems.unshift(newItem);
+    }
+
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+    addAuditNote(
+      existingIdx >= 0 ? 'Updated Board Item' : 'Added Board Item',
+      `${newItem.type.toUpperCase()}: "${newItem.title}" on Project Board.`,
+      'audit'
+    );
+  };
+
+  const deleteBoardItem = async (itemId: string) => {
+    const items = projectData.boardItems || [];
+    const itemToDelete = items.find(i => i.id === itemId);
+    const updatedItems = items.filter(i => i.id !== itemId);
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+    if (itemToDelete) {
+      addAuditNote('Deleted Board Item', `${itemToDelete.type.toUpperCase()}: "${itemToDelete.title}" removed from Project Board.`, 'audit');
+    }
+  };
+
+  const togglePinBoardItem = async (itemId: string) => {
+    const items = projectData.boardItems || [];
+    const updatedItems = items.map(item => item.id === itemId ? { ...item, isPinned: !item.isPinned } : item);
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const addBoardItemComment = async (itemId: string, content: string) => {
+    if (!content.trim()) return;
+    const items = projectData.boardItems || [];
+    const targetItem = items.find(i => i.id === itemId);
+    if (!targetItem) return;
+
+    const newComment: BoardItemComment = {
+      id: 'cmt-' + Date.now(),
+      itemId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      userAvatar: currentUser.avatar,
+      userRole: currentUser.title || currentUser.role,
+      content: content.trim(),
+      createdAt: new Date().toISOString(),
+      reactions: {}
+    };
+
+    const updatedItems = items.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          comments: [...(item.comments || []), newComment]
+        };
+      }
+      return item;
+    });
+
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const deleteBoardItemComment = async (itemId: string, commentId: string) => {
+    const items = projectData.boardItems || [];
+    const updatedItems = items.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          comments: (item.comments || []).filter(c => c.id !== commentId)
+        };
+      }
+      return item;
+    });
+
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const toggleBoardItemCommentReaction = async (itemId: string, commentId: string, emoji: string) => {
+    const items = projectData.boardItems || [];
+    const updatedItems = items.map(item => {
+      if (item.id === itemId) {
+        const comments = (item.comments || []).map(comment => {
+          if (comment.id === commentId) {
+            const reactions = { ...(comment.reactions || {}) };
+            const users = reactions[emoji] || [];
+            const userIndex = users.indexOf(currentUser.name);
+            let updatedUsers: string[];
+            if (userIndex >= 0) {
+              updatedUsers = users.filter(u => u !== currentUser.name);
+            } else {
+              updatedUsers = [...users, currentUser.name];
+            }
+            if (updatedUsers.length > 0) {
+              reactions[emoji] = updatedUsers;
+            } else {
+              delete reactions[emoji];
+            }
+            return { ...comment, reactions };
+          }
+          return comment;
+        });
+        return { ...item, comments };
+      }
+      return item;
+    });
+
+    const updated = { ...projectData, boardItems: updatedItems };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const addProjectChatMessage = async (msgData: Partial<ProjectChatMessage>) => {
+    if (!msgData.content?.trim()) return;
+    const messages = projectData.boardMessages || [];
+    const newMsg: ProjectChatMessage = {
+      id: 'msg-' + Date.now(),
+      projectId: activeProjectId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      userAvatar: currentUser.avatar,
+      userRole: currentUser.title || currentUser.role,
+      content: msgData.content.trim(),
+      createdAt: new Date().toISOString(),
+      type: msgData.type || 'chat',
+      linkedItemId: msgData.linkedItemId,
+      linkedItemTitle: msgData.linkedItemTitle,
+      isPinned: msgData.isPinned || false,
+      reactions: {}
+    };
+
+    const updated = { ...projectData, boardMessages: [...messages, newMsg] };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const deleteProjectChatMessage = async (messageId: string) => {
+    const messages = projectData.boardMessages || [];
+    const updatedMessages = messages.filter(m => m.id !== messageId);
+    const updated = { ...projectData, boardMessages: updatedMessages };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const toggleProjectChatMessageReaction = async (messageId: string, emoji: string) => {
+    const messages = projectData.boardMessages || [];
+    const updatedMessages = messages.map(msg => {
+      if (msg.id === messageId) {
+        const reactions = { ...(msg.reactions || {}) };
+        const users = reactions[emoji] || [];
+        const userIndex = users.indexOf(currentUser.name);
+        let updatedUsers: string[];
+        if (userIndex >= 0) {
+          updatedUsers = users.filter(u => u !== currentUser.name);
+        } else {
+          updatedUsers = [...users, currentUser.name];
+        }
+        if (updatedUsers.length > 0) {
+          reactions[emoji] = updatedUsers;
+        } else {
+          delete reactions[emoji];
+        }
+        return { ...msg, reactions };
+      }
+      return msg;
+    });
+
+    const updated = { ...projectData, boardMessages: updatedMessages };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const togglePinProjectChatMessage = async (messageId: string) => {
+    const messages = projectData.boardMessages || [];
+    const updatedMessages = messages.map(msg => {
+      if (msg.id === messageId) {
+        return { ...msg, isPinned: !msg.isPinned };
+      }
+      return msg;
+    });
+
+    const updated = { ...projectData, boardMessages: updatedMessages };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
   return (
     <ProjectContext.Provider
       value={{
@@ -1203,8 +1508,21 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         saveChangeRequest,
         deleteChangeRequest,
         updateChangeRequestStatus,
+        saveBoardCategory,
+        deleteBoardCategory,
+        saveBoardItem,
+        deleteBoardItem,
+        togglePinBoardItem,
+        addBoardItemComment,
+        deleteBoardItemComment,
+        toggleBoardItemCommentReaction,
+        addProjectChatMessage,
+        deleteProjectChatMessage,
+        toggleProjectChatMessageReaction,
+        togglePinProjectChatMessage,
         resetToDefault,
         updateWidgets,
+        updateStatusPercentages,
         addAuditNote,
         clearAuditLogs,
         customAiConfig,

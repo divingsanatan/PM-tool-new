@@ -13,7 +13,10 @@ export function calculateEVMMetrics(
   let totalEV = 0;
   let totalAC = 0;
 
-  tasks.forEach((task) => {
+  // Filter out 'on_hold' tasks so timelines and performance aren't skewed by indefinite on-hold items
+  const activeTasks = tasks.filter((task) => task.status !== 'on_hold');
+
+  activeTasks.forEach((task) => {
     const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
 
     // 1. Planned Value (PV)
@@ -44,7 +47,7 @@ export function calculateEVMMetrics(
     totalAC += eff.actualCost || 0;
   });
 
-  const BAC = projectBudget || tasks.reduce((sum, t) => sum + getTaskEffectiveValues(t, subtasks, stakeholders).plannedCost, 0) || 100000;
+  const BAC = projectBudget || activeTasks.reduce((sum, t) => sum + getTaskEffectiveValues(t, subtasks, stakeholders).plannedCost, 0) || 100000;
 
   // Avoid division by zero
   const safePV = totalPV <= 0 ? 1 : totalPV;
@@ -79,9 +82,9 @@ export function calculateStakeholderWorkloads(
   subtasks: Subtask[] = []
 ): StakeholderWorkload[] {
   return stakeholders.map((sh) => {
-    // Filter active tasks assigned to this stakeholder (via task.assigneeIds or subtask.assigneeId)
+    // Filter active tasks assigned to this stakeholder (via task.assigneeIds or subtask.assigneeId, excluding 'done' and 'on_hold')
     const assignedTasks = tasks.filter((t) => {
-      if (t.status === 'done') return false;
+      if (t.status === 'done' || t.status === 'on_hold') return false;
       const isTaskAssignee = t.assigneeIds && t.assigneeIds.includes(sh.id);
       const isSubtaskAssignee = subtasks.some(st => st.taskId === t.id && st.assigneeId === sh.id);
       return isTaskAssignee || isSubtaskAssignee;

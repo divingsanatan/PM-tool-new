@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Task, Stakeholder, UserProfile } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
+import { getStatusProgress } from '../../utils/taskCalculations';
 import {
   User,
   CheckCircle2,
@@ -22,6 +23,7 @@ import {
   Briefcase,
   Mail,
   Building2,
+  Bug,
   DollarSign,
   UserCheck,
   ArrowRight,
@@ -140,11 +142,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
   // Quick Status Handler
   const handleQuickStatusChange = async (task: Task, newStatus: Task['status']) => {
-    let newCompletion = task.completionPercent;
-    if (newStatus === 'done') newCompletion = 100;
-    else if (newStatus === 'todo') newCompletion = 0;
-    else if (newStatus === 'in_progress' && task.completionPercent === 0) newCompletion = 25;
-
+    const newCompletion = getStatusProgress(newStatus, projectData.statusPercentages);
     await saveTask({
       ...task,
       status: newStatus,
@@ -808,7 +806,9 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
               <option value="all">All Statuses</option>
               <option value="todo">To Do</option>
               <option value="in_progress">In Progress</option>
+              <option value="demoable">Demo-able</option>
               <option value="review">Under Review</option>
+              <option value="on_hold">On Hold</option>
               <option value="blocked">Blocked</option>
               <option value="done">Completed</option>
             </select>
@@ -846,6 +846,25 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                         }`}>
                           {task.priority}
                         </span>
+
+                        {task.type === 'bug' && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                            <Bug className="w-3 h-3 text-rose-400" />
+                            <span>BUG</span>
+                          </span>
+                        )}
+
+                        {task.linkedBugIds && task.linkedBugIds.length > 0 && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 cursor-pointer hover:bg-purple-500/30"
+                            onClick={() => onOpenTaskModal(task)}
+                            title={`${task.linkedBugIds.length} linked bug(s)`}
+                          >
+                            <Bug className="w-3 h-3 text-purple-400" />
+                            <span>{task.linkedBugIds.length} Linked Bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
+                          </span>
+                        )}
+
                         <h3 className="font-bold text-sm sm:text-base text-slate-100 hover:text-indigo-300 transition-colors leading-snug">
                           {task.title}
                         </h3>
@@ -893,63 +912,70 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                         className={`px-3 py-1.5 rounded-xl text-xs font-bold border outline-none cursor-pointer transition-colors ${
                           task.status === 'done' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
                           task.status === 'in_progress' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
+                          task.status === 'demoable' ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' :
                           task.status === 'review' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                          task.status === 'on_hold' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
                           task.status === 'blocked' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
                           'bg-slate-900 text-slate-300 border-slate-700'
                         }`}
                       >
                         <option value="todo" className="bg-slate-900 text-slate-200">To Do</option>
                         <option value="in_progress" className="bg-slate-900 text-slate-200">In Progress</option>
+                        <option value="demoable" className="bg-slate-900 text-slate-200">Demo-able</option>
                         <option value="review" className="bg-slate-900 text-slate-200">Under Review</option>
+                        <option value="on_hold" className="bg-slate-900 text-slate-200">On Hold</option>
                         <option value="blocked" className="bg-slate-900 text-slate-200">Blocked</option>
                         <option value="done" className="bg-slate-900 text-slate-200">Completed</option>
                       </select>
 
-                      {/* Quick Log Hours Button */}
+                      {/* Time Capture Status Badge / Audit Toggle */}
                       <button
                         onClick={() => {
                           setLoggingTaskId(isLoggingHours ? null : task.id);
                           setLogHoursInput(task.actualHours);
                         }}
                         className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                        title="Log or adjust actual hours worked"
+                        title="View auto-captured actual hours & status timestamps"
                       >
                         <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span>Log Hours</span>
+                        <span>{task.actualHours || 0}h Auto-Captured</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Inline Hours Logger Controls */}
+                  {/* Inline Time Capture Audit Controls */}
                   {isLoggingHours && (
-                    <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 flex flex-wrap items-center justify-between gap-3 text-xs animate-fade-in">
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-indigo-400" />
-                        <span className="font-semibold text-slate-200">Log Actual Hours Worked:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="200"
-                          step="0.5"
-                          value={logHoursInput}
-                          onChange={e => setLogHoursInput(Number(e.target.value))}
-                          className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-center font-mono text-slate-100 font-bold outline-none focus:border-indigo-500"
-                        />
-                        <span className="text-slate-400">hours</span>
+                    <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 space-y-2 text-xs animate-fade-in">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-indigo-400" />
+                          <span className="font-semibold text-slate-200">Status Transition Time Capture Audit</span>
+                        </div>
+                        <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                          Actual Hours: {task.actualHours || 0} hrs
+                        </span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-300 pt-1">
+                        <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                          <span className="text-slate-500 block text-[10px] uppercase font-sans">In Progress Timestamp:</span>
+                          <span className="text-indigo-300 font-semibold">{task.inProgressAt ? new Date(task.inProgressAt).toLocaleString() : 'Not recorded (Pending transition to In Progress)'}</span>
+                        </div>
+                        <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                          <span className="text-slate-500 block text-[10px] uppercase font-sans">Demo-able Timestamp:</span>
+                          <span className="text-teal-300 font-semibold">{task.demoableAt ? new Date(task.demoableAt).toLocaleString() : 'Not recorded (Pending transition to Demo-able)'}</span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleSaveLoggedHours(task)}
-                          className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs"
-                        >
-                          Save Hours
-                        </button>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] text-slate-400">
+                          ⚡ Actual time is auto-calculated between "In Progress" and "Demo-able" status transitions.
+                        </span>
                         <button
                           onClick={() => setLoggingTaskId(null)}
-                          className="px-3 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 text-xs"
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs"
                         >
-                          Cancel
+                          Close Audit
                         </button>
                       </div>
                     </div>

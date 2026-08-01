@@ -1,5 +1,5 @@
 export type Priority = 'urgent' | 'high' | 'normal' | 'low';
-export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'blocked' | 'done';
+export type TaskStatus = 'todo' | 'in_progress' | 'review' | 'demoable' | 'on_hold' | 'blocked' | 'done';
 export type FeatureStatus = 'backlog' | 'in_progress' | 'testing' | 'completed';
 export type MilestoneStatus = 'upcoming' | 'in_progress' | 'achieved' | 'delayed';
 
@@ -78,8 +78,11 @@ export interface RaciMatrix {
   informed?: string[];     // Stakeholder IDs (I)
 }
 
+export type WorkItemType = 'task' | 'bug';
+
 export interface Task {
   id: string;
+  type?: WorkItemType; // 'task' | 'bug', defaults to 'task'
   title: string;
   description?: string;
   epicId?: string;
@@ -93,10 +96,13 @@ export interface Task {
   dueDate: string;   // YYYY-MM-DD
   estimatedHours: number;
   actualHours: number;
+  inProgressAt?: string; // ISO string when status moved to in_progress
+  demoableAt?: string;   // ISO string when status moved to demoable
   plannedCost: number;
   actualCost: number;
   completionPercent: number; // 0 to 100
   dependencies: string[]; // task IDs
+  linkedBugIds?: string[]; // Optional linked bug IDs
   tags: string[];
   createdBy?: string;
   createdByEmail?: string;
@@ -227,6 +233,68 @@ export interface DashboardWidgetConfig {
   width: 'full' | 'half' | 'third';
 }
 
+export interface ProjectBoardCategory {
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export type BoardItemType = 'note' | 'link' | 'file';
+
+export interface BoardItemComment {
+  id: string;
+  itemId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userAvatar?: string;
+  userRole?: string;
+  content: string;
+  createdAt: string;
+  reactions?: Record<string, string[]>;
+}
+
+export interface ProjectChatMessage {
+  id: string;
+  projectId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userAvatar?: string;
+  userRole?: string;
+  content: string;
+  createdAt: string;
+  type?: 'chat' | 'announcement' | 'question' | 'item_reference';
+  linkedItemId?: string;
+  linkedItemTitle?: string;
+  isPinned?: boolean;
+  reactions?: Record<string, string[]>;
+}
+
+export interface ProjectBoardItem {
+  id: string;
+  projectId: string;
+  categoryId?: string;
+  type: BoardItemType;
+  title: string;
+  content: string; // Rich text HTML for note; notes/description for link; snippet/notes for file
+  url?: string; // For link or external file link
+  fileName?: string; // For file
+  fileSize?: string; // e.g. "2.4 MB"
+  fileType?: string; // e.g. "PDF", "PNG", "DOCX", "CSV", "ZIP", "SQL"
+  tags: string[];
+  color?: string; // Card background or accent theme
+  createdBy: string; // User ID
+  createdByName: string;
+  createdByEmail: string;
+  createdAt: string;
+  updatedAt: string;
+  isPinned?: boolean;
+  comments?: BoardItemComment[];
+}
+
 export interface ProjectData {
   id: string;
   projectName: string;
@@ -244,10 +312,14 @@ export interface ProjectData {
   raidItems: RaidItem[];
   activities: ActivityLog[];
   changeRequests?: ChangeRequest[];
+  boardCategories?: ProjectBoardCategory[];
+  boardItems?: ProjectBoardItem[];
+  boardMessages?: ProjectChatMessage[];
   widgets: DashboardWidgetConfig[];
+  statusPercentages?: Record<TaskStatus, number>;
 }
 
-export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change';
+export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board';
 
 export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'custom';
 

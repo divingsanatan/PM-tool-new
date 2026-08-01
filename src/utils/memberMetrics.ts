@@ -78,7 +78,10 @@ export function calculateMemberMetrics(
   let individualEV = 0;
   let individualAC = 0;
 
-  assignedTasks.forEach((task) => {
+  // Exclude 'on_hold' tasks for performance and SPI/CPI timeline calculations
+  const activeAssignedTasks = assignedTasks.filter(t => t.status !== 'on_hold');
+
+  activeAssignedTasks.forEach((task) => {
     const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
     const assigneesCount = Math.max(1, task.assigneeIds.length);
     
@@ -123,8 +126,8 @@ export function calculateMemberMetrics(
   const safePV = individualPV <= 0 ? (individualEV > 0 ? individualEV : 100) : individualPV;
   const safeAC = individualAC <= 0 ? (individualEV > 0 ? individualEV * 0.9 : 100) : individualAC;
 
-  const individualSPI = totalAssignedTasks === 0 ? 1.0 : Number((individualEV / safePV).toFixed(2));
-  const individualCPI = totalAssignedTasks === 0 ? 1.0 : Number((individualEV / safeAC).toFixed(2));
+  const individualSPI = activeAssignedTasks.length === 0 ? 1.0 : Number((individualEV / safePV).toFixed(2));
+  const individualCPI = activeAssignedTasks.length === 0 ? 1.0 : Number((individualEV / safeAC).toFixed(2));
 
   const workEfficiencyPercent = totalActualHours <= 0
     ? (earnedHours > 0 ? 100 : 100)
@@ -132,7 +135,7 @@ export function calculateMemberMetrics(
 
   const capacityHours = currentStakeholder.weeklyCapacityHours || 40;
   const utilizationPercent = Math.round((totalActualHours / capacityHours) * 100);
-  const taskCompletionPercent = totalAssignedTasks === 0 ? 100 : Math.round((completedTasksCount / totalAssignedTasks) * 100);
+  const taskCompletionPercent = activeAssignedTasks.length === 0 ? 100 : Math.round((completedTasksCount / activeAssignedTasks.length) * 100);
 
   // Compute Report Card Grade (0 to 100)
   // Weights: SPI (25%), CPI (25%), Task Completion % (30%), Work Efficiency % (20%)

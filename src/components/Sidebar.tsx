@@ -12,6 +12,7 @@ import {
   FileText,
   History,
   GitPullRequest,
+  FolderKanban,
   PanelLeftClose,
   PanelLeftOpen,
   Menu,
@@ -98,21 +99,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       shortLabel: 'Executive',
       category: 'core',
       pmOnly: true,
-      icon: <LayoutDashboard className="w-5 h-5 shrink-0" />
+      icon: <LayoutDashboard className="w-4 h-4 shrink-0" />
     },
     {
       id: 'member_dashboard',
       label: isPM ? 'Member Report Cards' : 'My Work & Performance',
       shortLabel: isPM ? 'Cards' : 'My Work',
       category: 'core',
-      icon: <Award className="w-5 h-5 shrink-0" />
+      icon: <Award className="w-4 h-4 shrink-0" />
     },
     {
       id: 'wbs',
       label: 'WBS & Tasks',
       shortLabel: 'WBS',
       category: 'core',
-      icon: <Network className="w-5 h-5 shrink-0" />,
+      icon: <Network className="w-4 h-4 shrink-0" />,
       badge: openTasksCount,
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
     },
@@ -121,28 +122,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Gantt Timeline',
       shortLabel: 'Gantt',
       category: 'core',
-      icon: <GanttChart className="w-5 h-5 shrink-0" />
+      icon: <GanttChart className="w-4 h-4 shrink-0" />
+    },
+    {
+      id: 'project_board',
+      label: 'Project Board',
+      shortLabel: 'Board',
+      category: 'core',
+      icon: <FolderKanban className="w-4 h-4 shrink-0" />
     },
     {
       id: 'workload',
       label: 'Workload & Capacity',
       shortLabel: 'Workload',
       category: 'team',
-      icon: <BarChart3 className="w-5 h-5 shrink-0" />
+      pmOnly: true,
+      icon: <BarChart3 className="w-4 h-4 shrink-0" />
     },
     {
       id: 'stakeholders',
       label: 'Stakeholders & Team',
       shortLabel: 'Team',
       category: 'team',
-      icon: <Users className="w-5 h-5 shrink-0" />
+      icon: <Users className="w-4 h-4 shrink-0" />
     },
     {
       id: 'raid',
       label: 'RAID Management',
       shortLabel: 'RAID',
       category: 'governance',
-      icon: <ShieldAlert className="w-5 h-5 shrink-0" />,
+      icon: <ShieldAlert className="w-4 h-4 shrink-0" />,
       badge: openRisksCount,
       badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30'
     },
@@ -151,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Change Control (PMI)',
       shortLabel: 'Change',
       category: 'governance',
-      icon: <GitPullRequest className="w-5 h-5 shrink-0" />,
+      icon: <GitPullRequest className="w-4 h-4 shrink-0" />,
       badge: pendingCRCount,
       badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30'
     },
@@ -160,14 +169,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Reports & AI Advisor',
       shortLabel: 'Reports',
       category: 'analytics',
-      icon: <FileText className="w-5 h-5 shrink-0" />
+      icon: <FileText className="w-4 h-4 shrink-0" />
     },
     {
       id: 'audit',
       label: 'Audit Trail & Logs',
       shortLabel: 'Audit',
       category: 'analytics',
-      icon: <History className="w-5 h-5 shrink-0" />
+      icon: <History className="w-4 h-4 shrink-0" />
     }
   ];
 
@@ -341,7 +350,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside
         id="app-sidebar"
         className={`hidden md:flex flex-col bg-slate-900 dark:bg-slate-950 border-r border-slate-800/80 p-2.5 shrink-0 transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'w-16' : 'w-56'
+          isCollapsed ? 'w-16' : 'w-56 lg:w-60'
         } sticky top-14 h-[calc(100vh-3.5rem)]`}
       >
         {/* Header Toggle */}
@@ -376,9 +385,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <div key={cat.key} className="space-y-1">
                 {!isCollapsed && (
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60" />
-                    <span>{cat.name}</span>
+                  <div className="px-2.5 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400/80 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500/60 shrink-0" />
+                    <span className="truncate">{cat.name}</span>
                   </div>
                 )}
 
@@ -390,25 +399,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       id={`nav-item-${item.id}`}
                       onClick={() => onSelectView(item.id)}
                       title={isCollapsed ? `${item.label} ${item.badge ? `(${item.badge})` : ''}` : undefined}
-                      className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all ${
+                      className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
                         isCollapsed ? 'justify-center px-0' : ''
                       } ${
                         isActive
-                          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 font-semibold'
+                          ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 font-semibold'
                           : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                       }`}
                     >
-                      <span className={isActive ? 'text-white' : 'text-slate-400'}>
+                      <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}>
                         {item.icon}
                       </span>
-                      {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      {!isCollapsed && (
+                        <span className="truncate leading-tight min-w-0 flex-1 text-left">{item.label}</span>
+                      )}
 
                       {item.badge !== undefined && item.badge > 0 && (
                         <span
                           className={`${
                             isCollapsed
                               ? 'absolute -top-1 -right-1'
-                              : 'ml-auto'
+                              : 'ml-auto shrink-0'
                           } text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${item.badgeColor || 'bg-slate-700 text-slate-300'}`}
                         >
                           {item.badge}
