@@ -26,16 +26,22 @@ import { LoginScreen } from './components/auth/LoginScreen';
 
 function MainLayout() {
   const { projectData, isAuthenticated, currentUser } = useProject();
-  const [currentView, setCurrentView] = useState<ViewMode>('dashboard');
+  const [currentView, setCurrentViewRaw] = useState<ViewMode>('dashboard');
+
+  const handleSelectView = React.useCallback((view: ViewMode) => {
+    React.startTransition(() => {
+      setCurrentViewRaw(view);
+    });
+  }, []);
 
   const isPM = currentUser?.role === 'pm';
 
   // Automatically enforce member dashboard for non-PM team members
   React.useEffect(() => {
     if (!isPM && currentView === 'dashboard') {
-      setCurrentView('member_dashboard');
+      handleSelectView('member_dashboard');
     }
-  }, [isPM, currentView]);
+  }, [isPM, currentView, handleSelectView]);
 
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -92,7 +98,7 @@ function MainLayout() {
         onOpenInviteModal={handleOpenInviteModal}
         onOpenAiReportModal={() => setIsAiReportModalOpen(true)}
         onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
-        onSelectView={setCurrentView}
+        onSelectView={handleSelectView}
       />
 
       {/* Main Workspace Body */}
@@ -100,7 +106,7 @@ function MainLayout() {
         {/* Left Side Navigation Bar */}
         <Sidebar
           currentView={currentView}
-          onSelectView={setCurrentView}
+          onSelectView={handleSelectView}
           openTasksCount={openTasksCount}
           openRisksCount={openRisksCount}
           pendingCRCount={pendingCRCount}
@@ -112,7 +118,7 @@ function MainLayout() {
           {currentView === 'dashboard' && (
             isPM ? (
               <DashboardView
-                onNavigate={setCurrentView}
+                onNavigate={handleSelectView}
                 onOpenAiReportModal={() => setIsAiReportModalOpen(true)}
                 onOpenTaskModal={() => handleOpenTaskModal()}
                 onOpenRaidModal={() => handleOpenRaidModal()}
@@ -161,11 +167,11 @@ function MainLayout() {
           )}
 
           {currentView === 'project_board' && (
-            <ProjectBoardView onNavigate={setCurrentView} />
+            <ProjectBoardView onNavigate={handleSelectView} />
           )}
 
           {currentView === 'chat' && (
-            <ProjectChatView onNavigate={setCurrentView} />
+            <ProjectChatView onNavigate={handleSelectView} />
           )}
 
           {currentView === 'reports' && (

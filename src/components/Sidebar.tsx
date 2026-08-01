@@ -65,6 +65,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [optimisticView, setOptimisticView] = useState<ViewMode | null>(null);
+
+  useEffect(() => {
+    setOptimisticView(null);
+  }, [currentView]);
+
+  const activeView = optimisticView || currentView;
 
   const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalCollapsed;
   const toggleCollapse = externalOnToggleCollapse || (() => setInternalCollapsed(!internalCollapsed));
@@ -116,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: 'core',
       icon: <Network className="w-4 h-4 shrink-0" />,
       badge: openTasksCount,
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+      badgeColor: 'bg-indigo-500 text-white font-bold border-indigo-400 shadow-sm'
     },
     {
       id: 'gantt',
@@ -154,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: 'team',
       icon: <MessagesSquare className="w-4 h-4 shrink-0" />,
       badge: (projectData.boardMessages || []).length > 0 ? (projectData.boardMessages || []).length : undefined,
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+      badgeColor: 'bg-indigo-500 text-white font-bold border-indigo-400 shadow-sm'
     },
     {
       id: 'raid',
@@ -163,7 +170,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: 'governance',
       icon: <ShieldAlert className="w-4 h-4 shrink-0" />,
       badge: openRisksCount,
-      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+      badgeColor: 'bg-rose-500 text-white font-bold border-rose-400 shadow-sm'
     },
     {
       id: 'change',
@@ -172,7 +179,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       category: 'governance',
       icon: <GitPullRequest className="w-4 h-4 shrink-0" />,
       badge: pendingCRCount,
-      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+      badgeColor: 'bg-amber-400 text-slate-950 font-bold border-amber-300 shadow-sm'
     },
     {
       id: 'reports',
@@ -202,11 +209,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleSelect = (view: ViewMode) => {
-    onSelectView(view);
-    setMobileDrawerOpen(false);
+    setOptimisticView(view);
+    React.startTransition(() => {
+      onSelectView(view);
+      setMobileDrawerOpen(false);
+    });
   };
 
-  const currentActiveItem = menuItems.find(m => m.id === currentView) || menuItems[0];
+  const currentActiveItem = menuItems.find(m => m.id === activeView) || menuItems[0];
 
   return (
     <>
@@ -216,15 +226,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="relative flex-1 min-w-0 overflow-hidden">
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-0.5 pr-2">
             {menuItems.map((item) => {
-              const isActive = currentView === item.id;
+              const isActive = activeView === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleSelect(item.id)}
-                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-all ${
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium shrink-0 transition-colors duration-75 select-none outline-none focus:outline-none ${
                     isActive
                       ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-semibold'
-                      : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800/90'
+                      : 'bg-slate-950/80 text-slate-300 hover:text-white hover:bg-slate-800/80 active:bg-indigo-600 active:text-white border border-slate-800/90'
                   }`}
                 >
                   <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}>
@@ -304,15 +314,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {catItems.map((item) => {
-                        const isActive = currentView === item.id;
+                        const isActive = activeView === item.id;
                         return (
                           <button
                             key={item.id}
                             onClick={() => handleSelect(item.id)}
-                            className={`flex items-center justify-between p-3 rounded-2xl text-xs font-medium transition-all ${
+                            className={`flex items-center justify-between p-3 rounded-2xl text-xs font-medium transition-colors duration-75 select-none outline-none focus:outline-none ${
                               isActive
                                 ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
-                                : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 border border-slate-800/80'
+                                : 'bg-slate-950/60 text-slate-300 hover:bg-slate-800 active:bg-indigo-600 active:text-white border border-slate-800/80'
                             }`}
                           >
                             <div className="flex items-center gap-3">
@@ -402,19 +412,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
 
                 {catItems.map((item) => {
-                  const isActive = currentView === item.id;
+                  const isActive = activeView === item.id;
                   return (
                     <button
                       key={item.id}
                       id={`nav-item-${item.id}`}
-                      onClick={() => onSelectView(item.id)}
+                      onClick={() => handleSelect(item.id)}
                       title={isCollapsed ? `${item.label} ${item.badge ? `(${item.badge})` : ''}` : undefined}
-                      className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-all ${
+                      className={`relative w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium transition-colors duration-75 select-none outline-none focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
                         isCollapsed ? 'justify-center px-0' : ''
                       } ${
                         isActive
                           ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25 font-semibold'
-                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 active:bg-indigo-600 active:text-white'
                       }`}
                     >
                       <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}>

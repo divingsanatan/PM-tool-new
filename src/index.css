@@ -542,43 +542,37 @@ html:not(.dark) {
   /* Translucent Tinted Borders in Light Mode */
   .border-indigo-500\/40,
   .border-indigo-500\/30,
-  .border-indigo-500\/20,
-  .border-indigo-400 {
+  .border-indigo-500\/20 {
     border-color: #c7d2fe !important;
   }
 
   .border-purple-500\/40,
   .border-purple-500\/30,
-  .border-purple-500\/20,
-  .border-purple-400 {
+  .border-purple-500\/20 {
     border-color: #e9d5ff !important;
   }
 
   .border-rose-500\/40,
   .border-rose-500\/30,
-  .border-rose-500\/20,
-  .border-rose-400 {
+  .border-rose-500\/20 {
     border-color: #fecdd3 !important;
   }
 
   .border-amber-500\/40,
   .border-amber-500\/30,
-  .border-amber-500\/20,
-  .border-amber-400 {
-    border-color: #fde68a !important;
+  .border-amber-500\/20 {
+    border-color: #fcd34d !important;
   }
 
   .border-teal-500\/40,
   .border-teal-500\/30,
-  .border-teal-500\/20,
-  .border-teal-400 {
+  .border-teal-500\/20 {
     border-color: #99f6e4 !important;
   }
 
   .border-emerald-500\/40,
   .border-emerald-500\/30,
-  .border-emerald-500\/20,
-  .border-emerald-400 {
+  .border-emerald-500\/20 {
     border-color: #a7f3d0 !important;
   }
 

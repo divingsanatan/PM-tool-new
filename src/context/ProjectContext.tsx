@@ -100,6 +100,17 @@ interface ProjectContextType {
   deleteProjectChatMessage: (messageId: string) => Promise<void>;
   toggleProjectChatMessageReaction: (messageId: string, emoji: string) => Promise<void>;
   togglePinProjectChatMessage: (messageId: string) => Promise<void>;
+  importWbsData: (
+    parsed: {
+      milestones: Milestone[];
+      epics: Epic[];
+      features: Feature[];
+      tasks: Task[];
+      subtasks: Subtask[];
+      raidItems: RaidItem[];
+    },
+    mode?: 'replace' | 'merge'
+  ) => Promise<void>;
   resetToDefault: () => Promise<void>;
   updateWidgets: (widgets: ProjectData['widgets']) => Promise<void>;
   updateStatusPercentages: (percentages: Record<string, number>) => Promise<void>;
@@ -1002,6 +1013,89 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       tasks: updatedTasks
     });
     addAuditNote('Status Percentages Updated', 'Project Manager updated task completion thresholds.', 'wbs');
+  };
+
+  const importWbsData = async (
+    parsed: {
+      milestones: Milestone[];
+      epics: Epic[];
+      features: Feature[];
+      tasks: Task[];
+      subtasks: Subtask[];
+      raidItems: RaidItem[];
+    },
+    mode: 'replace' | 'merge' = 'replace'
+  ) => {
+    let updatedMilestones = [...(projectData.milestones || [])];
+    let updatedEpics = [...(projectData.epics || [])];
+    let updatedFeatures = [...(projectData.features || [])];
+    let updatedTasks = [...(projectData.tasks || [])];
+    let updatedSubtasks = [...(projectData.subtasks || [])];
+    let updatedRaidItems = [...(projectData.raidItems || [])];
+
+    if (mode === 'replace') {
+      if (parsed.milestones.length > 0) updatedMilestones = parsed.milestones;
+      if (parsed.epics.length > 0) updatedEpics = parsed.epics;
+      if (parsed.features.length > 0) updatedFeatures = parsed.features;
+      if (parsed.tasks.length > 0) updatedTasks = parsed.tasks;
+      if (parsed.subtasks.length > 0) updatedSubtasks = parsed.subtasks;
+      if (parsed.raidItems.length > 0) updatedRaidItems = parsed.raidItems;
+    } else {
+      parsed.milestones.forEach(m => {
+        const idx = updatedMilestones.findIndex(item => item.id === m.id || item.title.toLowerCase() === m.title.toLowerCase());
+        if (idx >= 0) updatedMilestones[idx] = { ...updatedMilestones[idx], ...m };
+        else updatedMilestones.push(m);
+      });
+
+      parsed.epics.forEach(e => {
+        const idx = updatedEpics.findIndex(item => item.id === e.id || item.title.toLowerCase() === e.title.toLowerCase());
+        if (idx >= 0) updatedEpics[idx] = { ...updatedEpics[idx], ...e };
+        else updatedEpics.push(e);
+      });
+
+      parsed.features.forEach(f => {
+        const idx = updatedFeatures.findIndex(item => item.id === f.id || item.title.toLowerCase() === f.title.toLowerCase());
+        if (idx >= 0) updatedFeatures[idx] = { ...updatedFeatures[idx], ...f };
+        else updatedFeatures.push(f);
+      });
+
+      parsed.tasks.forEach(t => {
+        const idx = updatedTasks.findIndex(item => item.id === t.id || item.title.toLowerCase() === t.title.toLowerCase());
+        if (idx >= 0) updatedTasks[idx] = { ...updatedTasks[idx], ...t };
+        else updatedTasks.push(t);
+      });
+
+      parsed.subtasks.forEach(st => {
+        const idx = updatedSubtasks.findIndex(item => item.id === st.id || item.title.toLowerCase() === st.title.toLowerCase());
+        if (idx >= 0) updatedSubtasks[idx] = { ...updatedSubtasks[idx], ...st };
+        else updatedSubtasks.push(st);
+      });
+
+      parsed.raidItems.forEach(r => {
+        const idx = updatedRaidItems.findIndex(item => item.id === r.id || item.title.toLowerCase() === r.title.toLowerCase());
+        if (idx >= 0) updatedRaidItems[idx] = { ...updatedRaidItems[idx], ...r };
+        else updatedRaidItems.push(r);
+      });
+    }
+
+    const updatedData: ProjectData = {
+      ...projectData,
+      milestones: updatedMilestones,
+      epics: updatedEpics,
+      features: updatedFeatures,
+      tasks: updatedTasks,
+      subtasks: updatedSubtasks,
+      raidItems: updatedRaidItems
+    };
+
+    setProjectData(updatedData);
+    broadcastLocalTabSync(updatedData);
+
+    addAuditNote(
+      'CSV WBS Data Feed Imported',
+      `Imported WBS dataset (${parsed.tasks.length} tasks, ${parsed.features.length} features, ${parsed.epics.length} epics, ${parsed.milestones.length} milestones) in ${mode} mode.`,
+      'wbs'
+    );
   };
 
   const resetToDefault = async () => {

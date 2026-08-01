@@ -519,6 +519,12 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                   <marker id="arrow-amber" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
                   </marker>
+                  <marker id="arrow-purple" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#c084fc" />
+                  </marker>
+                  <marker id="arrow-cyan" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee" />
+                  </marker>
                   <marker id="arrow-red" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                     <path d="M 0 0 L 10 5 L 0 10 z" fill="#f43f5e" />
                   </marker>
@@ -526,9 +532,35 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
 
                 {dependencyLinks.map((link) => {
                   const isConflict = link.hasConflict;
-                  const strokeColor = isConflict ? '#f43f5e' : link.depType === 'SS' ? '#f59e0b' : '#818cf8';
-                  const markerUrl = isConflict ? 'url(#arrow-red)' : link.depType === 'SS' ? 'url(#arrow-amber)' : 'url(#arrow-indigo)';
-                  const dashArray = isConflict ? '4 3' : link.depType === 'SS' ? '5 3' : undefined;
+                  const strokeColor = isConflict
+                    ? '#f43f5e'
+                    : link.depType === 'SS'
+                    ? '#f59e0b'
+                    : link.depType === 'FF'
+                    ? '#c084fc'
+                    : link.depType === 'SF'
+                    ? '#22d3ee'
+                    : '#818cf8';
+
+                  const markerUrl = isConflict
+                    ? 'url(#arrow-red)'
+                    : link.depType === 'SS'
+                    ? 'url(#arrow-amber)'
+                    : link.depType === 'FF'
+                    ? 'url(#arrow-purple)'
+                    : link.depType === 'SF'
+                    ? 'url(#arrow-cyan)'
+                    : 'url(#arrow-indigo)';
+
+                  const dashArray = isConflict
+                    ? '4 3'
+                    : link.depType === 'SS'
+                    ? '5 3'
+                    : link.depType === 'FF'
+                    ? '2 3'
+                    : link.depType === 'SF'
+                    ? '6 2 2 2'
+                    : undefined;
 
                   const midX = (link.x1 + link.x2) / 2;
                   const pathD = `M ${link.x1} ${link.y1} C ${midX} ${link.y1}, ${midX} ${link.y2}, ${link.x2} ${link.y2}`;
@@ -625,11 +657,17 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-md bg-rose-600 border border-rose-400" /> Critical Path
           </span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-indigo-300">
-            <span className="w-4 h-0.5 bg-indigo-400 inline-block" /> FS (Finish-to-Start)
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold">
+            <span className="w-5 h-0.5 bg-indigo-600 dark:bg-indigo-400 inline-block rounded-full" /> FS (Finish-to-Start)
           </span>
-          <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-300">
-            <span className="w-4 h-0.5 border-t border-dashed border-amber-400 inline-block" /> SS (Start-to-Start)
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-amber-800 dark:text-amber-300 font-semibold">
+            <span className="w-5 h-0 border-t-2 border-dashed border-amber-600 dark:border-amber-400 inline-block" /> SS (Start-to-Start)
+          </span>
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-purple-800 dark:text-purple-300 font-semibold">
+            <span className="w-5 h-0 border-t-2 border-dotted border-purple-600 dark:border-purple-400 inline-block" /> FF (Finish-to-Finish)
+          </span>
+          <span className="flex items-center gap-1.5 font-mono text-[11px] text-cyan-800 dark:text-cyan-300 font-semibold">
+            <span className="w-5 h-0.5 bg-cyan-600 dark:bg-cyan-400 inline-block rounded-full opacity-90" /> SF (Start-to-Finish)
           </span>
         </div>
 
