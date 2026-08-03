@@ -20,7 +20,8 @@ import {
   Layers,
   Award,
   CheckSquare,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 
 interface PMChecklistWidgetProps {
@@ -210,22 +211,22 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
   return (
     <div id="pm-checklist-widget" className="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 space-y-6">
       {/* Header & Overall Score */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5">
               <ShieldCheck className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-bold text-slate-100">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
                   PM Governance & Readiness Checklist
                 </h3>
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 whitespace-nowrap shrink-0">
                   PM Authorized
                 </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
                 Automated validation for Scope, Stakeholders, Schedule, Cost, DOR, DOD & Acceptance Criteria.
               </p>
             </div>
@@ -233,18 +234,30 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
         </div>
 
         {/* Score & Controls */}
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('governance')}
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-1.5"
+            >
+              <span>Open Dedicated Governance Tab</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <div className="px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3 shrink-0">
             <div>
-              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">Readiness Score</p>
-              <div className="flex items-baseline gap-1">
+              <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 whitespace-nowrap">
+                Readiness Score
+              </p>
+              <div className="flex items-baseline gap-1 whitespace-nowrap">
                 <span className={`text-xl font-extrabold ${readinessScore >= 80 ? 'text-emerald-400' : readinessScore >= 60 ? 'text-amber-400' : 'text-rose-400'}`}>
                   {readinessScore}%
                 </span>
                 <span className="text-xs text-slate-500">/ 100%</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1 relative">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center p-1 relative shrink-0">
               <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                 <path
                   className="text-slate-800"
@@ -267,9 +280,9 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
           </div>
 
           {pendingACTasks.length > 0 && (
-            <span className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
+            <span className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 animate-pulse min-w-0">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{pendingACTasks.length} Demoable AC Pending PM Validation</span>
+              <span className="truncate">{pendingACTasks.length} Demoable AC Pending PM Validation</span>
             </span>
           )}
         </div>
@@ -279,29 +292,29 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
       <div className="flex items-center gap-2 border-b border-slate-800/60 pb-3 overflow-x-auto custom-scrollbar text-xs">
         <button
           onClick={() => setActiveTab('all')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
+          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0 ${activeTab === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
         >
           All Parameters
         </button>
         <button
           onClick={() => setActiveTab('core')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'core' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
+          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0 ${activeTab === 'core' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
         >
           Core Parameters ({coreCount}/4)
         </button>
         <button
           onClick={() => setActiveTab('dor_dod')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${activeTab === 'dor_dod' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
+          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0 ${activeTab === 'dor_dod' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
         >
           DOR & DOD Guidelines
         </button>
         <button
           onClick={() => setActiveTab('demoable')}
-          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${activeTab === 'demoable' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
+          className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${activeTab === 'demoable' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-slate-800/60 text-slate-400 hover:text-slate-200'}`}
         >
           <span>Demoable AC Validation</span>
           {pendingACTasks.length > 0 && (
-            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500 text-slate-950">
+            <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500 text-slate-950 shrink-0 inline-flex items-center justify-center">
               {pendingACTasks.length}
             </span>
           )}
@@ -318,24 +331,24 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 1. Scope Parameter */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 text-blue-400" />
-                  <span className="font-semibold text-slate-200 text-sm">1. Project Scope</span>
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FileText className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span className="font-semibold text-slate-200 text-sm truncate">1. Project Scope</span>
                 </div>
                 {hasScope ? (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Scope Defined
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Scope Defined
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> Missing Scope
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <XCircle className="w-3.5 h-3.5 shrink-0" /> Missing Scope
                   </span>
                 )}
               </div>
 
-              <p className="text-xs text-slate-300 leading-relaxed bg-slate-900 p-2.5 rounded-lg border border-slate-800">
+              <p className="text-xs text-slate-300 leading-relaxed bg-slate-900 p-2.5 rounded-lg border border-slate-800 break-words">
                 {projectData.pmChecklist?.scopeDetails || projectData.description || 'No detailed scope description provided.'}
               </p>
 
@@ -380,30 +393,30 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
             </div>
 
             {/* 2. Stakeholders Parameter */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Users className="w-4 h-4 text-purple-400" />
-                  <span className="font-semibold text-slate-200 text-sm">2. Key Stakeholders</span>
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Users className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="font-semibold text-slate-200 text-sm truncate">2. Key Stakeholders</span>
                 </div>
                 {hasStakeholders ? (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> {projectData.stakeholders.length} Active Stakeholders
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {projectData.stakeholders.length} Active Stakeholders
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> No Stakeholders Added
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <XCircle className="w-3.5 h-3.5 shrink-0" /> No Stakeholders Added
                   </span>
                 )}
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1.5">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>Assigned Team Members:</span>
-                  <span className="font-bold text-slate-200">{projectData.stakeholders.map(s => s.name).join(', ') || 'None'}</span>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-slate-400">
+                  <span className="whitespace-nowrap shrink-0">Assigned Team Members:</span>
+                  <span className="font-bold text-slate-200 truncate">{projectData.stakeholders.map(s => s.name).join(', ') || 'None'}</span>
                 </div>
                 {projectData.pmChecklist?.stakeholderNotes && (
-                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80">
+                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80 break-words">
                     "{projectData.pmChecklist.stakeholderNotes}"
                   </p>
                 )}
@@ -450,34 +463,34 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
             </div>
 
             {/* 3. Schedule Parameter */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <Calendar className="w-4 h-4 text-amber-400" />
-                  <span className="font-semibold text-slate-200 text-sm">3. Project Schedule</span>
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Calendar className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="font-semibold text-slate-200 text-sm truncate">3. Project Schedule</span>
                 </div>
                 {hasSchedule ? (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Schedule Baseline Set
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> Schedule Baseline Set
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> Schedule Incomplete
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <XCircle className="w-3.5 h-3.5 shrink-0" /> Schedule Incomplete
                   </span>
                 )}
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1 text-xs">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span>Timeline Window:</span>
-                  <span className="font-mono text-slate-200">{projectData.startDate} to {projectData.targetEndDate}</span>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1.5 text-xs min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-slate-400">
+                  <span className="whitespace-nowrap shrink-0">Timeline Window:</span>
+                  <span className="font-mono text-slate-200 whitespace-nowrap">{projectData.startDate} to {projectData.targetEndDate}</span>
                 </div>
-                <div className="flex items-center justify-between text-slate-400">
-                  <span>Milestones Logged:</span>
-                  <span className="font-bold text-slate-200">{projectData.milestones.length} Milestones</span>
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-slate-400">
+                  <span className="whitespace-nowrap shrink-0">Milestones Logged:</span>
+                  <span className="font-bold text-slate-200 whitespace-nowrap">{projectData.milestones.length} Milestones</span>
                 </div>
                 {projectData.pmChecklist?.scheduleNotes && (
-                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80">
+                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80 break-words">
                     "{projectData.pmChecklist.scheduleNotes}"
                   </p>
                 )}
@@ -524,30 +537,30 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
             </div>
 
             {/* 4. Cost / Budget Parameter */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <DollarSign className="w-4 h-4 text-emerald-400" />
-                  <span className="font-semibold text-slate-200 text-sm">4. Project Cost & Budget</span>
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-semibold text-slate-200 text-sm truncate">4. Project Cost & Budget</span>
                 </div>
                 {hasCost ? (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> ${projectData.budget.toLocaleString()} Budgeted
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> ${projectData.budget.toLocaleString()} Budgeted
                   </span>
                 ) : (
-                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1">
-                    <XCircle className="w-3.5 h-3.5" /> No Budget Defined
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/30 flex items-center gap-1 shrink-0 self-start sm:self-auto whitespace-nowrap">
+                    <XCircle className="w-3.5 h-3.5 shrink-0" /> No Budget Defined
                   </span>
                 )}
               </div>
 
-              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1 text-xs">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span>Total Baseline Budget (BAC):</span>
-                  <span className="font-mono text-emerald-400 font-bold">${projectData.budget.toLocaleString()}</span>
+              <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 space-y-1.5 text-xs min-w-0">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-slate-400">
+                  <span className="whitespace-nowrap shrink-0">Total Baseline Budget (BAC):</span>
+                  <span className="font-mono text-emerald-400 font-bold whitespace-nowrap">${projectData.budget.toLocaleString()}</span>
                 </div>
                 {projectData.pmChecklist?.costNotes && (
-                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80">
+                  <p className="text-xs text-slate-300 italic pt-1 border-t border-slate-800/80 break-words">
                     "{projectData.pmChecklist.costNotes}"
                   </p>
                 )}
@@ -606,13 +619,13 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Definition of Ready */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="font-bold text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
-                  Definition of Ready (DOR)
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                <span className="font-bold text-slate-200 text-xs sm:text-sm flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+                  <span className="truncate">Definition of Ready (DOR)</span>
                 </span>
-                <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-full font-semibold">
+                <span className="text-[10px] text-indigo-300 bg-indigo-500/10 px-2.5 py-0.5 rounded-full font-semibold whitespace-nowrap shrink-0 self-start sm:self-auto">
                   Pre-Sprint Entry Criteria
                 </span>
               </div>
@@ -658,13 +671,13 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
             </div>
 
             {/* Definition of Done */}
-            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="font-bold text-slate-200 text-xs sm:text-sm flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  Definition of Done (DOD)
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800/80 space-y-3 min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                <span className="font-bold text-slate-200 text-xs sm:text-sm flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+                  <span className="truncate">Definition of Done (DOD)</span>
                 </span>
-                <span className="text-[10px] text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded-full font-semibold">
+                <span className="text-[10px] text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full font-semibold whitespace-nowrap shrink-0 self-start sm:self-auto">
                   Release Verification Criteria
                 </span>
               </div>
@@ -715,12 +728,12 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
       {/* Demoable Acceptance Criteria Validation Section */}
       {(activeTab === 'all' || activeTab === 'demoable') && (
         <div className="space-y-4 pt-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Work Items Demoable Acceptance Criteria Validation</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2 min-w-0">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="truncate">Work Items Demoable Acceptance Criteria Validation</span>
             </h4>
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-400 shrink-0">
               {demoableTasks.length} Work Items in Review/Demoable Status
             </span>
           </div>
@@ -751,16 +764,16 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
                       <div className="flex items-center gap-2 shrink-0">
                         {acList.length > 0 ? (
                           allValidated ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> PM Validated ({validatedCount}/{acList.length})
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> PM Validated ({validatedCount}/{acList.length})
                             </span>
                           ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" /> Pending Validation ({validatedCount}/{acList.length})
+                            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Pending Validation ({validatedCount}/{acList.length})
                             </span>
                           )
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] text-slate-400 bg-slate-800/60 border border-slate-700">
+                          <span className="px-2.5 py-0.5 rounded-full text-[11px] text-slate-400 bg-slate-800/60 border border-slate-700 whitespace-nowrap shrink-0">
                             No Acceptance Criteria Added (Optional)
                           </span>
                         )}

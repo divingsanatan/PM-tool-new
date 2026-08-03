@@ -25,35 +25,11 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 const PORT = 3000;
-const STORE_FILE = path.join(process.cwd(), 'data_store.json');
 
 app.use(express.json({ limit: '10mb' }));
 
-// Helper to load persistent state from disk
-function loadStoreFromDisk() {
-  try {
-    if (fs.existsSync(STORE_FILE)) {
-      const content = fs.readFileSync(STORE_FILE, 'utf-8');
-      const data = JSON.parse(content);
-      if (data && data.allProjectsMap && Object.keys(data.allProjectsMap).length > 0) {
-        return {
-          allProjectsMap: data.allProjectsMap as Record<string, ProjectData>,
-          activeProjectId: (data.activeProjectId as string) || Object.keys(data.allProjectsMap)[0] || 'proj-1'
-        };
-      }
-    }
-  } catch (err) {
-    console.error('Failed to read data_store.json from disk:', err);
-  }
-  return {
-    allProjectsMap: { ...defaultProjectsMap },
-    activeProjectId: 'proj-1'
-  };
-}
-
-const initialStore = loadStoreFromDisk();
-let allProjectsMap: Record<string, ProjectData> = initialStore.allProjectsMap;
-let activeProjectId: string = initialStore.activeProjectId;
+let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap };
+let activeProjectId: string = 'proj-1';
 let isSupabaseConnected = false;
 
 // Async initial hydration from Supabase
@@ -69,7 +45,7 @@ async function initSupabaseHydration() {
         }
       });
       if (Object.keys(loadedMap).length > 0) {
-        allProjectsMap = loadedMap;
+        allProjectsMap = { ...defaultProjectsMap, ...loadedMap };
         if (!allProjectsMap[activeProjectId]) {
           activeProjectId = Object.keys(allProjectsMap)[0];
         }
@@ -85,23 +61,28 @@ async function initSupabaseHydration() {
 
 initSupabaseHydration();
 
-// Helper to save current state to disk & Supabase
-function saveStoreToDisk() {
-  try {
-    const payload = JSON.stringify({
-      allProjectsMap,
-      activeProjectId,
-      updatedAt: new Date().toISOString()
-    }, null, 2);
-    fs.writeFileSync(STORE_FILE, payload, 'utf-8');
-  } catch (err) {
-    console.error('Failed to write data_store.json to disk:', err);
-  }
-
-  // Background sync to Supabase
-  syncToSupabase().catch(err => console.warn('[Supabase] Background sync warning:', err.message || err));
+// Supabase Real-Time Listener
+try {
+  supabase
+    .channel('public:app_projects')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_projects' },
+      (payload) => {
+        if (payload.new && (payload.new as any).id && (payload.new as any).data) {
+          const row = payload.new as any;
+          allProjectsMap[row.id] = row.data;
+          console.log(`[Supabase Realtime] Received update for project ${row.id}`);
+          broadcastDataChange();
+        }
+      }
+    )
+    .subscribe();
+} catch (err) {
+  console.warn('[Supabase Realtime] Could not subscribe:', err);
 }
 
+// Background sync to Supabase
 async function syncToSupabase() {
   try {
     const rows = Object.values(allProjectsMap).map(p => ({
@@ -132,9 +113,9 @@ function getActiveProject(): ProjectData {
   return allProjectsMap[activeProjectId];
 }
 
-// Helper to broadcast state changes to all connected clients and save to disk
+// Helper to broadcast state changes to all connected clients and save to Supabase
 function broadcastDataChange(senderWs?: WebSocket) {
-  saveStoreToDisk();
+  syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
   const currentData = getActiveProject();
   const projectsList = Object.values(allProjectsMap).map(p => ({
     id: p.id || 'proj-1',
@@ -279,10 +260,20 @@ app.get('/api/projects', (_req, res) => {
 
 app.post('/api/projects/switch', (req, res) => {
   const { projectId } = req.body;
-  if (projectId && allProjectsMap[projectId]) {
+  if (!projectId) {
+    return res.status(400).json({ error: 'Missing projectId' });
+  }
+
+  let project = allProjectsMap[projectId];
+  if (!project && defaultProjectsMap[projectId]) {
+    project = defaultProjectsMap[projectId];
+    allProjectsMap[projectId] = project;
+  }
+
+  if (project) {
     activeProjectId = projectId;
     broadcastDataChange();
-    res.json({ success: true, activeProjectId, data: allProjectsMap[projectId] });
+    res.json({ success: true, activeProjectId, data: project });
   } else {
     res.status(404).json({ error: 'Project not found' });
   }
@@ -325,6 +316,7 @@ app.delete('/api/projects/:id', (req, res) => {
   if (activeProjectId === id) {
     activeProjectId = Object.keys(allProjectsMap)[0];
   }
+  Promise.resolve(supabase.from('app_projects').delete().eq('id', id)).catch(() => {});
   broadcastDataChange();
   res.json({ success: true, activeProjectId, data: getActiveProject() });
 });
@@ -692,6 +684,133 @@ Please provide:
   } catch (error: any) {
     console.error('Error analyzing risk:', error);
     res.status(500).json({ error: error.message || 'Failed to analyze risk' });
+  }
+});
+
+app.post('/api/ai/parse-sow', async (req, res) => {
+  try {
+    const { sowText, targetBudget, startDate, customAiConfig } = req.body;
+    if (!sowText || typeof sowText !== 'string' || !sowText.trim()) {
+      return res.status(400).json({ error: 'SOW / Document content is required.' });
+    }
+
+    const systemInstruction = "You are an expert Chief Project Officer and PMI Agile/EVM Project Architect. Analyze the provided Statement of Work (SOW), Project Brief, or Charter and extract a complete, production-ready project plan in strict JSON format.";
+
+    const prompt = `
+Analyze the following Statement of Work (SOW) / Project Brief / Charter and generate a detailed structured project structure.
+
+--- SOW / DOCUMENT CONTENT ---
+${sowText.slice(0, 20000)}
+--- END SOW CONTENT ---
+
+Optional Target Guidance:
+- Target Budget: ${targetBudget ? '$' + targetBudget : 'Infer from SOW or default to $200,000 baseline'}
+- Target Start Date: ${startDate || new Date().toISOString().split('T')[0]}
+
+Return ONLY valid JSON without conversational commentary or markdown block wrappers. The JSON must match this structure:
+{
+  "projectName": "Name of project extracted or synthesized",
+  "projectCode": "3-5 letter uppercase code e.g. CLOUD or APEX",
+  "description": "2-3 sentence executive project summary",
+  "startDate": "YYYY-MM-DD",
+  "targetEndDate": "YYYY-MM-DD",
+  "budget": 200000,
+  "scopeDetails": "Comprehensive project scope summary based on SOW objectives",
+  "stakeholders": [
+    {
+      "name": "Full Name",
+      "email": "email@example.com",
+      "role": "Project Manager / Senior Engineer / Lead Architect / QA Specialist / Client Sponsor",
+      "category": "internal",
+      "hourlyRate": 120,
+      "weeklyCapacityHours": 40,
+      "skills": ["Project Management", "Agile"]
+    }
+  ],
+  "milestones": [
+    {
+      "title": "Milestone Title",
+      "targetDate": "YYYY-MM-DD",
+      "description": "Milestone deliverable objective"
+    }
+  ],
+  "epics": [
+    {
+      "title": "Epic Title",
+      "description": "Epic description",
+      "milestoneIndex": 0
+    }
+  ],
+  "features": [
+    {
+      "title": "Feature Title",
+      "description": "Feature description",
+      "epicIndex": 0,
+      "milestoneIndex": 0
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Task Title",
+      "description": "Detailed task requirements and acceptance guidelines",
+      "featureIndex": 0,
+      "epicIndex": 0,
+      "priority": "high",
+      "estimatedHours": 24,
+      "baselineCost": 2880,
+      "status": "todo",
+      "acceptanceCriteria": [
+        { "id": "ac-1", "text": "Acceptance criterion text", "validated": false }
+      ]
+    }
+  ],
+  "subtasks": [
+    {
+      "title": "Subtask title",
+      "estimatedHours": 8,
+      "taskIndex": 0
+    }
+  ],
+  "raidItems": [
+    {
+      "type": "risk",
+      "title": "RAID item title",
+      "description": "Detailed risk description and mitigation plan",
+      "severity": "medium",
+      "status": "identified"
+    }
+  ],
+  "dorCriteria": [
+    "User story / requirement clearly defined with acceptance criteria",
+    "Technical dependencies identified and mapped"
+  ],
+  "dodCriteria": [
+    "Code peer reviewed and passed unit tests",
+    "QA validation complete and accepted by PM"
+  ]
+}
+`;
+
+    const rawResponse = await executeAiCall(prompt, customAiConfig, systemInstruction);
+    
+    let cleanedJson = rawResponse.trim();
+    if (cleanedJson.startsWith('```')) {
+      cleanedJson = cleanedJson.replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    }
+
+    try {
+      const proposal = JSON.parse(cleanedJson);
+      res.json({ success: true, proposal });
+    } catch (parseErr) {
+      console.error('Failed to parse AI JSON response:', parseErr, rawResponse);
+      res.status(422).json({ 
+        error: 'AI output was not valid JSON. Please try refining or resubmitting the SOW text.',
+        rawText: rawResponse 
+      });
+    }
+  } catch (err: any) {
+    console.error('Error in parse-sow endpoint:', err);
+    res.status(500).json({ error: err.message || 'Failed to analyze SOW document.' });
   }
 });
 

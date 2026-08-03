@@ -166,6 +166,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-indigo-500 text-white font-bold border-indigo-400 shadow-sm'
     },
     {
+      id: 'governance',
+      label: 'Governance & Readiness',
+      shortLabel: 'Governance',
+      category: 'governance',
+      icon: <ShieldCheck className="w-4 h-4 shrink-0" />
+    },
+    {
       id: 'raid',
       label: 'RAID Management',
       shortLabel: 'RAID',

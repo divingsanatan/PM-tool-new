@@ -18,7 +18,7 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState(200000);
 
-  const [initPlaceholderTeam, setInitPlaceholderTeam] = useState(true);
+  const [initPlaceholderTeam, setInitPlaceholderTeam] = useState(false);
 
   if (!isOpen) return null;
 

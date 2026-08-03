@@ -461,3 +461,55 @@ export function getProjectEffectiveValues(
   };
 }
 
+/**
+ * Calculates total project budget auto-computed from WBS tasks & subtasks planned costs
+ */
+export function calculateWbsTotalBudget(
+  tasks: Task[],
+  subtasks: Subtask[] = [],
+  stakeholders: Stakeholder[] = []
+): number {
+  if (!tasks || tasks.length === 0) return 0;
+  return tasks.reduce((sum, task) => {
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    return sum + eff.plannedCost;
+  }, 0);
+}
+
+/**
+ * Calculates project end date based on timeline estimated in WBS and user-marked start date
+ */
+export function calculateWbsProjectEndDate(startDate: string, tasks: Task[]): string {
+  const baseStartStr = startDate || new Date().toISOString().split('T')[0];
+  const baseStartMs = new Date(baseStartStr).getTime();
+
+  if (!tasks || tasks.length === 0) {
+    const d = new Date(baseStartMs);
+    d.setDate(d.getDate() + 60);
+    return d.toISOString().split('T')[0];
+  }
+
+  let latestDueDateMs = baseStartMs;
+
+  tasks.forEach(task => {
+    if (task.dueDate) {
+      const dueMs = new Date(task.dueDate).getTime();
+      if (!isNaN(dueMs) && dueMs > latestDueDateMs) {
+        latestDueDateMs = dueMs;
+      }
+    }
+  });
+
+  if (latestDueDateMs <= baseStartMs) {
+    const totalEstHours = tasks.reduce((sum, t) => sum + (t.estimatedHours || 10), 0);
+    const workDays = Math.max(14, Math.ceil(totalEstHours / 8));
+    const calendarDays = Math.ceil(workDays * 1.4);
+    const d = new Date(baseStartMs);
+    d.setDate(d.getDate() + calendarDays);
+    return d.toISOString().split('T')[0];
+  }
+
+  return new Date(latestDueDateMs).toISOString().split('T')[0];
+}
+
+

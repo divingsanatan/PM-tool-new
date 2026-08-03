@@ -28,7 +28,10 @@ import {
   Mail,
   MoreVertical,
   Key,
-  Database
+  Database,
+  Check,
+  FolderPlus,
+  Layers
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -52,12 +55,16 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSupabaseModal,
   onSelectView
 }) => {
-  const { projectData, projectsList, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
+  const { projectData, projectsList, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
   const isPM = currentUser?.role === 'pm';
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const projectDropdownRef = useRef<HTMLDivElement>(null);
+  const projectSelectorContainerRef = useRef<HTMLDivElement>(null);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -106,6 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
       } else if (e.key === 'Escape') {
         setIsSearchFocused(false);
         setIsMobileMenuOpen(false);
+        setIsProjectDropdownOpen(false);
         searchInputRef.current?.blur();
       }
     };
@@ -113,7 +121,7 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Click Outside to Close Search & Mobile Dropdowns
+  // Click Outside to Close Search, Mobile & Project Dropdowns
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -122,6 +130,13 @@ export const Header: React.FC<HeaderProps> = ({
         (!searchDropdownRef.current || !searchDropdownRef.current.contains(e.target as Node))
       ) {
         setIsSearchFocused(false);
+      }
+      if (
+        projectSelectorContainerRef.current &&
+        !projectSelectorContainerRef.current.contains(e.target as Node) &&
+        (!projectDropdownRef.current || !projectDropdownRef.current.contains(e.target as Node))
+      ) {
+        setIsProjectDropdownOpen(false);
       }
       if (
         mobileMenuRef.current && 
@@ -179,25 +194,91 @@ export const Header: React.FC<HeaderProps> = ({
             <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
           </div>
 
-          {/* Project Selector Trigger */}
-          <button
-            id="btn-project-selector"
-            onClick={() => setIsProjectsModalOpen(true)}
-            className="group text-left px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center gap-1 shrink min-w-0 max-w-[100px] xs:max-w-[120px] sm:max-w-[150px] md:max-w-[180px] lg:max-w-[200px]"
-            title="Manage or Switch Projects"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1 min-w-0">
-                <h1 className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight leading-none group-hover:text-indigo-300 transition-colors truncate min-w-0">
-                  {projectData.projectName}
-                </h1>
-                <span className="hidden 2xl:inline-block text-[9px] px-1 py-0.5 rounded bg-slate-950 text-indigo-300 font-mono border border-slate-800 shrink-0">
-                  {projectData.projectCode}
-                </span>
+          {/* Project Selector Trigger & Quick Switch Dropdown */}
+          <div ref={projectSelectorContainerRef} className="relative shrink min-w-0">
+            <button
+              id="btn-project-selector"
+              onClick={() => setIsProjectDropdownOpen(prev => !prev)}
+              className="group text-left px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center gap-1 shrink min-w-0 max-w-[110px] xs:max-w-[130px] sm:max-w-[160px] md:max-w-[190px] lg:max-w-[210px]"
+              title="Click to Switch Project or Manage Portfolio"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <h1 className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight leading-none group-hover:text-indigo-300 transition-colors truncate min-w-0">
+                    {projectData.projectName || 'Apex Project'}
+                  </h1>
+                  <span className="hidden 2xl:inline-block text-[9px] px-1 py-0.5 rounded bg-slate-950 text-indigo-300 font-mono border border-slate-800 shrink-0">
+                    {projectData.projectCode}
+                  </span>
+                </div>
               </div>
-            </div>
-            <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform shrink-0" />
-          </button>
+              <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform shrink-0 ${isProjectDropdownOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+            </button>
+
+            {/* Quick Project Switch Dropdown Menu */}
+            {isProjectDropdownOpen && (
+              <div
+                ref={projectDropdownRef}
+                className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 animate-fade-in space-y-1.5"
+              >
+                <div className="px-2.5 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                  <span>Switch Project ({projectsList.length})</span>
+                  <span className="text-[10px] text-emerald-400 font-normal">Instant Sync</span>
+                </div>
+
+                <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar pr-0.5">
+                  {projectsList.map(proj => {
+                    const isActive = proj.id === activeProjectId || proj.id === projectData.id;
+                    return (
+                      <button
+                        key={proj.id}
+                        onClick={() => {
+                          switchProject(proj.id);
+                          setIsProjectDropdownOpen(false);
+                        }}
+                        className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-2 border ${
+                          isActive
+                            ? 'bg-indigo-950/50 border-indigo-500/40 text-slate-100 shadow-sm'
+                            : 'bg-slate-950/40 hover:bg-slate-800/80 border-slate-800/60 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs truncate">{proj.projectName}</span>
+                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-indigo-300 border border-slate-800 shrink-0">
+                              {proj.projectCode}
+                            </span>
+                          </div>
+                          {proj.description && (
+                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{proj.description}</p>
+                          )}
+                        </div>
+
+                        {isActive && (
+                          <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">
+                            <Check className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-1.5 border-t border-slate-800">
+                  <button
+                    onClick={() => {
+                      setIsProjectDropdownOpen(false);
+                      setIsProjectsModalOpen(true);
+                    }}
+                    className="w-full p-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/30 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Manage Portfolio & Create Project</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Global Search Bar (Expanded width) */}

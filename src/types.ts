@@ -367,7 +367,7 @@ export interface ProjectData {
   pmChecklist?: PMChecklistConfig;
 }
 
-export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board' | 'chat';
+export type ViewMode = 'dashboard' | 'member_dashboard' | 'governance' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board' | 'chat';
 
 export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'custom';
 

@@ -1,9 +1,30 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import localforage from 'localforage';
 import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
-import { initialProjectData } from '../data/initialData';
+import { initialProjectData, defaultProjectsMap } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
-import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours } from '../utils/taskCalculations';
+import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate } from '../utils/taskCalculations';
+
+function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
+  if (!data) return data;
+  const tasks = data.tasks || [];
+  const subtasks = data.subtasks || [];
+  const stakeholders = data.stakeholders || [];
+
+  const computedBudget = calculateWbsTotalBudget(tasks, subtasks, stakeholders);
+  const computedEndDate = calculateWbsProjectEndDate(data.startDate, tasks);
+  const finalBudget = computedBudget > 0 ? computedBudget : data.budget;
+
+  if (data.budget === finalBudget && data.targetEndDate === computedEndDate) {
+    return data;
+  }
+
+  return {
+    ...data,
+    budget: finalBudget,
+    targetEndDate: computedEndDate
+  };
+}
 
 // Configure localForage instance
 localforage.config({
@@ -145,7 +166,7 @@ const PROJECTS_LIST_KEY = 'apex_pm_projects_list';
 const ACTIVE_PROJECT_ID_KEY = 'apex_pm_active_project_id';
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [projectData, setProjectData] = useState<ProjectData>(() => {
+  const [projectData, setProjectDataRaw] = useState<ProjectData>(() => {
     let baseData: ProjectData = { ...initialProjectData, id: 'proj-1' };
     try {
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
@@ -155,11 +176,19 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {
       console.warn('Failed to read cached project data:', e);
     }
-    return {
+    const merged = {
       ...baseData,
       statusPercentages: { ...DEFAULT_STATUS_PERCENTAGES, ...(baseData.statusPercentages || {}) }
     };
+    return syncProjectCalculatedAttributes(merged);
   });
+
+  const setProjectData = useCallback((action: ProjectData | ((prev: ProjectData) => ProjectData)) => {
+    setProjectDataRaw(prev => {
+      const next = typeof action === 'function' ? action(prev) : action;
+      return syncProjectCalculatedAttributes(next);
+    });
+  }, []);
 
   const [activeProjectId, setActiveProjectId] = useState<string>(() => {
     try {
@@ -703,6 +732,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Switch Active Project
   const switchProject = async (projectId: string) => {
     setActiveProjectId(projectId);
+
+    // Immediate optimistic local update if target exists in default map or cache
+    const targetLocal = defaultProjectsMap[projectId];
+    if (targetLocal) {
+      setProjectData(targetLocal);
+      broadcastLocalTabSync(targetLocal, projectsList, projectId);
+    }
+
     if (navigator.onLine) {
       try {
         const res = await fetch('/api/projects/switch', {
@@ -714,6 +751,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (json.success && json.data) {
           setProjectData(json.data);
           broadcastLocalTabSync(json.data, projectsList, projectId);
+        } else if (!targetLocal) {
+          // If server switch returned error and we don't have local default, push active project state
+          fetch('/api/project').then(r => r.json()).then(r => {
+            if (r.data) setProjectData(r.data);
+          }).catch(() => {});
         }
       } catch (err) {
         console.warn('Failed to switch project on server:', err);
@@ -723,6 +765,21 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Create Project
   const createProject = async (newProjData: Partial<ProjectData>) => {
+    const defaultCreatorStakeholder: Stakeholder = {
+      id: `sh-pm-${Date.now()}`,
+      name: currentUser.name || 'Project Manager',
+      email: currentUser.email || 'pm@example.com',
+      role: 'Project Manager (PM)',
+      category: 'internal',
+      avatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'PM')}`,
+      hourlyRate: currentUser.hourlyRate || 120,
+      weeklyCapacityHours: currentUser.weeklyCapacityHours || 40,
+      skills: currentUser.skills || ['Project Management', 'Agile', 'Scrum'],
+      status: 'active',
+      createdBy: currentUser.id,
+      createdByEmail: currentUser.email
+    };
+
     const newProject: ProjectData = {
       id: 'proj-' + Date.now(),
       projectName: newProjData.projectName || 'New Agile Project',
@@ -730,24 +787,48 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       description: newProjData.description || 'Project managed in ApexPM',
       startDate: newProjData.startDate || new Date().toISOString().split('T')[0],
       targetEndDate: newProjData.targetEndDate || new Date(Date.now() + 86400000 * 90).toISOString().split('T')[0],
-      budget: newProjData.budget || 150000,
-      stakeholders: newProjData.stakeholders || [...initialProjectData.stakeholders],
+      budget: typeof newProjData.budget === 'number' ? newProjData.budget : 150000,
+      stakeholders: newProjData.stakeholders && newProjData.stakeholders.length > 0
+        ? newProjData.stakeholders
+        : [defaultCreatorStakeholder],
       epics: newProjData.epics || [],
       features: newProjData.features || [],
       milestones: newProjData.milestones || [],
       tasks: newProjData.tasks || [],
       subtasks: newProjData.subtasks || [],
       raidItems: newProjData.raidItems || [],
-      activities: [
+      changeRequests: newProjData.changeRequests || [],
+      boardCategories: newProjData.boardCategories || [],
+      boardItems: newProjData.boardItems || [],
+      boardMessages: newProjData.boardMessages || [],
+      activities: newProjData.activities || [
         {
           id: 'act-' + Date.now(),
           timestamp: new Date().toISOString(),
-          user: currentUser.name,
+          user: currentUser.name || 'System',
           action: 'Created Project',
-          details: `Created project ${newProjData.projectName}`
+          details: `Created new project: ${newProjData.projectName || 'New Agile Project'}`
         }
       ],
-      widgets: initialProjectData.widgets
+      widgets: newProjData.widgets || [
+        { id: "pm-checklist", title: "PM Governance & Readiness Checklist", enabled: true, order: 1, width: "full" },
+        { id: "evm", title: "EVM Financial Performance", enabled: true, order: 2, width: "full" },
+        { id: "spi-cpi-gauges", title: "SPI / CPI Health Gauges", enabled: true, order: 3, width: "half" },
+        { id: "workload", title: "Stakeholder Workload", enabled: true, order: 4, width: "half" },
+        { id: "raid", title: "RAID Log Overview", enabled: true, order: 5, width: "half" },
+        { id: "gantt-preview", title: "Timeline & Gantt", enabled: true, order: 6, width: "half" }
+      ],
+      pmChecklist: newProjData.pmChecklist || {
+        scopeDetails: newProjData.description || 'Project scope defined upon creation.',
+        stakeholderNotes: '',
+        scheduleNotes: '',
+        costNotes: '',
+        dorNotes: '',
+        dodNotes: '',
+        dorCriteria: [],
+        dodCriteria: [],
+        customItems: []
+      }
     };
 
     setProjectData(newProject);

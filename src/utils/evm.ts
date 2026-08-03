@@ -1,5 +1,5 @@
 import { Task, Subtask, EVMMetrics, Stakeholder, StakeholderWorkload } from '../types';
-import { getTaskEffectiveValues, getTaskAllAssigneeIds } from './taskCalculations';
+import { getTaskEffectiveValues, getTaskAllAssigneeIds, calculateWbsTotalBudget } from './taskCalculations';
 
 export function calculateEVMMetrics(
   tasks: Task[],
@@ -47,7 +47,8 @@ export function calculateEVMMetrics(
     totalAC += eff.actualCost || 0;
   });
 
-  const BAC = projectBudget || activeTasks.reduce((sum, t) => sum + getTaskEffectiveValues(t, subtasks, stakeholders).plannedCost, 0) || 100000;
+  const wbsBudget = calculateWbsTotalBudget(activeTasks, subtasks, stakeholders);
+  const BAC = wbsBudget > 0 ? wbsBudget : (projectBudget || 100000);
 
   // Avoid division by zero
   const safePV = totalPV <= 0 ? 1 : totalPV;

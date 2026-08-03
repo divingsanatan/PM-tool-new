@@ -13,6 +13,7 @@ import { RaidView } from './components/raid/RaidView';
 import { ReportsView } from './components/reports/ReportsView';
 import { AuditTrailView } from './components/audit/AuditTrailView';
 import { ChangeManagementView } from './components/change/ChangeManagementView';
+import { GovernanceView } from './components/governance/GovernanceView';
 import { ProjectBoardView } from './components/board/ProjectBoardView';
 import { ProjectChatView } from './components/chat/ProjectChatView';
 
@@ -136,6 +137,10 @@ function MainLayout() {
 
           {currentView === 'member_dashboard' && (
             <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+          )}
+
+          {currentView === 'governance' && (
+            <GovernanceView onNavigate={handleSelectView} />
           )}
 
           {currentView === 'wbs' && (
