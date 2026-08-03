@@ -48,9 +48,11 @@ import {
   Users,
   Tag,
   FileText,
+  FileSpreadsheet,
   Bug
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
+import { CsvImportModal } from '../modals/CsvImportModal';
 import {
   getStatusProgress,
   getTaskEffectiveValues,
@@ -94,6 +96,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   } = useProject();
 
   const [showStatusConfigModal, setShowStatusConfigModal] = useState(false);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [tempPercentages, setTempPercentages] = useState<Record<string, number>>(
     projectData.statusPercentages || DEFAULT_STATUS_PERCENTAGES
   );
@@ -1159,6 +1162,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Work Item</span>
+            </button>
+
+            <button
+              onClick={() => setIsCsvModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold text-xs transition-colors shadow-sm shrink-0 whitespace-nowrap"
+              title="Download CSV template or upload spreadsheet to feed WBS data directly"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
+              <span>Import / Feed CSV</span>
             </button>
           </div>
         </div>
@@ -2475,6 +2487,12 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         initialParentMilestoneId={initialParentMilestoneId}
         initialParentEpicId={initialParentEpicId}
         itemToEdit={itemToEdit}
+      />
+
+      {/* CSV Feed Import Modal */}
+      <CsvImportModal
+        isOpen={isCsvModalOpen}
+        onClose={() => setIsCsvModalOpen(false)}
       />
 
       {/* Project Manager Status Completion Thresholds Modal */}

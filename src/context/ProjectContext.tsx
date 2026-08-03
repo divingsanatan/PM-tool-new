@@ -1614,6 +1614,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteProjectChatMessage,
         toggleProjectChatMessageReaction,
         togglePinProjectChatMessage,
+        importWbsData,
         resetToDefault,
         updateWidgets,
         updateStatusPercentages,

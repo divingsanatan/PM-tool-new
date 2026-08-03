@@ -560,9 +560,4 @@ async function setupViteOrStatic() {
   });
 }
 
-if (!process.env.VERCEL) {
-  setupViteOrStatic();
-}
-
-export default app;
-
+setupViteOrStatic();

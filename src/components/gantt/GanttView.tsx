@@ -16,8 +16,10 @@ import {
   AlertCircle,
   Eye,
   Layers,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet
 } from 'lucide-react';
+import { CsvImportModal } from '../modals/CsvImportModal';
 import {
   getTaskDependencies,
   getTaskPredecessors,
@@ -36,6 +38,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
   const [highlightCriticalPath, setHighlightCriticalPath] = useState<boolean>(true);
   const [showDependencies, setShowDependencies] = useState<boolean>(true);
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(250);
+  const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
   // Mouse drag handler for column resizing
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -264,13 +267,24 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
             </p>
           </div>
 
-          <button
-            onClick={() => onOpenTaskModal()}
-            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-sm shrink-0 self-start sm:self-auto"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span>Add Task</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsCsvModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold text-xs transition-all shadow-sm shrink-0 self-start sm:self-auto"
+              title="Download template or upload CSV to feed WBS and Gantt schedule"
+            >
+              <FileSpreadsheet className="w-4 h-4 shrink-0" />
+              <span>Import / Feed CSV</span>
+            </button>
+
+            <button
+              onClick={() => onOpenTaskModal()}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-sm shrink-0 self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              <span>Add Task</span>
+            </button>
+          </div>
         </div>
 
         {/* Bottom Row: Filter & TimeScale Controls Toolbar */}
@@ -675,6 +689,11 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
           Tasks: <strong className="text-slate-200">{filteredTasks.length}</strong> | Dependencies: <strong className="text-indigo-400">{dependencyLinks.length}</strong>
         </div>
       </div>
+
+      <CsvImportModal
+        isOpen={isCsvModalOpen}
+        onClose={() => setIsCsvModalOpen(false)}
+      />
     </div>
   );
 };
