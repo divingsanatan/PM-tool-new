@@ -13,7 +13,7 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
 
   const computedBudget = calculateWbsTotalBudget(tasks, subtasks, stakeholders);
   const computedEndDate = calculateWbsProjectEndDate(data.startDate, tasks);
-  const finalBudget = computedBudget > 0 ? computedBudget : data.budget;
+  const finalBudget = (data.budget && data.budget > 0) ? data.budget : (computedBudget > 0 ? computedBudget : 250000);
 
   if (data.budget === finalBudget && data.targetEndDate === computedEndDate) {
     return data;
@@ -784,7 +784,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       id: 'proj-' + Date.now(),
       projectName: newProjData.projectName || 'New Agile Project',
       projectCode: newProjData.projectCode || 'PRJ-' + Math.floor(100 + Math.random() * 900),
-      description: newProjData.description || 'Project managed in ApexPM',
+      description: newProjData.description || '',
       startDate: newProjData.startDate || new Date().toISOString().split('T')[0],
       targetEndDate: newProjData.targetEndDate || new Date(Date.now() + 86400000 * 90).toISOString().split('T')[0],
       budget: typeof newProjData.budget === 'number' ? newProjData.budget : 150000,
@@ -819,7 +819,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         { id: "gantt-preview", title: "Timeline & Gantt", enabled: true, order: 6, width: "half" }
       ],
       pmChecklist: newProjData.pmChecklist || {
-        scopeDetails: newProjData.description || 'Project scope defined upon creation.',
+        scopeDetails: newProjData.description || '',
         stakeholderNotes: '',
         scheduleNotes: '',
         costNotes: '',

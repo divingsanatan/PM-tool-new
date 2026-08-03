@@ -48,7 +48,7 @@ export function calculateEVMMetrics(
   });
 
   const wbsBudget = calculateWbsTotalBudget(activeTasks, subtasks, stakeholders);
-  const BAC = wbsBudget > 0 ? wbsBudget : (projectBudget || 100000);
+  const BAC = (projectBudget && projectBudget > 0) ? projectBudget : (wbsBudget > 0 ? wbsBudget : 100000);
 
   // Avoid division by zero
   const safePV = totalPV <= 0 ? 1 : totalPV;

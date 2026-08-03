@@ -135,14 +135,24 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2.5">
                 <Server className="w-4 h-4 text-emerald-400" />
-                <span className="text-xs font-bold text-slate-200">Supabase Endpoint</span>
+                <span className="text-xs font-bold text-slate-200">Supabase Shared Database (Live & Dev)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${status?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
                 <span className="text-xs font-semibold text-slate-300">
-                  {status?.connected ? 'Connected to Supabase' : 'Offline / Checking'}
+                  {status?.connected ? 'Connected to Shared Supabase DB' : 'Offline / Check Permissions'}
                 </span>
               </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-indigo-200 space-y-1">
+              <div className="flex items-center gap-1.5 font-semibold text-indigo-300">
+                <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>Automatic Live & Dev Dual-Sync</span>
+              </div>
+              <p className="text-[11px] text-indigo-200/80">
+                Your Development environment (<code className="text-indigo-300">ais-dev</code>) and Live preview (<code className="text-emerald-300">ais-pre</code>) automatically share this exact Supabase database. Changes made in Dev are immediately visible in Live!
+              </p>
             </div>
 
             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800/80 font-mono text-xs text-emerald-300 break-all flex items-center justify-between">
@@ -171,7 +181,7 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
                   ) : (
                     <span className="text-amber-400 font-bold flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5" />
-                      Table needed (Run SQL below)
+                      Table needed / Permissions required
                     </span>
                   )}
                 </div>
@@ -179,9 +189,21 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
 
               <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
                 <span className="text-slate-400 block text-[11px] mb-1">In-Memory Active Projects:</span>
-                <span className="font-bold text-indigo-300">{status?.activeProjectsInMemory ?? 1} projects synced</span>
+                <span className="font-bold text-indigo-300">{status?.activeProjectsInMemory ?? 1} projects loaded</span>
               </div>
             </div>
+
+            {status?.errorMessage && (
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Notice from Supabase: {status.errorMessage}</span>
+                  <span className="text-[11px] text-amber-300/80 mt-0.5 block">
+                    If permission is denied, copy the SQL script below and execute it in your Supabase SQL Editor.
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Action Message Toast */}

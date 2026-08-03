@@ -58,16 +58,16 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
   }, [projectData.description, projectData.pmChecklist?.scopeDetails]);
 
   const hasStakeholders = useMemo(() => {
-    return projectData.stakeholders.length >= 1;
-  }, [projectData.stakeholders]);
+    return projectData.stakeholders.length >= 2 || (projectData.tasks && projectData.tasks.some(t => t.assigneeIds && t.assigneeIds.length > 0));
+  }, [projectData.stakeholders, projectData.tasks]);
 
   const hasSchedule = useMemo(() => {
     return Boolean(projectData.startDate && projectData.targetEndDate && projectData.milestones.length >= 1);
   }, [projectData.startDate, projectData.targetEndDate, projectData.milestones]);
 
   const hasCost = useMemo(() => {
-    return projectData.budget > 0;
-  }, [projectData.budget]);
+    return projectData.budget > 0 && projectData.tasks.length > 0;
+  }, [projectData.budget, projectData.tasks]);
 
   // Demoable & Acceptance Criteria Metrics
   const demoableTasks = useMemo(() => {
@@ -86,45 +86,77 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
   }, [demoableTasks]);
 
   const isACValidatedForDemoable = useMemo(() => {
-    if (demoableTasks.length === 0) return true;
+    if (demoableTasks.length === 0) return false;
     return pendingACTasks.length === 0;
   }, [demoableTasks, pendingACTasks]);
 
-  // DOR & DOD Checks
-  const dorRules = projectData.pmChecklist?.dorCriteria || [
-    'Item description & scope clearly articulated',
-    'Assignee(s) designated with capacity checked',
-    'Effort estimated in hours',
-    'Optional Acceptance Criteria defined'
-  ];
-
-  const dodRules = projectData.pmChecklist?.dodCriteria || [
-    'All subtasks & code review finished',
-    'PM validated all defined Acceptance Criteria',
-    'Logged against corresponding milestone/epic',
-    'No critical unmitigated RAID items linked'
-  ];
-
+  // DOR & DOD Checks (Default to empty for clean slate on fresh projects)
+  const dorRules = projectData.pmChecklist?.dorCriteria || [];
+  const dodRules = projectData.pmChecklist?.dodCriteria || [];
   const customItems = projectData.pmChecklist?.customItems || [];
 
-  // Readiness Score Calculation (0 - 100%)
   const coreParams = [hasScope, hasStakeholders, hasSchedule, hasCost];
   const coreCount = coreParams.filter(Boolean).length;
-
   const customCompleted = customItems.filter(c => c.completed).length;
   const customTotal = customItems.length;
 
+  // Readiness Score Calculation (0 - 100%)
   const readinessScore = useMemo(() => {
-    const coreWeight = 50; // Core params equal 50%
-    const acWeight = 25;   // AC validation equals 25%
-    const customWeight = 25; // Custom items equal 25%
+    let score = 0;
 
-    const corePart = (coreCount / 4) * coreWeight;
-    const acPart = isACValidatedForDemoable ? acWeight : (demoableTasks.length > 0 ? (1 - pendingACTasks.length / demoableTasks.length) * acWeight : acWeight);
-    const customPart = customTotal > 0 ? (customCompleted / customTotal) * customWeight : customWeight;
+    // 1. Scope (15%)
+    if (hasScope) score += 15;
 
-    return Math.round(corePart + acPart + customPart);
-  }, [coreCount, isACValidatedForDemoable, pendingACTasks.length, demoableTasks.length, customCompleted, customTotal]);
+    // 2. Schedule & Milestones (15%)
+    if (hasSchedule) score += 15;
+
+    // 3. Cost & Budget Allocation (15%)
+    if (hasCost) score += 15;
+
+    // 4. Team Stakeholders (15%)
+    if (hasStakeholders) score += 15;
+
+    // 5. Definition of Ready & Done Guidelines (20%)
+    if (dorRules.length > 0) {
+      const metDor = dorRules.filter(r => r.startsWith('[x] ')).length;
+      score += Math.round((metDor / dorRules.length) * 10);
+    }
+    if (dodRules.length > 0) {
+      const metDod = dodRules.filter(r => r.startsWith('[x] ')).length;
+      score += Math.round((metDod / dodRules.length) * 10);
+    }
+
+    // 6. Work Items & Acceptance Criteria Quality (20%)
+    const totalTasks = projectData.tasks.length;
+    if (totalTasks > 0) {
+      score += 10; // Basic task breakdown exists
+      if (demoableTasks.length > 0 && isACValidatedForDemoable) {
+        score += 10;
+      } else if (tasksWithAC.length > 0) {
+        score += Math.round((tasksWithAC.length / totalTasks) * 10);
+      }
+    }
+
+    // Custom items bonus
+    if (customItems.length > 0) {
+      const customCompleted = customItems.filter(c => c.completed).length;
+      score = Math.min(100, score + Math.round((customCompleted / customItems.length) * 10));
+    }
+
+    return Math.min(100, Math.max(0, score));
+  }, [
+    hasScope,
+    hasStakeholders,
+    hasSchedule,
+    hasCost,
+    dorRules,
+    dodRules,
+    projectData.tasks.length,
+    tasksWithAC.length,
+    demoableTasks.length,
+    isACValidatedForDemoable,
+    customItems
+  ]);
 
   const handleSaveScopeNotes = async () => {
     await updatePMChecklist({ scopeDetails: scopeNotesInput });
@@ -211,22 +243,22 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
   return (
     <div id="pm-checklist-widget" className="bg-slate-900 border border-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 space-y-6">
       {/* Header & Overall Score */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-start gap-2.5">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="flex items-start gap-2.5 min-w-0">
             <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5">
               <ShieldCheck className="w-5 h-5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-slate-100 leading-snug break-words">
                   PM Governance & Readiness Checklist
                 </h3>
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 whitespace-nowrap shrink-0">
                   PM Authorized
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed break-words">
                 Automated validation for Scope, Stakeholders, Schedule, Cost, DOR, DOD & Acceptance Criteria.
               </p>
             </div>
@@ -234,18 +266,18 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
         </div>
 
         {/* Score & Controls */}
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 shrink-0 w-full xl:w-auto">
           {onNavigate && (
             <button
               onClick={() => onNavigate('governance')}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md flex items-center gap-1.5 shrink-0 whitespace-nowrap"
             >
               <span>Open Dedicated Governance Tab</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 shrink-0" />
             </button>
           )}
 
-          <div className="px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3 shrink-0">
+          <div className="px-3.5 py-2 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center gap-3 shrink-0 whitespace-nowrap">
             <div>
               <p className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 whitespace-nowrap">
                 Readiness Score
@@ -280,9 +312,9 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
           </div>
 
           {pendingACTasks.length > 0 && (
-            <span className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 animate-pulse min-w-0">
+            <span className="px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 animate-pulse shrink-0 whitespace-nowrap">
               <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-              <span className="truncate">{pendingACTasks.length} Demoable AC Pending PM Validation</span>
+              <span>{pendingACTasks.length} Demoable AC Pending PM Validation</span>
             </span>
           )}
         </div>
@@ -631,23 +663,29 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
               </div>
 
               <ul className="space-y-2 text-xs">
-                {dorRules.map((rule, idx) => (
-                  <li key={idx} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/60">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
-                      <span className="text-slate-300 leading-snug">{rule}</span>
-                    </div>
-                    {isPM && (
-                      <button
-                        onClick={() => handleRemoveDorRule(idx)}
-                        className="text-slate-500 hover:text-rose-400 p-0.5 shrink-0"
-                        title="Remove rule"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {dorRules.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic p-2 bg-slate-900/60 rounded-lg border border-slate-800/40">
+                    No custom DOR criteria added yet. Type below to add requirements.
+                  </p>
+                ) : (
+                  dorRules.map((rule, idx) => (
+                    <li key={idx} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/60">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-300 leading-snug">{rule}</span>
+                      </div>
+                      {isPM && (
+                        <button
+                          onClick={() => handleRemoveDorRule(idx)}
+                          className="text-slate-500 hover:text-rose-400 p-0.5 shrink-0"
+                          title="Remove rule"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  ))
+                )}
               </ul>
 
               {isPM && (
@@ -683,23 +721,29 @@ export const PMChecklistWidget: React.FC<PMChecklistWidgetProps> = ({ onNavigate
               </div>
 
               <ul className="space-y-2 text-xs">
-                {dodRules.map((rule, idx) => (
-                  <li key={idx} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/60">
-                    <div className="flex items-start gap-2 min-w-0">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                      <span className="text-slate-300 leading-snug">{rule}</span>
-                    </div>
-                    {isPM && (
-                      <button
-                        onClick={() => handleRemoveDodRule(idx)}
-                        className="text-slate-500 hover:text-rose-400 p-0.5 shrink-0"
-                        title="Remove rule"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </li>
-                ))}
+                {dodRules.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic p-2 bg-slate-900/60 rounded-lg border border-slate-800/40">
+                    No custom DOD criteria added yet. Type below to add requirements.
+                  </p>
+                ) : (
+                  dodRules.map((rule, idx) => (
+                    <li key={idx} className="flex items-start justify-between gap-2 p-2 rounded-lg bg-slate-900/80 border border-slate-800/60">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                        <span className="text-slate-300 leading-snug">{rule}</span>
+                      </div>
+                      {isPM && (
+                        <button
+                          onClick={() => handleRemoveDodRule(idx)}
+                          className="text-slate-500 hover:text-rose-400 p-0.5 shrink-0"
+                          title="Remove rule"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  ))
+                )}
               </ul>
 
               {isPM && (

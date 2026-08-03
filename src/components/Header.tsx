@@ -31,7 +31,8 @@ import {
   Database,
   Check,
   FolderPlus,
-  Layers
+  Layers,
+  Pencil
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -59,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
   const isPM = currentUser?.role === 'pm';
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+  const [editTargetProjectId, setEditTargetProjectId] = useState<string | null>(null);
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -264,10 +266,22 @@ export const Header: React.FC<HeaderProps> = ({
                   })}
                 </div>
 
-                <div className="pt-1.5 border-t border-slate-800">
+                <div className="pt-1.5 border-t border-slate-800 space-y-1">
                   <button
                     onClick={() => {
                       setIsProjectDropdownOpen(false);
+                      setEditTargetProjectId(projectData.id);
+                      setIsProjectsModalOpen(true);
+                    }}
+                    className="w-full p-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700/80 flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Edit Current Project Details</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsProjectDropdownOpen(false);
+                      setEditTargetProjectId(null);
                       setIsProjectsModalOpen(true);
                     }}
                     className="w-full p-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/30 flex items-center justify-center gap-2 transition-colors"
@@ -617,19 +631,8 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Supabase DB & Sync Status Badges */}
+          {/* Sync Status Badge */}
           <div className="hidden lg:flex items-center gap-1.5 shrink-0">
-            {onOpenSupabaseModal && (
-              <button
-                id="btn-supabase-modal"
-                onClick={onOpenSupabaseModal}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all shrink-0 shadow-sm"
-                title="Supabase Database Status & Sync Settings"
-              >
-                <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                <span>Supabase DB</span>
-              </button>
-            )}
 
             <div
               id="sync-status-badge"
@@ -963,7 +966,11 @@ export const Header: React.FC<HeaderProps> = ({
       {/* Embedded Modals */}
       <ProjectManagementModal
         isOpen={isProjectsModalOpen}
-        onClose={() => setIsProjectsModalOpen(false)}
+        initialEditProjectId={editTargetProjectId}
+        onClose={() => {
+          setIsProjectsModalOpen(false);
+          setEditTargetProjectId(null);
+        }}
       />
       <UserAuthModal
         isOpen={isUserModalOpen}

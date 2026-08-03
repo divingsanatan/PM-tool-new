@@ -533,22 +533,22 @@ Re-architect internal company workspace portal for multi-project tracking, team 
         {/* 1. DYNAMIC COST & BUDGET CARD */}
         <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-800/90 shadow-md space-y-3.5 flex flex-col justify-between min-w-0">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
                   <DollarSign className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-slate-200 text-sm leading-tight truncate">Project Cost & Budget</h3>
-                  <span className="text-[10px] text-slate-400 block truncate">Dynamic WBS Rollup</span>
+                  <h3 className="font-bold text-slate-200 text-sm leading-tight">Project Cost & Budget</h3>
+                  <span className="text-[10px] text-slate-400 block">Dynamic WBS Rollup</span>
                 </div>
               </div>
               {costDifference <= 0 ? (
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap self-start sm:self-auto">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                   <CheckCircle2 className="w-3 h-3 shrink-0" /> Budget Aligned
                 </span>
               ) : (
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap self-start sm:self-auto">
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                   <AlertTriangle className="w-3 h-3 shrink-0" /> Exceeds BAC
                 </span>
               )}
@@ -594,17 +594,17 @@ Re-architect internal company workspace portal for multi-project tracking, team 
         {/* 2. DYNAMIC KEY STAKEHOLDERS CARD */}
         <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-800/90 shadow-md space-y-3.5 flex flex-col justify-between min-w-0">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
                   <Users className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-slate-200 text-sm leading-tight truncate">Key Stakeholders & Team</h3>
-                  <span className="text-[10px] text-slate-400 block truncate">Live Resource Roster</span>
+                  <h3 className="font-bold text-slate-200 text-sm leading-tight">Key Stakeholders & Team</h3>
+                  <span className="text-[10px] text-slate-400 block">Live Resource Roster</span>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap self-start sm:self-auto">
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                 <CheckCircle2 className="w-3 h-3 shrink-0" /> {activeStakeholdersCount} Members
               </span>
             </div>
@@ -651,17 +651,17 @@ Re-architect internal company workspace portal for multi-project tracking, team 
         {/* 3. DYNAMIC PROJECT SCHEDULE CARD */}
         <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 border border-slate-800/90 shadow-md space-y-3.5 flex flex-col justify-between min-w-0 sm:col-span-2 lg:col-span-1">
           <div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
                   <Calendar className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-slate-200 text-sm leading-tight truncate">Project Schedule</h3>
-                  <span className="text-[10px] text-slate-400 block truncate">Gantt & Milestones Sync</span>
+                  <h3 className="font-bold text-slate-200 text-sm leading-tight">Project Schedule</h3>
+                  <span className="text-[10px] text-slate-400 block">Gantt & Milestones Sync</span>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap self-start sm:self-auto">
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
                 <CheckCircle2 className="w-3 h-3 shrink-0" /> Baseline Active
               </span>
             </div>
@@ -781,11 +781,11 @@ Re-architect internal company workspace portal for multi-project tracking, team 
         {(activeTab === 'all' || activeTab === 'dor') && (
           <div className="space-y-4 pt-2 border-t border-slate-800/80">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400"></div>
-                <h3 className="font-bold text-slate-200 text-sm">Definition of Ready (DOR) Guidelines</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 shrink-0"></div>
+                <h3 className="font-bold text-slate-200 text-sm truncate">Definition of Ready (DOR) Guidelines</h3>
               </div>
-              <span className="text-xs text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full font-semibold border border-indigo-500/20 self-start sm:self-auto">
+              <span className="text-xs text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full font-semibold border border-indigo-500/20 whitespace-nowrap shrink-0 self-start sm:self-auto">
                 Pre-Sprint Entry Criteria
               </span>
             </div>
@@ -812,7 +812,7 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                       </label>
                       <button
                         onClick={() => handleRemoveDorCriterion(idx)}
-                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors"
+                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors shrink-0"
                         title="Delete Criterion"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -834,9 +834,9 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                 />
                 <button
                   onClick={handleAddDorCriterion}
-                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add
+                  <Plus className="w-3.5 h-3.5 shrink-0" /> Add
                 </button>
               </div>
             </div>
@@ -847,11 +847,11 @@ Re-architect internal company workspace portal for multi-project tracking, team 
         {(activeTab === 'all' || activeTab === 'dod') && (
           <div className="space-y-4 pt-2 border-t border-slate-800/80">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400"></div>
-                <h3 className="font-bold text-slate-200 text-sm">Definition of Done (DOD) Guidelines</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></div>
+                <h3 className="font-bold text-slate-200 text-sm truncate">Definition of Done (DOD) Guidelines</h3>
               </div>
-              <span className="text-xs text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full font-semibold border border-emerald-500/20 self-start sm:self-auto">
+              <span className="text-xs text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full font-semibold border border-emerald-500/20 whitespace-nowrap shrink-0 self-start sm:self-auto">
                 Release Verification Criteria
               </span>
             </div>
@@ -878,7 +878,7 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                       </label>
                       <button
                         onClick={() => handleRemoveDodCriterion(idx)}
-                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors"
+                        className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors shrink-0"
                         title="Delete Criterion"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
@@ -900,9 +900,9 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                 />
                 <button
                   onClick={handleAddDodCriterion}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1 transition-all whitespace-nowrap shrink-0"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Add
+                  <Plus className="w-3.5 h-3.5 shrink-0" /> Add
                 </button>
               </div>
             </div>
@@ -915,9 +915,9 @@ Re-architect internal company workspace portal for multi-project tracking, team 
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2 min-w-0">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="truncate">Work Items Demoable Acceptance Criteria Validation</span>
+                <span className="leading-tight">Work Items Demoable Acceptance Criteria Validation</span>
               </h3>
-              <span className="text-xs text-slate-400 shrink-0">
+              <span className="text-xs text-slate-400 shrink-0 whitespace-nowrap">
                 {demoableTasks.length} Work Items in Review/Demoable Status
               </span>
             </div>
@@ -935,17 +935,17 @@ Re-architect internal company workspace portal for multi-project tracking, team 
 
                   return (
                     <div key={task.id} className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[10px] text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950 border border-indigo-800">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-mono text-[10px] text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950 border border-indigo-800 whitespace-nowrap shrink-0">
                               {task.id.slice(-6)}
                             </span>
-                            <h5 className="font-semibold text-slate-200 text-xs truncate">{task.title}</h5>
+                            <h5 className="font-semibold text-slate-200 text-xs sm:text-sm truncate min-w-0 flex-1">{task.title}</h5>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           {acList.length > 0 ? (
                             allValidated ? (
                               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 whitespace-nowrap shrink-0">
@@ -965,9 +965,9 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                           {task.status !== 'done' && (
                             <button
                               onClick={() => saveTask({ ...task, status: 'done', completionPercent: 100 })}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1 whitespace-nowrap shrink-0"
                             >
-                              <Check className="w-3 h-3" /> Sign Off Done
+                              <Check className="w-3 h-3 shrink-0" /> Sign Off Done
                             </button>
                           )}
                         </div>
@@ -981,7 +981,7 @@ Re-architect internal company workspace portal for multi-project tracking, team 
                                 type="checkbox"
                                 checked={ac.validated}
                                 onChange={(e) => validateAcceptanceCriterion(task.id, ac.id, e.target.checked)}
-                                className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500"
+                                className="mt-0.5 rounded border-slate-700 text-emerald-500 focus:ring-emerald-500 shrink-0"
                               />
                               <span className={ac.validated ? 'line-through text-slate-400' : ''}>
                                 {ac.text}

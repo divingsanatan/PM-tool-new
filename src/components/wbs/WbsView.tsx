@@ -53,6 +53,7 @@ import {
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
 import { CsvImportModal } from '../modals/CsvImportModal';
+import { calculateEVMMetrics } from '../../utils/evm';
 import {
   getStatusProgress,
   getTaskEffectiveValues,
@@ -923,6 +924,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     return getProjectEffectiveValues(filteredTasks, projectData.subtasks, projectData.stakeholders);
   }, [filteredTasks, projectData.subtasks, projectData.stakeholders]);
 
+  const evmMetrics = useMemo(() => {
+    return calculateEVMMetrics(
+      filteredTasks,
+      projectData.budget,
+      projectData.subtasks,
+      projectData.stakeholders
+    );
+  }, [filteredTasks, projectData.budget, projectData.subtasks, projectData.stakeholders]);
+
   // Subtask Add Handler
   const handleAddSubtask = async (taskId: string) => {
     const title = newSubtaskTitles[taskId]?.trim();
@@ -1056,6 +1066,68 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <Kanban className="w-3.5 h-3.5 shrink-0" />
             <span>Kanban</span>
           </button>
+        </div>
+      </div>
+
+      {/* Financial Baseline & EVM Summary Bar on WBS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>Project Baseline (BAC)</span>
+            </div>
+            <div className="text-base font-bold font-mono text-emerald-400 mt-1">
+              ${(projectData.budget || 250000).toLocaleString()}
+            </div>
+            <span className="text-[10px] text-slate-500">Authorized Target Budget</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <Calculator className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>WBS Planned Cost</span>
+            </div>
+            <div className="text-base font-bold font-mono text-indigo-300 mt-1">
+              ${projectRollup.plannedCost.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-slate-500">Sum of All WBS Tasks</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Actual Cost (AC)</span>
+            </div>
+            <div className="text-base font-bold font-mono text-amber-400 mt-1">
+              ${projectRollup.actualCost.toLocaleString()}
+            </div>
+            <span className="text-[10px] text-slate-500">Incurred Work ({projectRollup.actualHours}h)</span>
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+              <PieChart className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>Cost Efficiency (CPI)</span>
+            </div>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className={`text-base font-bold font-mono ${evmMetrics.cpi >= 1 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {evmMetrics.cpi.toFixed(2)}
+              </span>
+              <span className="text-[11px] font-mono text-slate-400">
+                (EV: ${evmMetrics.earnedValue.toLocaleString()})
+              </span>
+            </div>
+            <span className="text-[10px] text-slate-500">
+              CV: {evmMetrics.costVariance >= 0 ? '+' : ''}${evmMetrics.costVariance.toLocaleString()}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -1313,24 +1385,29 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   </div>
 
                   {/* Project Rollup Summary */}
-                  <div className="flex items-center gap-3 sm:gap-4 text-xs font-mono bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 text-xs font-mono bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 shrink-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-slate-400 uppercase font-sans">Scope:</span>
                       <span className="text-slate-200 font-semibold">{projectRollup.doneTasks}/{projectRollup.totalTasks}</span>
                     </div>
                     <div className="w-px h-3.5 bg-slate-800" />
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Hours:</span>
-                      <span className="text-amber-400 font-semibold">{projectRollup.actualHours}/{projectRollup.estimatedHours}h</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-sans">BAC:</span>
+                      <span className="text-emerald-400 font-bold">${(projectData.budget || 250000).toLocaleString()}</span>
                     </div>
                     <div className="w-px h-3.5 bg-slate-800" />
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Cost:</span>
-                      <span className="text-emerald-400 font-semibold">${projectRollup.plannedCost.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-sans">WBS Planned:</span>
+                      <span className="text-indigo-300 font-semibold">${projectRollup.plannedCost.toLocaleString()}</span>
                     </div>
                     <div className="w-px h-3.5 bg-slate-800" />
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Done:</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-sans">Actual Cost (AC):</span>
+                      <span className="text-amber-400 font-bold">${projectRollup.actualCost.toLocaleString()}</span>
+                    </div>
+                    <div className="w-px h-3.5 bg-slate-800" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-slate-400 uppercase font-sans">Progress:</span>
                       <span className="text-indigo-400 font-bold">{projectRollup.completionPercent}%</span>
                     </div>
                   </div>
@@ -1419,7 +1496,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                               </div>
                               <span className="text-slate-400 text-[11px]">Due: <span className="text-slate-200">{milestone.dueDate}</span></span>
                               <span className="text-amber-400 text-[11px] font-semibold">{mRollup.actualHours}/{mRollup.estimatedHours}h</span>
-                              <span className="text-emerald-400 text-[11px] font-semibold">${mRollup.plannedCost.toLocaleString()}</span>
+                              <span className="text-emerald-400 text-[11px] font-semibold" title="Planned Cost">${mRollup.plannedCost.toLocaleString()}</span>
+                              <span className="text-amber-300 text-[11px] font-semibold" title="Actual Cost Incurred">AC: ${mRollup.actualCost.toLocaleString()}</span>
                               <span className="text-indigo-400 text-[11px] font-bold">{mRollup.completionPercent}%</span>
 
                               {/* Quick Action Controls */}
@@ -1491,7 +1569,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                         </div>
                                         <span className="font-mono text-slate-400 text-[11px]">{epicFeatures.length} features</span>
                                         <span className="font-mono text-amber-400 text-[11px] font-semibold">{epicRollup.actualHours}/{epicRollup.estimatedHours}h</span>
-                                        <span className="font-mono text-emerald-400 text-[11px] font-semibold">${epicRollup.plannedCost.toLocaleString()}</span>
+                                        <span className="font-mono text-emerald-400 text-[11px] font-semibold" title="Planned Cost">${epicRollup.plannedCost.toLocaleString()}</span>
+                                        <span className="font-mono text-amber-300 text-[11px] font-semibold" title="Actual Cost Incurred">AC: ${epicRollup.actualCost.toLocaleString()}</span>
                                         <span className="font-mono text-indigo-300 text-[11px] font-bold">{epicRollup.completionPercent}%</span>
                                         <button
                                           onClick={() => openEditModal(epic)}
@@ -1558,7 +1637,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                                   </div>
                                                   <span className="font-mono text-slate-400 text-[11px]">{fRollup.totalTasks} items</span>
                                                   <span className="font-mono text-amber-400 text-[11px] font-medium">{fRollup.actualHours}/{fRollup.estimatedHours}h</span>
-                                                  <span className="font-mono text-emerald-400 text-[11px] font-medium">${fRollup.plannedCost.toLocaleString()}</span>
+                                                  <span className="font-mono text-emerald-400 text-[11px] font-medium" title="Planned Cost">${fRollup.plannedCost.toLocaleString()}</span>
+                                                  <span className="font-mono text-amber-300 text-[11px] font-medium" title="Actual Cost Incurred">AC: ${fRollup.actualCost.toLocaleString()}</span>
                                                   <span className="font-mono text-indigo-300 text-[11px] font-bold">{fRollup.completionPercent}%</span>
                                                   <button
                                                     onClick={() => onOpenTaskModal({ featureId: feature.id, epicId: epic.id, milestoneId: milestone.id })}
@@ -2577,6 +2657,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     const subtasks = getSubtasksForTask(task.id);
     const predecessors = getTaskPredecessors(task, projectData.tasks);
     const isDragTarget = dragOverTargetId === task.id;
+    const taskEff = getTaskEffectiveValues(task, subtasks, projectData.stakeholders);
 
     return (
       <div
@@ -2746,6 +2827,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 <option value="task">Task</option>
                 <option value="subtask">Subtask</option>
               </select>
+            </div>
+
+            {/* Task Planned & Actual Cost (AC) */}
+            <div className="w-24 text-right font-mono text-[11px] shrink-0">
+              <span className="text-emerald-400 font-semibold block" title="Planned Cost">
+                ${taskEff.plannedCost.toLocaleString()}
+              </span>
+              <span className="text-amber-400/90 text-[10px] block" title="Actual Cost Incurred">
+                AC: ${taskEff.actualCost.toLocaleString()}
+              </span>
             </div>
 
             {/* Priority flag */}

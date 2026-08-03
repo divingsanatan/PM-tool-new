@@ -31,9 +31,19 @@ app.use(express.json({ limit: '10mb' }));
 let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap };
 let activeProjectId: string = 'proj-1';
 let isSupabaseConnected = false;
+let lastLocalStateHash = '';
 
-// Async initial hydration from Supabase
-async function initSupabaseHydration() {
+// Helper to compute quick hash of current in-memory data state
+function getProjectsStateHash(): string {
+  try {
+    return JSON.stringify(allProjectsMap);
+  } catch {
+    return '';
+  }
+}
+
+// Async initial hydration and continuous sync from Supabase
+async function initSupabaseHydration(shouldBroadcast: boolean = false) {
   try {
     const { data, error } = await supabase.from('app_projects').select('*');
     if (!error && data && data.length > 0) {
@@ -44,22 +54,38 @@ async function initSupabaseHydration() {
           loadedMap[row.id] = row.data;
         }
       });
+
       if (Object.keys(loadedMap).length > 0) {
-        allProjectsMap = { ...defaultProjectsMap, ...loadedMap };
-        if (!allProjectsMap[activeProjectId]) {
-          activeProjectId = Object.keys(allProjectsMap)[0];
+        const newHash = JSON.stringify(loadedMap);
+        if (newHash !== lastLocalStateHash) {
+          lastLocalStateHash = newHash;
+          allProjectsMap = { ...defaultProjectsMap, ...loadedMap };
+          if (!allProjectsMap[activeProjectId]) {
+            activeProjectId = Object.keys(allProjectsMap)[0];
+          }
+          console.log(`[Supabase Auto-Sync] Hydrated ${data.length} project(s) from Supabase database.`);
+          if (shouldBroadcast) {
+            broadcastDataChange(undefined, false);
+          }
         }
-        console.log(`[Supabase] Hydrated ${data.length} project(s) from Supabase database.`);
       }
     } else if (error) {
-      console.warn('[Supabase] Initial query notice:', error.message);
+      console.warn('[Supabase Auto-Sync] Initial query notice:', error.message);
     }
   } catch (err: any) {
-    console.warn('[Supabase] Connection notice:', err.message || err);
+    console.warn('[Supabase Auto-Sync] Connection notice:', err.message || err);
   }
 }
 
-initSupabaseHydration();
+// Initial hydration on server start
+initSupabaseHydration(false);
+
+// Continuous background polling sync (every 5 seconds) to keep Live and Dev containers automatically synchronized via Supabase
+setInterval(() => {
+  initSupabaseHydration(true).catch(err => {
+    console.warn('[Supabase Auto-Poll Notice]', err?.message || err);
+  });
+}, 5000);
 
 // Supabase Real-Time Listener
 try {
@@ -72,8 +98,9 @@ try {
         if (payload.new && (payload.new as any).id && (payload.new as any).data) {
           const row = payload.new as any;
           allProjectsMap[row.id] = row.data;
-          console.log(`[Supabase Realtime] Received update for project ${row.id}`);
-          broadcastDataChange();
+          lastLocalStateHash = getProjectsStateHash();
+          console.log(`[Supabase Realtime] Received live update for project ${row.id}`);
+          broadcastDataChange(undefined, false);
         }
       }
     )
@@ -94,6 +121,7 @@ async function syncToSupabase() {
     const { error } = await supabase.from('app_projects').upsert(rows, { onConflict: 'id' });
     if (!error) {
       isSupabaseConnected = true;
+      lastLocalStateHash = getProjectsStateHash();
     } else {
       console.warn('[Supabase] Upsert warning:', error.message);
     }
@@ -114,8 +142,10 @@ function getActiveProject(): ProjectData {
 }
 
 // Helper to broadcast state changes to all connected clients and save to Supabase
-function broadcastDataChange(senderWs?: WebSocket) {
-  syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
+function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true) {
+  if (syncToRemote) {
+    syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
+  }
   const currentData = getActiveProject();
   const projectsList = Object.values(allProjectsMap).map(p => ({
     id: p.id || 'proj-1',
@@ -191,22 +221,30 @@ app.get('/api/supabase/status', async (_req, res) => {
 
     res.json({
       success: true,
-      connected: true,
+      connected: !error || error.code !== 'PGRST301',
       url: SUPABASE_URL,
       tableExists,
       projectCount,
       activeProjectsInMemory: Object.keys(allProjectsMap).length,
       errorMessage: error ? error.message : null,
-      sqlScript: `CREATE TABLE IF NOT EXISTS public.app_projects (
+      errorCode: error ? error.code : null,
+      sqlScript: `-- 1. Create table for shared project data
+CREATE TABLE IF NOT EXISTS public.app_projects (
   id TEXT PRIMARY KEY,
   data JSONB NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Enable Row Level Security (optional) or allow public read/write for applet
+-- 2. Grant privileges for anon and authenticated users
+GRANT ALL ON TABLE public.app_projects TO anon, authenticated, service_role;
+
+-- 3. Configure Row Level Security (RLS) policies for full access
 ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow public full access" ON public.app_projects;
-CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);`
+CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. Enable Supabase Realtime for instant Live & Dev multi-environment sync
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_projects;`
     });
   } catch (err: any) {
     res.json({
@@ -215,11 +253,23 @@ CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (t
       url: SUPABASE_URL,
       tableExists: false,
       errorMessage: err.message || 'Supabase host unreachable',
-      sqlScript: `CREATE TABLE IF NOT EXISTS public.app_projects (
+      sqlScript: `-- 1. Create table for shared project data
+CREATE TABLE IF NOT EXISTS public.app_projects (
   id TEXT PRIMARY KEY,
   data JSONB NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);`
+);
+
+-- 2. Grant privileges for anon and authenticated users
+GRANT ALL ON TABLE public.app_projects TO anon, authenticated, service_role;
+
+-- 3. Configure Row Level Security (RLS) policies for full access
+ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public full access" ON public.app_projects;
+CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);
+
+-- 4. Enable Supabase Realtime for instant Live & Dev multi-environment sync
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_projects;`
     });
   }
 });

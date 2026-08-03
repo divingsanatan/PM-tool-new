@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { Stakeholder } from '../../types';
-import { FolderPlus, Check, Trash2, Layers, Calendar, DollarSign, X } from 'lucide-react';
+import { Stakeholder, ProjectData } from '../../types';
+import { FolderPlus, Check, Trash2, Layers, Calendar, DollarSign, X, Pencil, Save } from 'lucide-react';
 
 interface ProjectManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialEditProjectId?: string | null;
 }
 
-export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ isOpen, onClose }) => {
-  const { projectsList, activeProjectId, switchProject, createProject, deleteProject, currentUser } = useProject();
+export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ isOpen, onClose, initialEditProjectId }) => {
+  const { projectData, projectsList, activeProjectId, switchProject, createProject, deleteProject, updateProjectDetails, currentUser } = useProject();
   const isPM = currentUser.role === 'pm';
 
   const [isCreating, setIsCreating] = useState(false);
@@ -17,10 +18,82 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
   const [projectCode, setProjectCode] = useState('');
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState(200000);
-
   const [initPlaceholderTeam, setInitPlaceholderTeam] = useState(false);
 
+  // Editing state for updating project details
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editBudget, setEditBudget] = useState<number>(150000);
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editTargetEndDate, setEditTargetEndDate] = useState('');
+
+  const startEditing = (proj: ProjectData) => {
+    setEditingProjectId(proj.id);
+    setEditName(proj.projectName || '');
+    setEditCode(proj.projectCode || '');
+    setEditDescription(proj.description || '');
+    setEditBudget(proj.budget || 150000);
+    setEditStartDate(proj.startDate || new Date().toISOString().split('T')[0]);
+    setEditTargetEndDate(proj.targetEndDate || new Date(Date.now() + 86400000 * 90).toISOString().split('T')[0]);
+    setIsCreating(false);
+  };
+
+  useEffect(() => {
+    if (isOpen && initialEditProjectId) {
+      const proj = projectsList.find(p => p.id === initialEditProjectId) || (initialEditProjectId === activeProjectId ? projectData : null);
+      if (proj) {
+        startEditing(proj);
+      }
+    } else if (!isOpen) {
+      setEditingProjectId(null);
+      setIsCreating(false);
+    }
+  }, [isOpen, initialEditProjectId]);
+
   if (!isOpen) return null;
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProjectId || !editName.trim()) return;
+
+    const targetProj = projectsList.find(p => p.id === editingProjectId) || (editingProjectId === activeProjectId ? projectData : null);
+    if (!targetProj) return;
+
+    const updatedData: ProjectData = {
+      ...targetProj,
+      projectName: editName.trim(),
+      projectCode: editCode.trim() || 'PRJ-' + Math.floor(100 + Math.random() * 899),
+      description: editDescription.trim(),
+      budget: Number(editBudget) || 150000,
+      startDate: editStartDate || targetProj.startDate,
+      targetEndDate: editTargetEndDate || targetProj.targetEndDate
+    };
+
+    if (editingProjectId === activeProjectId) {
+      await updateProjectDetails({
+        projectName: updatedData.projectName,
+        projectCode: updatedData.projectCode,
+        description: updatedData.description,
+        budget: updatedData.budget,
+        startDate: updatedData.startDate,
+        targetEndDate: updatedData.targetEndDate
+      });
+    } else {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedData })
+        });
+      } catch (err) {
+        console.warn('Failed to update non-active project:', err);
+      }
+    }
+
+    setEditingProjectId(null);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,6 +330,115 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
           <div className="space-y-3">
             {projectsList.map(project => {
               const isActive = project.id === activeProjectId;
+              const isEditingThis = editingProjectId === project.id;
+
+              if (isEditingThis) {
+                return (
+                  <form
+                    key={project.id}
+                    onSubmit={handleSaveEdit}
+                    className="p-4 rounded-2xl bg-slate-950 border border-indigo-500/50 space-y-3 animate-fade-in shadow-lg"
+                  >
+                    <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Pencil className="w-4 h-4 text-indigo-400" />
+                        <h4 className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                          Edit Project Details ({project.projectName})
+                        </h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditingProjectId(null)}
+                        className="text-xs text-slate-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">Project Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">Project Code</label>
+                        <input
+                          type="text"
+                          value={editCode}
+                          onChange={e => setEditCode(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-medium text-slate-300 mb-1">Description / Scope Summary</label>
+                      <textarea
+                        rows={2}
+                        value={editDescription}
+                        onChange={e => setEditDescription(e.target.value)}
+                        placeholder="Detailed project scope description..."
+                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none resize-none leading-relaxed"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">Total Budget ($)</label>
+                        <input
+                          type="number"
+                          value={editBudget}
+                          onChange={e => setEditBudget(Number(e.target.value))}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">Start Date</label>
+                        <input
+                          type="date"
+                          value={editStartDate}
+                          onChange={e => setEditStartDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-300 mb-1">Target End Date</label>
+                        <input
+                          type="date"
+                          value={editTargetEndDate}
+                          onChange={e => setEditTargetEndDate(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setEditingProjectId(null)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:bg-slate-800"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save Changes</span>
+                      </button>
+                    </div>
+                  </form>
+                );
+              }
+
               return (
                 <div
                   key={project.id}
@@ -278,8 +460,8 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 line-clamp-1 mb-2">{project.description}</p>
-                    <div className="flex items-center gap-4 text-[11px] text-slate-400">
+                    <p className="text-xs text-slate-400 line-clamp-1 mb-2">{project.description || 'No detailed scope description provided.'}</p>
+                    <div className="flex items-center gap-4 text-[11px] text-slate-400 flex-wrap">
                       <span className="flex items-center gap-1 font-mono">
                         <DollarSign className="w-3 h-3 text-slate-500" />
                         ${project.budget?.toLocaleString()}
@@ -295,6 +477,14 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => startEditing(project)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700/80 transition-all"
+                      title="Edit project details"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
                     {!isActive && (
                       <button
                         onClick={() => {
