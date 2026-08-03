@@ -22,6 +22,8 @@ import { StakeholderModal } from './components/modals/StakeholderModal';
 import { InviteMemberModal } from './components/modals/InviteMemberModal';
 import { AiReportModal } from './components/modals/AiReportModal';
 import { AiSettingsModal } from './components/modals/AiSettingsModal';
+import { UserAuthModal } from './components/modals/UserAuthModal';
+import { SupabaseModal } from './components/modals/SupabaseModal';
 import { LoginScreen } from './components/auth/LoginScreen';
 
 function MainLayout() {
@@ -58,6 +60,8 @@ function MainLayout() {
 
   const [isAiReportModalOpen, setIsAiReportModalOpen] = useState(false);
   const [isAiSettingsModalOpen, setIsAiSettingsModalOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
 
   if (!isAuthenticated) {
     return <LoginScreen />;
@@ -98,6 +102,7 @@ function MainLayout() {
         onOpenInviteModal={handleOpenInviteModal}
         onOpenAiReportModal={() => setIsAiReportModalOpen(true)}
         onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onSelectView={handleSelectView}
       />
 
@@ -111,6 +116,7 @@ function MainLayout() {
           openRisksCount={openRisksCount}
           pendingCRCount={pendingCRCount}
           onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
+          onOpenUserModal={() => setIsUserModalOpen(true)}
         />
 
         {/* Central View Canvas */}
@@ -201,6 +207,7 @@ function MainLayout() {
         isOpen={isStakeholderModalOpen}
         onClose={() => setIsStakeholderModalOpen(false)}
         stakeholderToEdit={stakeholderToEdit}
+        onOpenInviteModal={handleOpenInviteModal}
       />
 
       <InviteMemberModal
@@ -218,6 +225,16 @@ function MainLayout() {
       <AiSettingsModal
         isOpen={isAiSettingsModalOpen}
         onClose={() => setIsAiSettingsModalOpen(false)}
+      />
+
+      <UserAuthModal
+        isOpen={isUserModalOpen}
+        onClose={() => setIsUserModalOpen(false)}
+      />
+
+      <SupabaseModal
+        isOpen={isSupabaseModalOpen}
+        onClose={() => setIsSupabaseModalOpen(false)}
       />
     </div>
   );

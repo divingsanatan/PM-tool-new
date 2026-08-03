@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useProject } from '../../context/ProjectContext';
+import { Stakeholder } from '../../types';
 import { FolderPlus, Check, Trash2, Layers, Calendar, DollarSign, X } from 'lucide-react';
 
 interface ProjectManagementModalProps {
@@ -17,17 +18,89 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState(200000);
 
+  const [initPlaceholderTeam, setInitPlaceholderTeam] = useState(true);
+
   if (!isOpen) return null;
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!projectName.trim()) return;
+
+    const initialTeam: Stakeholder[] = [
+      {
+        id: `sh-pm-${Date.now()}`,
+        name: currentUser.name,
+        email: currentUser.email,
+        role: 'Project Manager (PM)',
+        category: 'internal',
+        avatar: currentUser.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name)}`,
+        hourlyRate: 120,
+        weeklyCapacityHours: 40,
+        skills: ['Project Management', 'Agile', 'Scrum'],
+        status: 'active',
+        createdBy: currentUser.id,
+        createdByEmail: currentUser.email
+      }
+    ];
+
+    if (initPlaceholderTeam) {
+      initialTeam.push(
+        {
+          id: `sh-dummy-1-${Date.now()}`,
+          name: 'Lead Developer (Unassigned)',
+          email: 'unassigned.dev@placeholder.local',
+          role: 'Lead Full Stack Engineer',
+          category: 'internal',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80',
+          hourlyRate: 95,
+          weeklyCapacityHours: 40,
+          skills: ['React', 'Node.js', 'Architecture'],
+          status: 'placeholder',
+          isPlaceholder: true,
+          createdBy: currentUser.id,
+          createdByEmail: currentUser.email
+        },
+        {
+          id: `sh-dummy-2-${Date.now()}`,
+          name: 'QA & Test Specialist (Unassigned)',
+          email: 'unassigned.qa@placeholder.local',
+          role: 'Quality Assurance Lead',
+          category: 'internal',
+          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
+          hourlyRate: 75,
+          weeklyCapacityHours: 40,
+          skills: ['Automated Testing', 'Selenium', 'QA'],
+          status: 'placeholder',
+          isPlaceholder: true,
+          createdBy: currentUser.id,
+          createdByEmail: currentUser.email
+        },
+        {
+          id: `sh-dummy-3-${Date.now()}`,
+          name: 'UI/UX Designer (Unassigned)',
+          email: 'unassigned.design@placeholder.local',
+          role: 'Product Designer',
+          category: 'internal',
+          avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
+          hourlyRate: 85,
+          weeklyCapacityHours: 40,
+          skills: ['Figma', 'UI Design', 'Design Systems'],
+          status: 'placeholder',
+          isPlaceholder: true,
+          createdBy: currentUser.id,
+          createdByEmail: currentUser.email
+        }
+      );
+    }
+
     await createProject({
       projectName,
       projectCode: projectCode || 'PRJ-' + Math.floor(100 + Math.random() * 899),
       description,
-      budget: Number(budget) || 150000
+      budget: Number(budget) || 150000,
+      stakeholders: initialTeam
     });
+
     setProjectName('');
     setProjectCode('');
     setDescription('');
@@ -143,6 +216,23 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
                     className="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:border-indigo-500 outline-none font-mono"
                   />
                 </div>
+              </div>
+
+              <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-xl flex items-center justify-between gap-3">
+                <div>
+                  <label className="text-xs font-bold text-indigo-300 block cursor-pointer">
+                    Initialize Default Team Placeholders
+                  </label>
+                  <p className="text-[11px] text-slate-400">
+                    Automatically creates dummy team slots (Lead Dev, QA, Designer) that you can invite members to later.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={initPlaceholderTeam}
+                  onChange={e => setInitPlaceholderTeam(e.target.checked)}
+                  className="w-4 h-4 accent-indigo-500 cursor-pointer rounded"
+                />
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

@@ -4,6 +4,7 @@ import { calculateStakeholderWorkloads } from '../../utils/evm';
 import { getTaskPredecessors } from '../../utils/dependencies';
 import { RaciChartWidget } from './RaciChartWidget';
 import { RiskMatrixWidget } from './RiskMatrixWidget';
+import { PMChecklistWidget } from './PMChecklistWidget';
 import {
   TrendingUp,
   TrendingDown,
@@ -747,6 +748,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* PM Governance & Readiness Checklist Widget */}
+      {(projectData.widgets.find(w => w.id === 'pm-checklist')?.enabled !== false) && (
+        <PMChecklistWidget onNavigate={onNavigate} />
+      )}
 
       {/* 1. Core EVM & Health Metric Cards Grid */}
       <div id="evm-cards-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">

@@ -7,14 +7,16 @@ interface StakeholderModalProps {
   isOpen: boolean;
   onClose: () => void;
   stakeholderToEdit?: Stakeholder | null;
+  onOpenInviteModal?: (email?: string) => void;
 }
 
 export const StakeholderModal: React.FC<StakeholderModalProps> = ({
   isOpen,
   onClose,
-  stakeholderToEdit
+  stakeholderToEdit,
+  onOpenInviteModal
 }) => {
-  const { saveStakeholder, currentUser } = useProject();
+  const { saveStakeholder, currentUser, addActivityLog } = useProject();
 
   const isPM = currentUser?.role === 'pm';
 
@@ -30,19 +32,23 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('');
   const [category, setCategory] = useState<StakeholderCategory>('internal');
-  const [hourlyRate, setHourlyRate] = useState(90);
-  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState(40);
+  const [hourlyRate, setHourlyRate] = useState<number | ''>(90);
+  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState<number | ''>(40);
   const [skillsStr, setSkillsStr] = useState('');
+  const [isDummy, setIsDummy] = useState(false);
+  const [triggerInvite, setTriggerInvite] = useState(false);
 
   useEffect(() => {
     if (stakeholderToEdit) {
       setName(stakeholderToEdit.name);
-      setEmail(stakeholderToEdit.email);
+      setEmail(stakeholderToEdit.email.includes('@placeholder') ? '' : stakeholderToEdit.email);
       setRole(stakeholderToEdit.role);
       setCategory(stakeholderToEdit.category || 'internal');
-      setHourlyRate(stakeholderToEdit.hourlyRate);
-      setWeeklyCapacityHours(stakeholderToEdit.weeklyCapacityHours);
+      setHourlyRate(stakeholderToEdit.hourlyRate || '');
+      setWeeklyCapacityHours(stakeholderToEdit.weeklyCapacityHours || '');
       setSkillsStr(stakeholderToEdit.skills.join(', '));
+      setIsDummy(Boolean(stakeholderToEdit.isPlaceholder || stakeholderToEdit.status === 'placeholder'));
+      setTriggerInvite(Boolean(stakeholderToEdit.status === 'placeholder' || !stakeholderToEdit.email));
     } else {
       setName('');
       setEmail('');
@@ -51,6 +57,8 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
       setHourlyRate(90);
       setWeeklyCapacityHours(40);
       setSkillsStr('Agile, React, Management');
+      setIsDummy(false);
+      setTriggerInvite(true);
     }
   }, [stakeholderToEdit, isOpen]);
 
@@ -61,19 +69,43 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     if (!isEditable) return;
     const skills = skillsStr.split(',').map(s => s.trim()).filter(Boolean);
 
+    let finalEmail = email.trim();
+    if (isDummy && (!finalEmail || !finalEmail.includes('@'))) {
+      finalEmail = `unassigned.${(role || name || 'role').toLowerCase().replace(/\s+/g, '.')}@placeholder.local`;
+    }
+
+    const isNowInvited = !isDummy && finalEmail.includes('@') && !finalEmail.includes('@placeholder') && triggerInvite;
+    const computedStatus = isDummy ? 'placeholder' : (isNowInvited ? 'invited' : (stakeholderToEdit?.status || 'active'));
+
     await saveStakeholder({
       id: stakeholderToEdit?.id,
-      name,
-      email,
-      role,
+      name: name.trim() || (isDummy ? `${role || 'Placeholder'} (Unassigned)` : 'New Team Member'),
+      email: finalEmail,
+      role: role.trim() || 'Contributor',
       category,
-      hourlyRate: Number(hourlyRate),
-      weeklyCapacityHours: Number(weeklyCapacityHours),
+      hourlyRate: hourlyRate === '' ? 0 : Number(hourlyRate),
+      weeklyCapacityHours: weeklyCapacityHours === '' ? 0 : Number(weeklyCapacityHours),
       skills,
-      status: 'active',
+      status: computedStatus,
+      isPlaceholder: isDummy,
       createdBy: stakeholderToEdit?.createdBy || currentUser?.id,
       createdByEmail: stakeholderToEdit?.createdByEmail || currentUser?.email
     });
+
+    if (isNowInvited && onOpenInviteModal) {
+      onOpenInviteModal(finalEmail);
+    } else {
+      addActivityLog({
+        user: currentUser?.name || 'User',
+        userEmail: currentUser?.email || '',
+        action: isDummy ? 'Created Placeholder Stakeholder' : 'Updated Stakeholder',
+        details: isDummy
+          ? `Added placeholder stakeholder profile "${role || name}" to project team.`
+          : `Saved stakeholder "${name}" (${finalEmail}).`,
+        category: 'stakeholder'
+      });
+    }
+
     onClose();
   };
 
@@ -104,15 +136,41 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
           )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Dummy / Placeholder Mode Toggle */}
+          <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-xl flex items-center justify-between gap-3">
+            <div>
+              <label className="text-xs font-bold text-indigo-200 block cursor-pointer">
+                Create as Dummy / Placeholder Stakeholder
+              </label>
+              <p className="text-[11px] text-slate-400">
+                Reserve team capacity before assigning an email address. You can add their email later to send an invitation link.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              disabled={!isEditable}
+              checked={isDummy}
+              onChange={(e) => {
+                setIsDummy(e.target.checked);
+                if (e.target.checked) {
+                  setTriggerInvite(false);
+                }
+              }}
+              className="w-4 h-4 accent-indigo-500 cursor-pointer rounded"
+            />
+          </div>
+
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">Full Name *</label>
+            <label className="block text-slate-300 font-semibold mb-1">
+              Full Name {isDummy ? '(Optional)' : '*'}
+            </label>
             <input
               type="text"
-              required
+              required={!isDummy}
               disabled={!isEditable}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Sarah Jenkins"
+              placeholder={isDummy ? "e.g. Lead Frontend Engineer (Unassigned)" : "e.g. Sarah Jenkins"}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
@@ -132,18 +190,41 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">Email Address *</label>
+              <label className="block text-slate-300 font-semibold mb-1">
+                Email Address {isDummy ? '(Optional / Pending)' : '*'}
+              </label>
               <input
                 type="email"
-                required
+                required={!isDummy}
                 disabled={!isEditable}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="sarah.j@company.com"
+                placeholder={isDummy ? "pending.invite@company.com" : "sarah.j@company.com"}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
           </div>
+
+          {/* Trigger Email Invitation option */}
+          {!isDummy && (
+            <div className="p-3 bg-teal-950/40 border border-teal-500/20 rounded-xl flex items-center justify-between gap-3">
+              <div>
+                <label className="text-xs font-bold text-teal-300 block cursor-pointer">
+                  📧 Trigger Email Invitation with Join Link
+                </label>
+                <p className="text-[11px] text-slate-400">
+                  Automatically generates a personal project invitation link and opens the invitation email composer upon saving.
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                disabled={!isEditable}
+                checked={triggerInvite}
+                onChange={(e) => setTriggerInvite(e.target.checked)}
+                className="w-4 h-4 accent-teal-500 cursor-pointer rounded"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-slate-300 font-semibold mb-1">Role / Job Title *</label>
@@ -160,37 +241,48 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">Hourly Rate ($)</label>
+              <label className="block text-slate-300 font-semibold mb-1">
+                Hourly Rate ($) *
+              </label>
               <input
                 type="number"
+                required
+                min="0"
+                step="any"
                 disabled={!isEditable}
                 value={hourlyRate}
-                onChange={(e) => setHourlyRate(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                onChange={(e) => setHourlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="e.g. 90"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 font-semibold mb-1">Weekly Capacity (Hours)</label>
+              <label className="block text-slate-300 font-semibold mb-1">
+                Weekly Capacity (Hours) <span className="text-slate-400 font-normal">(Optional)</span>
+              </label>
               <input
                 type="number"
                 disabled={!isEditable}
                 value={weeklyCapacityHours}
-                onChange={(e) => setWeeklyCapacityHours(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+                onChange={(e) => setWeeklyCapacityHours(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="e.g. 40 (Optional)"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">Skills (comma separated)</label>
+            <label className="block text-slate-300 font-semibold mb-1">
+              Skills (comma separated) <span className="text-slate-400 font-normal">(Optional)</span>
+            </label>
             <input
               type="text"
               disabled={!isEditable}
               value={skillsStr}
               onChange={(e) => setSkillsStr(e.target.value)}
-              placeholder="e.g. React, Docker, Security"
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder="e.g. React, Docker, Security (Optional)"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
 

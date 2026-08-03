@@ -27,7 +27,8 @@ import {
   LogOut,
   Mail,
   MoreVertical,
-  Key
+  Key,
+  Database
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -37,6 +38,7 @@ interface HeaderProps {
   onOpenInviteModal?: (email?: string) => void;
   onOpenAiReportModal: () => void;
   onOpenAiSettingsModal?: () => void;
+  onOpenSupabaseModal?: () => void;
   onSelectView?: (view: ViewMode) => void;
 }
 
@@ -47,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenInviteModal,
   onOpenAiReportModal,
   onOpenAiSettingsModal,
+  onOpenSupabaseModal,
   onSelectView
 }) => {
   const { projectData, projectsList, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
@@ -533,28 +536,42 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Real-time / Offline Status Badge */}
-          <div
-            id="sync-status-badge"
-            className={`hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors shrink-0 ${
-              isOffline
-                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                : isWsConnected
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
-            }`}
-          >
-            {isOffline ? (
-              <>
-                <WifiOff className="w-3.5 h-3.5" />
-                <span>Offline</span>
-              </>
-            ) : (
-              <>
-                <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{isWsConnected ? 'Live' : 'Connected'}</span>
-              </>
+          {/* Supabase DB & Sync Status Badges */}
+          <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+            {onOpenSupabaseModal && (
+              <button
+                id="btn-supabase-modal"
+                onClick={onOpenSupabaseModal}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all shrink-0 shadow-sm"
+                title="Supabase Database Status & Sync Settings"
+              >
+                <Database className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Supabase DB</span>
+              </button>
             )}
+
+            <div
+              id="sync-status-badge"
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-colors shrink-0 ${
+                isOffline
+                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : isWsConnected
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                  : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+              }`}
+            >
+              {isOffline ? (
+                <>
+                  <WifiOff className="w-3.5 h-3.5" />
+                  <span>Offline</span>
+                </>
+              ) : (
+                <>
+                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>{isWsConnected ? 'Live' : 'Connected'}</span>
+                </>
+              )}
+            </div>
           </div>
 
           {/* AI Executive Summary Launcher & AI Key Settings */}

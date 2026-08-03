@@ -37,7 +37,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   const [role, setRole] = useState<string>('Frontend Engineer');
   const [category, setCategory] = useState<StakeholderCategory>('internal');
   const [hourlyRate, setHourlyRate] = useState<number>(75);
-  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState<number>(40);
+  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState<number | ''>(40);
   const [personalNote, setPersonalNote] = useState<string>('');
   
   const [copied, setCopied] = useState<boolean>(false);
@@ -53,7 +53,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
 
   // Dynamic Invitation Token & Link
   const inviteToken = `inv_${Math.random().toString(36).substring(2, 9)}`;
-  const joinUrl = `https://ais-dev-mapsi556lnzk7nvslfakd7-711936506864.asia-southeast1.run.app/?project=${encodeURIComponent(projectCode)}&email=${encodeURIComponent(recipientEmail)}&token=${inviteToken}`;
+  const baseUrl = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'http://localhost:3000/';
+  const joinUrl = `${baseUrl}?project=${encodeURIComponent(projectCode)}&email=${encodeURIComponent(recipientEmail)}&token=${inviteToken}&role=${encodeURIComponent(role)}&name=${encodeURIComponent(candidateName || '')}`;
 
   const emailSubject = `Invitation: Join ${projectName} (${projectCode}) as ${role}`;
   const emailBody = `Hi ${candidateName || 'Team Member'},
@@ -109,9 +110,11 @@ Project Manager, ${projectName}`;
         role: role.trim() || 'Team Member',
         category,
         hourlyRate,
-        weeklyCapacityHours,
+        weeklyCapacityHours: weeklyCapacityHours === '' ? 0 : Number(weeklyCapacityHours),
         skills: ['Team Member', role],
-        status: 'active',
+        status: 'invited',
+        inviteToken,
+        invitedAt: new Date().toISOString(),
         avatar: avatarUrl,
         createdBy: currentUser?.id,
         createdByEmail: currentUser?.email
@@ -259,7 +262,7 @@ Project Manager, ${projectName}`;
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Weekly Capacity (hrs)
+                  Weekly Capacity (hrs) <span className="text-slate-400 font-normal">(Optional)</span>
                 </label>
                 <div className="relative">
                   <Clock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
@@ -268,8 +271,9 @@ Project Manager, ${projectName}`;
                     min="1"
                     max="80"
                     value={weeklyCapacityHours}
-                    onChange={(e) => setWeeklyCapacityHours(Number(e.target.value))}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 font-mono outline-none"
+                    onChange={(e) => setWeeklyCapacityHours(e.target.value === '' ? '' : Number(e.target.value))}
+                    placeholder="e.g. 40 (Optional)"
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 font-mono outline-none"
                   />
                 </div>
               </div>
@@ -278,7 +282,7 @@ Project Manager, ${projectName}`;
             {/* Personal Note */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Personalized Message / Welcome Note
+                Personalized Message / Welcome Note <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <textarea
                 rows={2}

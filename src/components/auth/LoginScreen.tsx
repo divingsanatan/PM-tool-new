@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { UserProfile, UserRole } from '../../types';
 import {
@@ -23,14 +23,26 @@ interface LoginScreenProps {
 }
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
-  const { allUsers, loginAsUser, createUserAccount } = useProject();
+  const { allUsers, loginAsUser, createUserAccount, pendingInvite, acceptPendingInvite } = useProject();
 
-  const [activeTab, setActiveTab] = useState<'google' | 'credentials' | 'register'>('google');
-  
+  const [activeTab, setActiveTab] = useState<'google' | 'credentials' | 'register'>(
+    pendingInvite?.email ? 'register' : 'google'
+  );
+
+  // Auto-fill invitation email if present
+  useEffect(() => {
+    if (pendingInvite?.email) {
+      setRegEmail(pendingInvite.email);
+      setCustomGoogleEmail(pendingInvite.email);
+      if (pendingInvite.name) setRegName(pendingInvite.name);
+      if (pendingInvite.role) setRegTitle(pendingInvite.role);
+    }
+  }, [pendingInvite]);
+
   // Google Sign In Modal State
   const [showGoogleAccountPicker, setShowGoogleAccountPicker] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
-  const [customGoogleName, setCustomGoogleName] = useState('');
+  const [customGoogleEmail, setCustomGoogleEmail] = useState(pendingInvite?.email || '');
+  const [customGoogleName, setCustomGoogleName] = useState(pendingInvite?.name || '');
   const [isCustomGoogleForm, setIsCustomGoogleForm] = useState(false);
 
   // Credentials Form State
@@ -39,15 +51,38 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [errorMsg, setErrorMsg] = useState('');
 
   // Register Form State
-  const [regName, setRegName] = useState('');
-  const [regEmail, setRegEmail] = useState('');
+  const [regName, setRegName] = useState(pendingInvite?.name || '');
+  const [regEmail, setRegEmail] = useState(pendingInvite?.email || '');
   const [regRole, setRegRole] = useState<UserRole>('stakeholder');
-  const [regTitle, setRegTitle] = useState('');
+  const [regTitle, setRegTitle] = useState(pendingInvite?.role || '');
   const [regDepartment, setRegDepartment] = useState('Engineering');
   const [regPassword, setRegPassword] = useState('demo1234');
 
   const handleLoginUser = (user: UserProfile) => {
-    loginAsUser(user);
+    if (pendingInvite) {
+      acceptPendingInvite(user);
+    } else {
+      loginAsUser(user);
+    }
+    if (onLoginSuccess) onLoginSuccess();
+  };
+
+  const handleQuickAcceptInvite = () => {
+    const inviteEmail = pendingInvite?.email || 'team.member@company.com';
+    const inviteName = pendingInvite?.name || inviteEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+    const invitedUser: UserProfile = {
+      id: 'inv-user-' + Date.now(),
+      name: inviteName,
+      email: inviteEmail,
+      role: 'stakeholder',
+      title: pendingInvite?.role || 'Team Member',
+      department: 'Project Team',
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(inviteName)}`
+    };
+
+    createUserAccount(invitedUser);
+    acceptPendingInvite(invitedUser);
     if (onLoginSuccess) onLoginSuccess();
   };
 
@@ -137,6 +172,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                 <p className="text-xs text-indigo-300 font-mono">Role-Gated Workspace</p>
               </div>
             </div>
+
+            {/* Invitation Pending Banner */}
+            {pendingInvite && (
+              <div className="mb-5 p-4 bg-teal-500/10 border border-teal-500/30 rounded-2xl text-teal-200 space-y-3 animate-in fade-in duration-300">
+                <div className="flex items-center gap-2 font-bold text-xs text-teal-300">
+                  <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
+                  <span>Project Invitation Received!</span>
+                </div>
+                <div className="text-xs text-slate-300 space-y-1">
+                  <div>Project: <strong className="text-white font-mono">{pendingInvite.projectCode || 'Target Project'}</strong></div>
+                  {pendingInvite.email && <div>Recipient: <strong className="text-teal-300">{pendingInvite.email}</strong></div>}
+                  {pendingInvite.role && <div>Role: <strong className="text-white">{pendingInvite.role}</strong></div>}
+                </div>
+                <button
+                  onClick={handleQuickAcceptInvite}
+                  className="w-full py-2 px-3 bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-teal-600/30 transition-all flex items-center justify-center gap-1.5"
+                >
+                  <span>Accept Invitation & Enter Project</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               <h2 className="text-base font-semibold text-slate-200">

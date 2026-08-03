@@ -37,6 +37,7 @@ interface SidebarProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
   onOpenAiSettingsModal?: () => void;
+  onOpenUserModal?: () => void;
 }
 
 interface MenuItem {
@@ -58,7 +59,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   pendingCRCount,
   isCollapsed: externalIsCollapsed,
   onToggleCollapse: externalOnToggleCollapse,
-  onOpenAiSettingsModal
+  onOpenAiSettingsModal,
+  onOpenUserModal
 }) => {
   const { currentUser, projectData, customAiConfig } = useProject();
   const isPM = currentUser.role === 'pm';
@@ -482,7 +484,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {!isCollapsed ? (
-            <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-xs">
+            <div
+              onClick={onOpenUserModal}
+              className={`p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/80 text-xs ${
+                onOpenUserModal ? 'cursor-pointer hover:border-indigo-500/50 hover:bg-slate-900 transition-all' : ''
+              }`}
+              title="Click to Edit Profile & Account Settings"
+            >
               <div className="flex items-center gap-2 mb-1.5">
                 <img
                   src={currentUser.avatar}
@@ -507,8 +515,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
           ) : (
-            <div className="text-center">
-              <div className="w-8 h-8 rounded-full border border-indigo-400/60 mx-auto overflow-hidden shadow-sm" title={`${currentUser.name} (${currentUser.role})`}>
+            <div
+              onClick={onOpenUserModal}
+              className={`text-center ${onOpenUserModal ? 'cursor-pointer hover:opacity-80' : ''}`}
+              title={`Edit Profile: ${currentUser.name} (${currentUser.role})`}
+            >
+              <div className="w-8 h-8 rounded-full border border-indigo-400/60 mx-auto overflow-hidden shadow-sm">
                 <img src={currentUser.avatar} alt={currentUser.name} className="w-full h-full object-cover" />
               </div>
               <span className="text-[9px] font-mono text-indigo-400 font-bold block mt-1">v2.6</span>

@@ -1,8 +1,16 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage } from '../types';
+import localforage from 'localforage';
+import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
 import { initialProjectData } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
 import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours } from '../utils/taskCalculations';
+
+// Configure localForage instance
+localforage.config({
+  name: 'ApexPM',
+  storeName: 'apex_pm_store',
+  description: 'ApexPM persistent storage for user modifications across sessions'
+});
 
 export const DEFAULT_USERS: UserProfile[] = [
   {
@@ -67,10 +75,13 @@ interface ProjectContextType {
   toggleTheme: () => void;
   loginAsUser: (user: UserProfile) => void;
   createUserAccount: (user: UserProfile) => void;
+  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;
   createProject: (newProject: Partial<ProjectData>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   updateProjectDetails: (details: Partial<ProjectData>) => Promise<void>;
+  updatePMChecklist: (config: Partial<PMChecklistConfig>) => Promise<void>;
+  validateAcceptanceCriterion: (taskId: string, criterionId: string, validated: boolean) => Promise<void>;
   saveTask: (task: Partial<Task>) => Promise<void>;
   deleteTask: (taskId: string) => Promise<void>;
   saveSubtask: (subtask: Partial<Subtask>) => Promise<void>;
@@ -118,6 +129,9 @@ interface ProjectContextType {
   clearAuditLogs: () => void;
   customAiConfig: CustomAiConfig;
   updateCustomAiConfig: (config: CustomAiConfig) => void;
+  pendingInvite: PendingInvite | null;
+  acceptPendingInvite: (userOverride?: UserProfile) => Promise<void>;
+  clearPendingInvite: () => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -127,6 +141,8 @@ const THEME_STORAGE_KEY = 'apex_pm_theme';
 const AI_CONFIG_STORAGE_KEY = 'apex_pm_custom_ai_config';
 const USER_STORAGE_KEY = 'apex_pm_current_user';
 const USERS_LIST_KEY = 'apex_pm_all_users';
+const PROJECTS_LIST_KEY = 'apex_pm_projects_list';
+const ACTIVE_PROJECT_ID_KEY = 'apex_pm_active_project_id';
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [projectData, setProjectData] = useState<ProjectData>(() => {
@@ -145,19 +161,39 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   });
 
-  const [activeProjectId, setActiveProjectId] = useState<string>(projectData.id || 'proj-1');
-  const [projectsList, setProjectsList] = useState<ProjectMeta[]>([
-    {
-      id: 'proj-1',
-      projectName: initialProjectData.projectName,
-      projectCode: initialProjectData.projectCode,
-      description: initialProjectData.description,
-      budget: initialProjectData.budget,
-      startDate: initialProjectData.startDate,
-      targetEndDate: initialProjectData.targetEndDate,
-      taskCount: initialProjectData.tasks.length
+  const [activeProjectId, setActiveProjectId] = useState<string>(() => {
+    try {
+      const cached = localStorage.getItem(ACTIVE_PROJECT_ID_KEY);
+      if (cached) return cached;
+    } catch (e) {
+      // Ignore
     }
-  ]);
+    return projectData.id || 'proj-1';
+  });
+
+  const [projectsList, setProjectsList] = useState<ProjectMeta[]>(() => {
+    try {
+      const cached = localStorage.getItem(PROJECTS_LIST_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return [
+      {
+        id: 'proj-1',
+        projectName: initialProjectData.projectName,
+        projectCode: initialProjectData.projectCode,
+        description: initialProjectData.description,
+        budget: initialProjectData.budget,
+        startDate: initialProjectData.startDate,
+        targetEndDate: initialProjectData.targetEndDate,
+        taskCount: initialProjectData.tasks.length
+      }
+    ];
+  });
 
   const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     try {
@@ -211,28 +247,207 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   });
 
+  // Async Hydration on mount using localForage
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLocalForageState() {
+      try {
+        const storedProjectData = await localforage.getItem<ProjectData>(LOCAL_STORAGE_KEY);
+        if (isMounted && storedProjectData && storedProjectData.id) {
+          setProjectData(storedProjectData);
+        }
+        const storedProjectsList = await localforage.getItem<ProjectMeta[]>(PROJECTS_LIST_KEY);
+        if (isMounted && storedProjectsList && storedProjectsList.length > 0) {
+          setProjectsList(storedProjectsList);
+        }
+        const storedActiveId = await localforage.getItem<string>(ACTIVE_PROJECT_ID_KEY);
+        if (isMounted && storedActiveId) {
+          setActiveProjectId(storedActiveId);
+        }
+        const storedUsers = await localforage.getItem<UserProfile[]>(USERS_LIST_KEY);
+        if (isMounted && storedUsers && storedUsers.length > 0) {
+          setAllUsers(storedUsers);
+        }
+        const storedUser = await localforage.getItem<UserProfile>(USER_STORAGE_KEY);
+        if (isMounted && storedUser) {
+          setCurrentUser(storedUser);
+        }
+        const storedAuth = await localforage.getItem<boolean>('apex_pm_is_authenticated');
+        if (isMounted && storedAuth !== null) {
+          setIsAuthenticated(storedAuth);
+        }
+        const storedAiConfig = await localforage.getItem<CustomAiConfig>(AI_CONFIG_STORAGE_KEY);
+        if (isMounted && storedAiConfig) {
+          setCustomAiConfig(storedAiConfig);
+        }
+      } catch (err) {
+        console.warn('Error hydrating state from localForage on mount:', err);
+      }
+    }
+    loadLocalForageState();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const broadcastLocalTabSync = useCallback((data: ProjectData, pList?: ProjectMeta[], activeId?: string) => {
+    try {
+      const channel = new BroadcastChannel('apex_pm_sync_channel');
+      channel.postMessage({
+        type: 'LOCAL_STATE_UPDATE',
+        data,
+        projects: pList || projectsList,
+        activeProjectId: activeId || activeProjectId
+      });
+      channel.close();
+    } catch (e) {
+      // BroadcastChannel ignore fallback
+    }
+  }, [projectsList, activeProjectId]);
+
+  const [pendingInvite, setPendingInvite] = useState<PendingInvite | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const project = params.get('project') || params.get('projectId') || params.get('code');
+      const email = params.get('email');
+      const token = params.get('token');
+      const role = params.get('role');
+      const name = params.get('name');
+
+      if (project || email || token) {
+        return {
+          projectCode: project || undefined,
+          email: email || undefined,
+          token: token || undefined,
+          role: role || 'Team Member',
+          name: name || undefined
+        };
+      }
+    } catch (e) {
+      console.warn('Error reading URL invitation params:', e);
+    }
+    return null;
+  });
+
+  const clearPendingInvite = useCallback(() => {
+    setPendingInvite(null);
+    try {
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }, []);
+
+  const acceptPendingInvite = useCallback(async (userOverride?: UserProfile) => {
+    const userToLogin = userOverride || currentUser;
+    const inviteEmail = pendingInvite?.email || userToLogin.email;
+    const inviteRole = pendingInvite?.role || userToLogin.title || 'Team Member';
+    const inviteName = userToLogin.name || pendingInvite?.name || (inviteEmail ? inviteEmail.split('@')[0] : 'Team Contributor');
+
+    setCurrentUser(userToLogin);
+    setIsAuthenticated(true);
+
+    if (!allUsers.some(u => u.email.toLowerCase() === userToLogin.email.toLowerCase())) {
+      setAllUsers(prev => [...prev, userToLogin]);
+    }
+
+    const existingIdx = projectData.stakeholders.findIndex(
+      s => (s.email && s.email.toLowerCase() === inviteEmail.toLowerCase()) || s.id === userToLogin.id
+    );
+
+    let updatedStakeholders = [...projectData.stakeholders];
+    if (existingIdx >= 0) {
+      updatedStakeholders[existingIdx] = {
+        ...updatedStakeholders[existingIdx],
+        name: inviteName,
+        email: inviteEmail,
+        status: 'active',
+        isPlaceholder: false
+      };
+    } else {
+      updatedStakeholders.push({
+        id: userToLogin.id || `sh-inv-${Date.now()}`,
+        name: inviteName,
+        email: inviteEmail,
+        role: inviteRole,
+        category: 'internal',
+        avatar: userToLogin.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(inviteName)}`,
+        hourlyRate: 85,
+        weeklyCapacityHours: 40,
+        skills: [inviteRole, 'Agile'],
+        status: 'active',
+        isPlaceholder: false
+      });
+    }
+
+    const updatedData = {
+      ...projectData,
+      stakeholders: updatedStakeholders,
+      activities: [
+        {
+          id: 'act-' + Date.now(),
+          timestamp: new Date().toISOString(),
+          user: inviteName,
+          userEmail: inviteEmail,
+          action: 'Accepted Project Invite',
+          details: `Joined ${projectData.projectName || 'project'} team as ${inviteRole} via invitation link.`,
+          category: 'stakeholder' as const
+        },
+        ...projectData.activities
+      ]
+    };
+
+    setProjectData(updatedData);
+    broadcastLocalTabSync(updatedData);
+
+    if (pendingInvite?.projectCode) {
+      const targetProj = projectsList.find(
+        p => p.projectCode.toLowerCase() === pendingInvite.projectCode?.toLowerCase() || p.id === pendingInvite.projectCode
+      );
+      if (targetProj && targetProj.id !== activeProjectId) {
+        setActiveProjectId(targetProj.id);
+      }
+    }
+
+    clearPendingInvite();
+  }, [currentUser, pendingInvite, allUsers, projectData, projectsList, activeProjectId, broadcastLocalTabSync, clearPendingInvite]);
+
   const updateCustomAiConfig = (config: CustomAiConfig) => {
     setCustomAiConfig(config);
     try {
       localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(config));
+      localforage.setItem(AI_CONFIG_STORAGE_KEY, config).catch(() => {});
     } catch (e) {
-      console.error('Failed to save custom AI config to localStorage:', e);
+      console.error('Failed to save custom AI config:', e);
     }
   };
 
   const wsRef = useRef<WebSocket | null>(null);
 
-  // Sync state to local storage on every change
+  // Sync state to local storage and localForage immediately on every change
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projectData));
+      localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(projectsList));
+      localStorage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId);
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
       localStorage.setItem(USERS_LIST_KEY, JSON.stringify(allUsers));
       localStorage.setItem('apex_pm_is_authenticated', JSON.stringify(isAuthenticated));
+      localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(customAiConfig));
+
+      localforage.setItem(LOCAL_STORAGE_KEY, projectData).catch(() => {});
+      localforage.setItem(PROJECTS_LIST_KEY, projectsList).catch(() => {});
+      localforage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId).catch(() => {});
+      localforage.setItem(USER_STORAGE_KEY, currentUser).catch(() => {});
+      localforage.setItem(USERS_LIST_KEY, allUsers).catch(() => {});
+      localforage.setItem('apex_pm_is_authenticated', isAuthenticated).catch(() => {});
+      localforage.setItem(AI_CONFIG_STORAGE_KEY, customAiConfig).catch(() => {});
     } catch (e) {
-      console.error('Failed to save to localStorage:', e);
+      console.error('Failed to save to localForage / localStorage:', e);
     }
-  }, [projectData, currentUser, allUsers, isAuthenticated]);
+  }, [projectData, projectsList, activeProjectId, currentUser, allUsers, isAuthenticated, customAiConfig]);
 
   // Handle Theme switching
   useEffect(() => {
@@ -282,6 +497,73 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const updateUserProfile = async (updates: Partial<UserProfile>) => {
+    const updatedUser: UserProfile = {
+      ...currentUser,
+      ...updates
+    };
+
+    setCurrentUser(updatedUser);
+
+    // Update in allUsers list
+    const updatedAllUsers = allUsers.map(u => 
+      u.id === updatedUser.id || (u.email && u.email.toLowerCase() === updatedUser.email.toLowerCase())
+        ? updatedUser
+        : u
+    );
+    setAllUsers(updatedAllUsers);
+
+    // Also update matching stakeholder in projectData.stakeholders if present
+    const matchingShIdx = projectData.stakeholders.findIndex(
+      sh => sh.id === updatedUser.id || 
+            (sh.email && sh.email.toLowerCase() === updatedUser.email.toLowerCase()) || 
+            sh.id === `sh-${updatedUser.id.replace('user-', '')}`
+    );
+
+    let updatedStakeholders = [...projectData.stakeholders];
+    if (matchingShIdx >= 0) {
+      const existingSh = updatedStakeholders[matchingShIdx];
+      updatedStakeholders[matchingShIdx] = {
+        ...existingSh,
+        name: updatedUser.name || existingSh.name,
+        email: updatedUser.email || existingSh.email,
+        avatar: updatedUser.avatar || existingSh.avatar,
+        role: updatedUser.title || existingSh.role,
+        hourlyRate: updatedUser.hourlyRate !== undefined ? updatedUser.hourlyRate : existingSh.hourlyRate,
+        weeklyCapacityHours: updatedUser.weeklyCapacityHours !== undefined ? updatedUser.weeklyCapacityHours : existingSh.weeklyCapacityHours,
+        skills: updatedUser.skills || existingSh.skills
+      };
+    }
+
+    const updatedProjectData = {
+      ...projectData,
+      stakeholders: updatedStakeholders
+    };
+
+    setProjectData(updatedProjectData);
+    broadcastLocalTabSync(updatedProjectData);
+
+    try {
+      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+      localStorage.setItem(USERS_LIST_KEY, JSON.stringify(updatedAllUsers));
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedProjectData));
+    } catch (e) {
+      console.warn('LocalStorage save failed:', e);
+    }
+
+    if (navigator.onLine) {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedProjectData })
+        });
+      } catch (err) {
+        console.warn('Server sync failed, saved locally:', err);
+      }
+    }
+  };
+
   // BroadcastChannel for multi-tab local offline sync
   useEffect(() => {
     const channel = new BroadcastChannel('apex_pm_sync_channel');
@@ -296,21 +578,6 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       channel.close();
     };
   }, []);
-
-  const broadcastLocalTabSync = (data: ProjectData, pList?: ProjectMeta[], activeId?: string) => {
-    try {
-      const channel = new BroadcastChannel('apex_pm_sync_channel');
-      channel.postMessage({
-        type: 'LOCAL_STATE_UPDATE',
-        data,
-        projects: pList || projectsList,
-        activeProjectId: activeId || activeProjectId
-      });
-      channel.close();
-    } catch (e) {
-      // BroadcastChannel ignore fallback
-    }
-  };
 
   // Setup WebSocket connection for real-time synchronization
   const connectWebSocket = useCallback(() => {
@@ -382,14 +649,16 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [connectWebSocket]);
 
-  // Initial fetch from REST API
+  // Initial fetch from REST API with local persistence preference
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
       .then(res => {
         if (res.success && res.projects) {
-          setProjectsList(res.projects);
-          if (res.activeProjectId) setActiveProjectId(res.activeProjectId);
+          setProjectsList(prev => (prev && prev.length > 1 ? prev : res.projects));
+          if (res.activeProjectId && !localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
+            setActiveProjectId(res.activeProjectId);
+          }
         }
       })
       .catch(() => {});
@@ -398,7 +667,24 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .then(res => res.json())
       .then(res => {
         if (res.success && res.data) {
-          setProjectData(res.data);
+          const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+          if (!cached) {
+            setProjectData(res.data);
+          } else {
+            // Push local modifications to server to ensure server matches local persistence
+            try {
+              const parsed = JSON.parse(cached);
+              if (parsed && parsed.id) {
+                fetch('/api/project', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ data: parsed })
+                }).catch(() => {});
+              }
+            } catch (e) {
+              setProjectData(res.data);
+            }
+          }
         }
       })
       .catch(err => {
@@ -536,6 +822,50 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const updatePMChecklist = async (config: Partial<PMChecklistConfig>) => {
+    const updatedChecklist: PMChecklistConfig = {
+      ...(projectData.pmChecklist || {}),
+      ...config
+    };
+    const updated = { ...projectData, pmChecklist: updatedChecklist };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+
+    if (navigator.onLine) {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updated })
+        });
+      } catch (err) {
+        console.warn('Server sync failed, saved locally:', err);
+      }
+    }
+  };
+
+  const validateAcceptanceCriterion = async (taskId: string, criterionId: string, validated: boolean) => {
+    const targetTask = projectData.tasks.find(t => t.id === taskId);
+    if (!targetTask) return;
+
+    const updatedCriteria = (targetTask.acceptanceCriteria || []).map(ac => {
+      if (ac.id === criterionId) {
+        return {
+          ...ac,
+          validated,
+          validatedBy: validated ? `${currentUser.name} (${currentUser.role.toUpperCase()})` : undefined,
+          validatedAt: validated ? new Date().toISOString().split('T')[0] : undefined
+        };
+      }
+      return ac;
+    });
+
+    await saveTask({
+      ...targetTask,
+      acceptanceCriteria: updatedCriteria
+    });
+  };
+
   const saveTask = async (task: Partial<Task>) => {
     // Auto-resolve hierarchy mapping
     let resolvedEpicId = task.epicId;
@@ -582,6 +912,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       completionPercent: task.completionPercent ?? 0,
       dependencies: task.dependencies || [],
       linkedBugIds: task.linkedBugIds || existingTask?.linkedBugIds || [],
+      acceptanceCriteria: task.acceptanceCriteria !== undefined ? task.acceptanceCriteria : existingTask?.acceptanceCriteria || [],
       tags: task.tags || []
     };
 
@@ -1103,7 +1434,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localStorage.removeItem(LOCAL_STORAGE_KEY);
       localStorage.removeItem(USER_STORAGE_KEY);
       localStorage.removeItem(USERS_LIST_KEY);
+      localStorage.removeItem(PROJECTS_LIST_KEY);
+      localStorage.removeItem(ACTIVE_PROJECT_ID_KEY);
       localStorage.removeItem('apex_pm_is_authenticated');
+      await localforage.clear();
     } catch (e) {
       // Ignore
     }
@@ -1581,10 +1915,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         toggleTheme,
         loginAsUser,
         createUserAccount,
+        updateUserProfile,
         switchProject,
         createProject,
         deleteProject,
         updateProjectDetails,
+        updatePMChecklist,
+        validateAcceptanceCriterion,
         saveTask,
         deleteTask,
         saveSubtask,
@@ -1621,7 +1958,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         addAuditNote,
         clearAuditLogs,
         customAiConfig,
-        updateCustomAiConfig
+        updateCustomAiConfig,
+        pendingInvite,
+        acceptPendingInvite,
+        clearPendingInvite
       }}
     >
       {children}

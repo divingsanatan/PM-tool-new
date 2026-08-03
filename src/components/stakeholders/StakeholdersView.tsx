@@ -258,6 +258,23 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                           {isExternal ? <Globe className="w-2.5 h-2.5" /> : <Building2 className="w-2.5 h-2.5" />}
                           <span>{isExternal ? 'External' : 'Internal'}</span>
                         </span>
+
+                        {/* Status Badges */}
+                        {(sh.isPlaceholder || sh.status === 'placeholder') && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 flex items-center gap-1 shrink-0">
+                            <span>🎨 Dummy / Placeholder</span>
+                          </span>
+                        )}
+                        {sh.status === 'invited' && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1 shrink-0">
+                            <span>✉️ Invite Pending</span>
+                          </span>
+                        )}
+                        {sh.status === 'active' && !sh.isPlaceholder && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1 shrink-0">
+                            <span>✓ Active</span>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -293,17 +310,34 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-slate-400 min-w-0">
                     <div className="flex items-center gap-2 min-w-0 truncate">
                       <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <span className="truncate">{sh.email}</span>
+                      <span className="truncate">
+                        {sh.isPlaceholder || sh.email.includes('@placeholder')
+                          ? <em className="text-purple-300 font-sans font-medium">No email assigned (Dummy User)</em>
+                          : sh.email}
+                      </span>
                     </div>
-                    {isPM && onOpenInviteModal && (
-                      <button
-                        onClick={() => onOpenInviteModal(sh.email)}
-                        className="px-2 py-0.5 rounded bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[10px] font-bold transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto"
-                        title={`Resend/Send invitation email to ${sh.email}`}
-                      >
-                        <Mail className="w-2.5 h-2.5" />
-                        <span>Send Invite Email</span>
-                      </button>
+                    {isPM && (
+                      sh.isPlaceholder || sh.email.includes('@placeholder') ? (
+                        <button
+                          onClick={() => onOpenStakeholderModal(sh)}
+                          className="px-2.5 py-1 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[11px] font-bold transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto shadow-sm"
+                          title="Assign an email address to this dummy stakeholder and send invitation link"
+                        >
+                          <Mail className="w-3 h-3 text-purple-300" />
+                          <span>Assign Email & Send Invite</span>
+                        </button>
+                      ) : (
+                        onOpenInviteModal && (
+                          <button
+                            onClick={() => onOpenInviteModal(sh.email)}
+                            className="px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[10px] font-bold transition-colors shrink-0 flex items-center gap-1 self-start sm:self-auto"
+                            title={`Resend/Send invitation email to ${sh.email}`}
+                          >
+                            <Mail className="w-2.5 h-2.5" />
+                            <span>{sh.status === 'invited' ? 'Resend Invite' : 'Send Invite Email'}</span>
+                          </button>
+                        )
+                      )
                     )}
                   </div>
 

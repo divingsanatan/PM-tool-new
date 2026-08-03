@@ -8,6 +8,16 @@ export type RaidSeverity = 'low' | 'medium' | 'high' | 'critical';
 export type RiskStatus = 'identified' | 'monitoring' | 'mitigated' | 'occurred' | 'closed';
 
 export type StakeholderCategory = 'internal' | 'external';
+export type StakeholderStatus = 'active' | 'invited' | 'placeholder' | 'out-of-office' | 'part-time';
+
+export interface PendingInvite {
+  projectCode?: string;
+  projectId?: string;
+  email?: string;
+  token?: string;
+  role?: string;
+  name?: string;
+}
 
 export interface Stakeholder {
   id: string;
@@ -19,7 +29,10 @@ export interface Stakeholder {
   hourlyRate: number;
   weeklyCapacityHours: number;
   skills: string[];
-  status: 'active' | 'out-of-office' | 'part-time';
+  status: StakeholderStatus;
+  isPlaceholder?: boolean;
+  inviteToken?: string;
+  invitedAt?: string;
   createdBy?: string;
   createdByEmail?: string;
 }
@@ -78,6 +91,14 @@ export interface RaciMatrix {
   informed?: string[];     // Stakeholder IDs (I)
 }
 
+export interface AcceptanceCriterion {
+  id: string;
+  text: string;
+  validated: boolean;
+  validatedBy?: string;
+  validatedAt?: string;
+}
+
 export type WorkItemType = 'task' | 'bug';
 
 export interface Task {
@@ -103,6 +124,7 @@ export interface Task {
   completionPercent: number; // 0 to 100
   dependencies: string[]; // task IDs
   linkedBugIds?: string[]; // Optional linked bug IDs
+  acceptanceCriteria?: AcceptanceCriterion[];
   tags: string[];
   createdBy?: string;
   createdByEmail?: string;
@@ -210,6 +232,11 @@ export interface UserProfile {
   title: string;
   avatar: string;
   department?: string;
+  phone?: string;
+  bio?: string;
+  skills?: string[];
+  hourlyRate?: number;
+  weeklyCapacityHours?: number;
 }
 
 export interface ProjectMeta {
@@ -295,6 +322,26 @@ export interface ProjectBoardItem {
   comments?: BoardItemComment[];
 }
 
+export interface PMChecklistCustomItem {
+  id: string;
+  title: string;
+  completed: boolean;
+  category?: string;
+  details?: string;
+}
+
+export interface PMChecklistConfig {
+  scopeDetails?: string;
+  stakeholderNotes?: string;
+  scheduleNotes?: string;
+  costNotes?: string;
+  dorNotes?: string;
+  dodNotes?: string;
+  dorCriteria?: string[];
+  dodCriteria?: string[];
+  customItems?: PMChecklistCustomItem[];
+}
+
 export interface ProjectData {
   id: string;
   projectName: string;
@@ -317,6 +364,7 @@ export interface ProjectData {
   boardMessages?: ProjectChatMessage[];
   widgets: DashboardWidgetConfig[];
   statusPercentages?: Record<TaskStatus, number>;
+  pmChecklist?: PMChecklistConfig;
 }
 
 export type ViewMode = 'dashboard' | 'member_dashboard' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board' | 'chat';

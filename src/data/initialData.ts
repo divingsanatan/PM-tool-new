@@ -266,6 +266,11 @@ export const initialProjectData: ProjectData = {
       completionPercent: 80,
       dependencies: ["task-101:FS"],
       linkedBugIds: ["task-bug-1"],
+      acceptanceCriteria: [
+        { id: "ac-103-1", text: "EV, PV, AC formulas adhere to PMI standard (EV = % Complete * BAC)", validated: true, validatedBy: "Alex Morgan (PM)", validatedAt: "2026-07-26" },
+        { id: "ac-103-2", text: "SPI and CPI handle zero-cost and edge cases gracefully without division-by-zero errors", validated: true, validatedBy: "Alex Morgan (PM)", validatedAt: "2026-07-27" },
+        { id: "ac-103-3", text: "EAC and ETC auto-update when actual hours change", validated: false }
+      ],
       tags: ["EVM", "Analytics", "Engine"]
     },
     {
@@ -275,7 +280,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-2",
       featureId: "feat-2",
       milestoneId: "m-2",
-      status: "in_progress",
+      status: "demoable",
       priority: "urgent",
       assigneeIds: ["sh-3", "sh-4"],
       raci: {
@@ -290,8 +295,13 @@ export const initialProjectData: ProjectData = {
       actualHours: 45,
       plannedCost: 7800,
       actualCost: 4950,
-      completionPercent: 65,
+      completionPercent: 85,
       dependencies: ["task-102:SS"],
+      acceptanceCriteria: [
+        { id: "ac-104-1", text: "Timeline renders task bars with correct start and end dates", validated: true, validatedBy: "Alex Morgan (PM)", validatedAt: "2026-07-28" },
+        { id: "ac-104-2", text: "Drag-and-drop handles FS/SS/FF dependency constraints visually", validated: false },
+        { id: "ac-104-3", text: "Critical path tasks highlighted in amber/red outline when selected", validated: false }
+      ],
       tags: ["Gantt", "Interactive", "Visualization"]
     },
     {
@@ -625,13 +635,39 @@ export const initialProjectData: ProjectData = {
     }
   ],
   widgets: [
-    { id: "evm-summary", title: "EVM Performance Index (SPI & CPI)", enabled: true, order: 1, width: "full" },
-    { id: "gantt-chart", title: "Interactive Gantt Timeline & Critical Path", enabled: true, order: 2, width: "full" },
-    { id: "workload-distribution", title: "Stakeholder Workload Distribution & Load Heatmap", enabled: true, order: 3, width: "half" },
-    { id: "raid-matrix", title: "RAID Risk & Oversight Matrix", enabled: true, order: 4, width: "half" },
-    { id: "completion-metrics", title: "Work Item Completion Progress (Features, Milestones, Tasks)", enabled: true, order: 5, width: "half" },
-    { id: "ai-assistant", title: "AI Executive Project Summary & Risk Advisor", enabled: true, order: 6, width: "half" }
+    { id: "pm-checklist", title: "PM Governance & Readiness Checklist", enabled: true, order: 1, width: "full" },
+    { id: "evm-summary", title: "EVM Performance Index (SPI & CPI)", enabled: true, order: 2, width: "full" },
+    { id: "gantt-chart", title: "Interactive Gantt Timeline & Critical Path", enabled: true, order: 3, width: "full" },
+    { id: "workload-distribution", title: "Stakeholder Workload Distribution & Load Heatmap", enabled: true, order: 4, width: "half" },
+    { id: "raid-matrix", title: "RAID Risk & Oversight Matrix", enabled: true, order: 5, width: "half" },
+    { id: "completion-metrics", title: "Work Item Completion Progress (Features, Milestones, Tasks)", enabled: true, order: 6, width: "half" },
+    { id: "ai-assistant", title: "AI Executive Project Summary & Risk Advisor", enabled: true, order: 7, width: "half" }
   ],
+  pmChecklist: {
+    scopeDetails: "Enterprise cloud application featuring ClickUp-grade execution tracking, automated EVM reporting, and real-time collaboration.",
+    stakeholderNotes: "All 5 core internal and external stakeholders onboarded with hourly rates and weekly capacities assigned.",
+    scheduleNotes: "Project spans 6 months (June - November 2026) broken down into 4 key milestone releases.",
+    costNotes: "$250,000 baseline budget authorized across engineering, design, and infrastructure streams.",
+    dorNotes: "Work item must have: Title, description, estimated hours, assigned stakeholder, and defined acceptance criteria.",
+    dodNotes: "Work item must have: 100% subtasks completed, code verified, acceptance criteria validated by PM, and no blocking risks.",
+    dorCriteria: [
+      "Item description & scope clearly articulated",
+      "Assignee(s) designated with capacity checked",
+      "Effort estimated in hours",
+      "Optional Acceptance Criteria defined"
+    ],
+    dodCriteria: [
+      "All subtasks & code review finished",
+      "PM validated all defined Acceptance Criteria",
+      "Logged against corresponding milestone/epic",
+      "No critical unmitigated RAID items linked"
+    ],
+    customItems: [
+      { id: "c-1", title: "Architecture & Security Review Sign-off", completed: true, category: "Governance", details: "Signed off by Principal Architect Dr. Elena Rostova" },
+      { id: "c-2", title: "Design System & Accessibility Checklist", completed: true, category: "Design", details: "Priya Sharma verified WCAG 2.1 AA compliance" },
+      { id: "c-3", title: "Client Demo Environment Provisioned", completed: false, category: "DevOps", details: "Pending staging deployment setup" }
+    ]
+  },
   changeRequests: [
     {
       id: "cr-101",

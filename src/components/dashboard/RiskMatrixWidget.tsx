@@ -69,19 +69,24 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
   const getCellBgClass = (prob: string, impact: string, isSelected: boolean) => {
     let base = '';
     if (prob === 'high' && impact === 'high') {
-      base = 'bg-rose-950/60 border-rose-500/40 text-rose-200 hover:bg-rose-900/60';
+      // Critical Red Zone
+      base = 'bg-rose-100/90 border-rose-300 text-rose-900 hover:bg-rose-200/90 dark:bg-rose-950/70 dark:border-rose-500/50 dark:text-rose-200 dark:hover:bg-rose-900/70';
     } else if ((prob === 'high' && impact === 'medium') || (prob === 'medium' && impact === 'high')) {
-      base = 'bg-amber-950/50 border-amber-500/40 text-amber-200 hover:bg-amber-900/50';
+      // High Amber / Orange Zone
+      base = 'bg-amber-100/90 border-amber-300 text-amber-950 hover:bg-amber-200/90 dark:bg-amber-950/60 dark:border-amber-500/50 dark:text-amber-200 dark:hover:bg-amber-900/60';
     } else if (prob === 'medium' && impact === 'medium') {
-      base = 'bg-yellow-950/40 border-yellow-500/30 text-yellow-200 hover:bg-yellow-900/40';
+      // Moderate Yellow Zone
+      base = 'bg-yellow-100/90 border-yellow-300 text-yellow-950 hover:bg-yellow-200/90 dark:bg-yellow-950/50 dark:border-yellow-500/40 dark:text-yellow-200 dark:hover:bg-yellow-900/50';
     } else if ((prob === 'high' && impact === 'low') || (prob === 'low' && impact === 'high')) {
-      base = 'bg-slate-900/90 border-slate-700/60 text-slate-300 hover:bg-slate-800/60';
+      // Sky / Slate Low-Med Zone
+      base = 'bg-sky-50 border-sky-200 text-sky-950 hover:bg-sky-100 dark:bg-slate-900/90 dark:border-slate-700/60 dark:text-slate-300 dark:hover:bg-slate-800/60';
     } else {
-      base = 'bg-slate-950/80 border-slate-800/80 text-slate-400 hover:bg-slate-900/80';
+      // Emerald / Slate Low Risk Zone
+      base = 'bg-emerald-50 border-emerald-200 text-emerald-950 hover:bg-emerald-100 dark:bg-slate-950/80 dark:border-slate-800/80 dark:text-slate-400 dark:hover:bg-slate-900/80';
     }
 
     if (isSelected) {
-      base += ' ring-2 ring-indigo-400 shadow-lg scale-[1.02]';
+      base += ' ring-2 ring-indigo-500 dark:ring-indigo-400 shadow-md scale-[1.02]';
     }
     return base;
   };
@@ -114,23 +119,23 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
   };
 
   return (
-    <div className="bg-slate-900 border border-slate-800/80 p-4 sm:p-5 rounded-2xl shadow-sm space-y-5">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/80 p-4 sm:p-5 rounded-2xl shadow-sm space-y-5 text-slate-800 dark:text-slate-100">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800/80 pb-3.5">
         <div className="flex items-start sm:items-center gap-2.5">
-          <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-            <ShieldAlert className="w-5 h-5 text-rose-300" />
+          <div className="p-2 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 shrink-0">
+            <ShieldAlert className="w-5 h-5 text-rose-600 dark:text-rose-300" />
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-bold text-slate-100 text-sm sm:text-base">
+              <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                 Risk Probability & Impact Matrix
               </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30 whitespace-nowrap">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30 whitespace-nowrap">
                 3x3 Heatmap
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Quantitative likelihood vs impact matrix coupled with executive commentary.
             </p>
           </div>
@@ -140,7 +145,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
           {selectedCell && (
             <button
               onClick={() => setSelectedCell(null)}
-              className="text-xs text-slate-400 hover:text-slate-200 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800 flex items-center gap-1"
+              className="text-xs text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-slate-100 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-800 flex items-center gap-1 transition-colors"
             >
               <Filter className="w-3 h-3" />
               <span>Clear Filter</span>
@@ -149,7 +154,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
           {onNavigate && (
             <button
               onClick={() => onNavigate('raid')}
-              className="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-medium bg-slate-950/60 px-3 py-1 rounded-lg border border-slate-800/80 transition-colors"
+              className="text-xs text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 flex items-center gap-1 font-medium bg-rose-50 dark:bg-slate-950/60 px-3 py-1 rounded-lg border border-rose-200 dark:border-slate-800/80 transition-colors"
             >
               <span>Full RAID Log</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -162,22 +167,22 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* LEFT / TOP: 3x3 Heatmap Matrix (7 cols) */}
         <div className="lg:col-span-7 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
+          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 font-semibold px-1">
             <span className="flex items-center gap-1">
-              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <Shield className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
               <span>Likelihood vs Impact Heatmap</span>
             </span>
-            <span className="text-[11px] font-mono text-slate-400">
+            <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
               Click cell to filter items
             </span>
           </div>
 
           {/* Matrix Box */}
-          <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
+          <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
             {/* Y-axis Label & Matrix Grid */}
             <div className="flex gap-2">
               {/* Y-axis Probability Header */}
-              <div className="flex flex-col justify-between py-6 text-[10px] font-bold text-slate-400 uppercase tracking-wider w-5 shrink-0 text-center">
+              <div className="flex flex-col justify-between py-6 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider w-5 shrink-0 text-center">
                 <span className="rotate-[-90deg] origin-center translate-y-2">High</span>
                 <span className="rotate-[-90deg] origin-center">Med</span>
                 <span className="rotate-[-90deg] origin-center -translate-y-2">Low</span>
@@ -209,20 +214,20 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                           {cellItems.slice(0, 3).map((item) => (
                             <span
                               key={item.id}
-                              className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-900/80 border border-slate-700/80 truncate max-w-[90px]"
+                              className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-white/90 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 shadow-xs truncate max-w-[90px]"
                               title={item.title}
                             >
                               {item.id.replace('raid-', 'R-')}
                             </span>
                           ))}
                           {cellItems.length > 3 && (
-                            <span className="text-[9px] font-mono opacity-80 self-center">
+                            <span className="text-[9px] font-mono font-bold opacity-80 self-center">
                               +{cellItems.length - 3}
                             </span>
                           )}
                         </div>
 
-                        <div className="text-[9px] font-medium opacity-70 text-right capitalize">
+                        <div className="text-[9px] font-medium opacity-80 text-right capitalize">
                           {impact} Imp
                         </div>
                       </div>
@@ -233,7 +238,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
             </div>
 
             {/* X-axis Impact Header */}
-            <div className="flex justify-between pl-7 pr-1 pt-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-center">
+            <div className="flex justify-between pl-7 pr-1 pt-1 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">
               <span className="w-1/3">Low Impact</span>
               <span className="w-1/3">Med Impact</span>
               <span className="w-1/3">High Impact</span>
@@ -241,23 +246,23 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
           </div>
 
           {/* Matrix Legend */}
-          <div className="flex flex-wrap items-center justify-between text-[11px] gap-2 pt-1 text-slate-400 px-1">
+          <div className="flex flex-wrap items-center justify-between text-[11px] gap-2 pt-1 text-slate-600 dark:text-slate-400 px-1">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded bg-rose-500/80 inline-block shrink-0" />
+                <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block shrink-0" />
                 <span>Critical Red</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded bg-amber-500/80 inline-block shrink-0" />
+                <span className="w-2.5 h-2.5 rounded bg-amber-500 inline-block shrink-0" />
                 <span>High Orange</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded bg-yellow-500/70 inline-block shrink-0" />
+                <span className="w-2.5 h-2.5 rounded bg-yellow-500 inline-block shrink-0" />
                 <span>Moderate Yellow</span>
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded bg-slate-700 inline-block shrink-0" />
-                <span>Low Tolerance</span>
+                <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block shrink-0" />
+                <span>Low Risk</span>
               </span>
             </div>
           </div>
@@ -265,13 +270,13 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
 
         {/* RIGHT / BOTTOM: Executive Commentary Box (5 cols) */}
         <div className="lg:col-span-5 flex flex-col justify-between space-y-3">
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3 flex-1 flex flex-col justify-between">
+          <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3 flex-1 flex flex-col justify-between">
             <div>
               {/* Commentary Header */}
-              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 mb-3">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800/80 pb-2.5 mb-3">
                 <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-indigo-400 shrink-0" />
-                  <h4 className="font-bold text-slate-100 text-xs sm:text-sm">
+                  <MessageSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
                     Executive Risk Commentary
                   </h4>
                 </div>
@@ -284,7 +289,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                       setIsEditingComment(true);
                     }
                   }}
-                  className="text-[11px] font-medium text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-500/10 hover:bg-indigo-500/20 px-2.5 py-1 rounded-lg border border-indigo-500/20 transition-colors"
+                  className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center gap-1 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-500/20 transition-colors"
                 >
                   {isEditingComment ? (
                     <>
@@ -305,10 +310,10 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                 <span
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border uppercase tracking-wide ${
                     criticalZoneCount > 0
-                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                      ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/40'
                       : highZoneCount > 0
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/40'
+                      : 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40'
                   }`}
                 >
                   {criticalZoneCount > 0
@@ -317,7 +322,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                     ? 'Elevated Risk Profile'
                     : 'Low Risk Tolerance'}
                 </span>
-                <span className="text-[11px] font-mono text-slate-400">
+                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
                   {totalActiveRisks} Active Risks
                 </span>
               </div>
@@ -329,39 +334,39 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                     value={customComment}
                     onChange={(e) => setCustomComment(e.target.value)}
                     placeholder="Enter custom executive risk assessment commentary..."
-                    className="w-full h-28 p-2.5 rounded-xl bg-slate-900 border border-indigo-500/40 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed resize-none"
+                    className="w-full h-28 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-400 dark:border-indigo-500/40 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 leading-relaxed resize-none shadow-xs"
                   />
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => setCustomComment('')}
-                      className="text-[10px] text-slate-400 hover:text-slate-200 underline"
+                      className="text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 underline"
                     >
                       Reset to AI Default
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800/80 text-xs text-slate-300 leading-relaxed space-y-2">
+                <div className="p-3 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 text-xs text-slate-700 dark:text-slate-300 leading-relaxed space-y-2 shadow-xs">
                   <p>{activeCommentText}</p>
                 </div>
               )}
             </div>
 
             {/* Quick Action / Highlighted Risk */}
-            <div className="pt-3 border-t border-slate-800/80 text-xs space-y-1.5">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800/80 text-xs space-y-1.5">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
                 Top Priority Active Item
               </span>
               {risks.length > 0 ? (
-                <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-2 min-w-0">
+                <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 min-w-0 shadow-xs">
                   <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-slate-200 truncate text-xs">
+                    <div className="font-semibold text-slate-900 dark:text-slate-200 truncate text-xs">
                       {risks[0].title}
                     </div>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-2 mt-0.5">
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
                       <span>Owner: {getOwnerName(risks[0].ownerId)}</span>
                       <span>•</span>
-                      <span className="capitalize text-amber-400 font-mono">
+                      <span className="capitalize text-amber-600 dark:text-amber-400 font-mono font-semibold">
                         {risks[0].impact || 'High'} Imp / {risks[0].probability || 'Med'} Prob
                       </span>
                     </div>
@@ -376,10 +381,10 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
       </div>
 
       {/* FILTERED RISK TABLE BELOW MATRIX */}
-      <div className="pt-2 border-t border-slate-800/80 space-y-3">
-        <div className="flex items-center justify-between text-xs text-slate-300 font-semibold">
+      <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 space-y-3">
+        <div className="flex items-center justify-between text-xs text-slate-800 dark:text-slate-300 font-semibold">
           <span className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-indigo-400" />
+            <Filter className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>
               {selectedCell
                 ? `Risks in ${selectedCell.prob.toUpperCase()} Probability / ${selectedCell.impact.toUpperCase()} Impact Zone (${displayedRisks.length})`
@@ -389,7 +394,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
           {selectedCell && (
             <button
               onClick={() => setSelectedCell(null)}
-              className="text-[11px] text-indigo-400 hover:text-indigo-300 underline"
+              className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 underline"
             >
               Show All ({risks.length})
             </button>
@@ -405,48 +410,48 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
               return (
                 <div
                   key={item.id}
-                  className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800/80 hover:border-slate-700 transition-all flex flex-col justify-between space-y-2.5 shadow-inner min-w-0 overflow-hidden"
+                  className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between space-y-2.5 shadow-xs min-w-0 overflow-hidden"
                 >
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex items-center justify-between gap-2 min-w-0">
-                      <span className="text-[10px] font-mono font-bold text-slate-400 uppercase shrink-0 whitespace-nowrap">
+                      <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 uppercase shrink-0 whitespace-nowrap">
                         {item.id}
                       </span>
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 whitespace-nowrap ${
                           prob === 'high' && imp === 'high'
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                            ? 'bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30'
                             : prob === 'high' || imp === 'high'
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30'
+                            : 'bg-indigo-100 text-indigo-800 border border-indigo-300 dark:bg-indigo-500/20 dark:text-indigo-300 dark:border-indigo-500/30'
                         }`}
                       >
                         {item.status || 'Active'}
                       </span>
                     </div>
 
-                    <h5 className="font-bold text-xs text-slate-100 line-clamp-2 leading-snug">
+                    <h5 className="font-bold text-xs text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
                       {item.title}
                     </h5>
 
                     {item.mitigationStrategy && (
-                      <div className="bg-slate-900/60 p-2 rounded-lg border border-slate-800/60 min-w-0 overflow-hidden">
-                        <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">
-                          <strong className="text-slate-300 font-medium">Mitigation: </strong>
+                      <div className="bg-white dark:bg-slate-900/60 p-2 rounded-lg border border-slate-200 dark:border-slate-800/60 min-w-0 overflow-hidden">
+                        <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                          <strong className="text-slate-800 dark:text-slate-300 font-medium">Mitigation: </strong>
                           {item.mitigationStrategy}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 pt-2 border-t border-slate-800/60 min-w-0">
-                    <span className="flex items-center gap-1 font-mono text-slate-300 min-w-0 truncate">
+                  <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-800/60 min-w-0">
+                    <span className="flex items-center gap-1 font-mono text-slate-700 dark:text-slate-300 min-w-0 truncate">
                       <User className="w-3 h-3 text-slate-400 shrink-0" />
                       <span className="truncate">{getOwnerName(item.ownerId)}</span>
                     </span>
 
-                    <span className="font-mono text-slate-300 shrink-0 whitespace-nowrap">
-                      Score: <strong className="text-indigo-400">{item.riskScore || 6}</strong>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 shrink-0 whitespace-nowrap">
+                      Score: <strong className="text-indigo-600 dark:text-indigo-400">{item.riskScore || 6}</strong>
                     </span>
                   </div>
                 </div>
@@ -454,7 +459,7 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
             })}
           </div>
         ) : (
-          <div className="p-6 rounded-xl bg-slate-950/60 border border-slate-800/60 text-center text-xs text-slate-400">
+          <div className="p-6 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/60 text-center text-xs text-slate-500 dark:text-slate-400">
             No risks found in the selected matrix cell quadrant.
           </div>
         )}

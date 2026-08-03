@@ -2,10 +2,16 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { createClient } from '@supabase/supabase-js';
 import { initialProjectData, defaultProjectsMap } from './src/data/initialData.js';
 import { ProjectData } from './src/types.js';
+
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://icvuibdumunumdztxbbq.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_Q95HY1AG_Xo4T5HU7M0UKA_oMnitXJy';
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const currentFilename = typeof __filename !== 'undefined'
   ? __filename
@@ -19,12 +25,101 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 
 const PORT = 3000;
+const STORE_FILE = path.join(process.cwd(), 'data_store.json');
 
 app.use(express.json({ limit: '10mb' }));
 
-// In-memory state for multiple projects
-let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap };
-let activeProjectId: string = "proj-1";
+// Helper to load persistent state from disk
+function loadStoreFromDisk() {
+  try {
+    if (fs.existsSync(STORE_FILE)) {
+      const content = fs.readFileSync(STORE_FILE, 'utf-8');
+      const data = JSON.parse(content);
+      if (data && data.allProjectsMap && Object.keys(data.allProjectsMap).length > 0) {
+        return {
+          allProjectsMap: data.allProjectsMap as Record<string, ProjectData>,
+          activeProjectId: (data.activeProjectId as string) || Object.keys(data.allProjectsMap)[0] || 'proj-1'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Failed to read data_store.json from disk:', err);
+  }
+  return {
+    allProjectsMap: { ...defaultProjectsMap },
+    activeProjectId: 'proj-1'
+  };
+}
+
+const initialStore = loadStoreFromDisk();
+let allProjectsMap: Record<string, ProjectData> = initialStore.allProjectsMap;
+let activeProjectId: string = initialStore.activeProjectId;
+let isSupabaseConnected = false;
+
+// Async initial hydration from Supabase
+async function initSupabaseHydration() {
+  try {
+    const { data, error } = await supabase.from('app_projects').select('*');
+    if (!error && data && data.length > 0) {
+      isSupabaseConnected = true;
+      const loadedMap: Record<string, ProjectData> = {};
+      data.forEach((row: any) => {
+        if (row.id && row.data) {
+          loadedMap[row.id] = row.data;
+        }
+      });
+      if (Object.keys(loadedMap).length > 0) {
+        allProjectsMap = loadedMap;
+        if (!allProjectsMap[activeProjectId]) {
+          activeProjectId = Object.keys(allProjectsMap)[0];
+        }
+        console.log(`[Supabase] Hydrated ${data.length} project(s) from Supabase database.`);
+      }
+    } else if (error) {
+      console.warn('[Supabase] Initial query notice:', error.message);
+    }
+  } catch (err: any) {
+    console.warn('[Supabase] Connection notice:', err.message || err);
+  }
+}
+
+initSupabaseHydration();
+
+// Helper to save current state to disk & Supabase
+function saveStoreToDisk() {
+  try {
+    const payload = JSON.stringify({
+      allProjectsMap,
+      activeProjectId,
+      updatedAt: new Date().toISOString()
+    }, null, 2);
+    fs.writeFileSync(STORE_FILE, payload, 'utf-8');
+  } catch (err) {
+    console.error('Failed to write data_store.json to disk:', err);
+  }
+
+  // Background sync to Supabase
+  syncToSupabase().catch(err => console.warn('[Supabase] Background sync warning:', err.message || err));
+}
+
+async function syncToSupabase() {
+  try {
+    const rows = Object.values(allProjectsMap).map(p => ({
+      id: p.id || 'proj-1',
+      data: p,
+      updated_at: new Date().toISOString()
+    }));
+
+    const { error } = await supabase.from('app_projects').upsert(rows, { onConflict: 'id' });
+    if (!error) {
+      isSupabaseConnected = true;
+    } else {
+      console.warn('[Supabase] Upsert warning:', error.message);
+    }
+  } catch (err: any) {
+    console.warn('[Supabase] Upsert exception:', err.message || err);
+  }
+}
 
 // Helper to get active project data
 function getActiveProject(): ProjectData {
@@ -37,8 +132,9 @@ function getActiveProject(): ProjectData {
   return allProjectsMap[activeProjectId];
 }
 
-// Helper to broadcast state changes to all connected clients
+// Helper to broadcast state changes to all connected clients and save to disk
 function broadcastDataChange(senderWs?: WebSocket) {
+  saveStoreToDisk();
   const currentData = getActiveProject();
   const projectsList = Object.values(allProjectsMap).map(p => ({
     id: p.id || 'proj-1',
@@ -103,6 +199,67 @@ wss.on('connection', (ws) => {
       console.error('Error handling WS message:', err);
     }
   });
+});
+
+// Supabase Status & Database Health Endpoints
+app.get('/api/supabase/status', async (_req, res) => {
+  try {
+    const { data, error } = await supabase.from('app_projects').select('id, updated_at').limit(50);
+    const tableExists = !error;
+    const projectCount = data ? data.length : 0;
+
+    res.json({
+      success: true,
+      connected: true,
+      url: SUPABASE_URL,
+      tableExists,
+      projectCount,
+      activeProjectsInMemory: Object.keys(allProjectsMap).length,
+      errorMessage: error ? error.message : null,
+      sqlScript: `CREATE TABLE IF NOT EXISTS public.app_projects (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable Row Level Security (optional) or allow public read/write for applet
+ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public full access" ON public.app_projects;
+CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);`
+    });
+  } catch (err: any) {
+    res.json({
+      success: false,
+      connected: false,
+      url: SUPABASE_URL,
+      tableExists: false,
+      errorMessage: err.message || 'Supabase host unreachable',
+      sqlScript: `CREATE TABLE IF NOT EXISTS public.app_projects (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);`
+    });
+  }
+});
+
+app.post('/api/supabase/sync-push', async (_req, res) => {
+  try {
+    await syncToSupabase();
+    res.json({ success: true, message: 'Local project data pushed to Supabase app_projects table successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Push to Supabase failed' });
+  }
+});
+
+app.post('/api/supabase/sync-pull', async (_req, res) => {
+  try {
+    await initSupabaseHydration();
+    broadcastDataChange();
+    res.json({ success: true, message: 'Pulled latest state from Supabase database.', activeProjectId, data: getActiveProject() });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Pull from Supabase failed' });
+  }
 });
 
 // REST Endpoints

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { Task, Priority, TaskStatus, WorkItemType } from '../../types';
-import { X, CheckSquare, DollarSign, Clock, Calendar, Users, Calculator, ShieldCheck, Link2, Plus, AlertTriangle, Trash2, Flag, Bookmark, Layers, Bug } from 'lucide-react';
+import { Task, Priority, TaskStatus, WorkItemType, AcceptanceCriterion } from '../../types';
+import { X, CheckSquare, DollarSign, Clock, Calendar, Users, Calculator, ShieldCheck, Link2, Plus, AlertTriangle, Trash2, Flag, Bookmark, Layers, Bug, Sparkles, CheckCircle2 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from './HierarchyItemModal';
 import { getAvgHourlyRate, getStatusProgress } from '../../utils/taskCalculations';
 import {
@@ -84,6 +84,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [selectedDepTaskId, setSelectedDepTaskId] = useState<string>('');
   const [selectedDepType, setSelectedDepType] = useState<DependencyType>('FS');
 
+  // Acceptance Criteria State
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState<AcceptanceCriterion[]>([]);
+  const [newAcText, setNewAcText] = useState('');
+
   const availableBugs = useMemo(() => {
     return projectData.tasks.filter(t => t.type === 'bug' && t.id !== taskToEdit?.id);
   }, [projectData.tasks, taskToEdit]);
@@ -92,6 +96,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     if (taskToEdit) {
       setType(taskToEdit.type || 'task');
       setLinkedBugIds(taskToEdit.linkedBugIds || []);
+      setAcceptanceCriteria(taskToEdit.acceptanceCriteria || []);
       setTitle(taskToEdit.title);
       setDescription(taskToEdit.description || '');
       setStatus(taskToEdit.status);
@@ -115,6 +120,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     } else {
       setType('task');
       setLinkedBugIds([]);
+      setAcceptanceCriteria([]);
       setTitle('');
       if (defaultStatus) setStatus(defaultStatus);
       setDescription('');
@@ -144,6 +150,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     setSelectedDepTaskId('');
     setSelectedDepType('FS');
+    setNewAcText('');
   }, [taskToEdit, defaultStatus, isOpen]);
 
   // Handle automatic hierarchy filling when feature is selected
@@ -220,9 +227,39 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       actualCost: liveActualCost,
       completionPercent: liveCompletionPercent,
       dependencies,
-      linkedBugIds
+      linkedBugIds,
+      acceptanceCriteria
     });
     onClose();
+  };
+
+  const handleAddAcceptanceCriterion = () => {
+    if (!newAcText.trim()) return;
+    const newAc: AcceptanceCriterion = {
+      id: 'ac-' + Date.now(),
+      text: newAcText.trim(),
+      validated: false
+    };
+    setAcceptanceCriteria(prev => [...prev, newAc]);
+    setNewAcText('');
+  };
+
+  const handleRemoveAcceptanceCriterion = (id: string) => {
+    setAcceptanceCriteria(prev => prev.filter(ac => ac.id !== id));
+  };
+
+  const handleToggleAcceptanceCriterionValidation = (id: string, checked: boolean) => {
+    setAcceptanceCriteria(prev => prev.map(ac => {
+      if (ac.id === id) {
+        return {
+          ...ac,
+          validated: checked,
+          validatedBy: checked ? `${currentUser.name} (${currentUser.role.toUpperCase()})` : undefined,
+          validatedAt: checked ? new Date().toISOString().split('T')[0] : undefined
+        };
+      }
+      return ac;
+    }));
   };
 
   const toggleAssignee = (id: string) => {
@@ -695,6 +732,109 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <span>Add Link</span>
               </button>
             </div>
+          </div>
+
+          {/* Acceptance Criteria (Optional) */}
+          <div className="bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-slate-200 font-semibold text-xs sm:text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Acceptance Criteria (Optional)</span>
+              </label>
+              <span className="text-[11px] text-slate-400">
+                {acceptanceCriteria.length} {acceptanceCriteria.length === 1 ? 'criterion' : 'criteria'} defined
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Define testable rules for this work item. PM validates these items when moving work items to demoable status.
+            </p>
+
+            {/* List of existing criteria */}
+            {acceptanceCriteria.length > 0 && (
+              <div className="space-y-2 pt-1">
+                {acceptanceCriteria.map((ac, idx) => (
+                  <div
+                    key={ac.id || idx}
+                    className={`flex items-start justify-between gap-2.5 p-2.5 rounded-xl border transition-colors ${
+                      ac.validated
+                        ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                        : 'bg-slate-900 border-slate-800 text-slate-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={ac.validated}
+                        onChange={e => handleToggleAcceptanceCriterionValidation(ac.id, e.target.checked)}
+                        className="rounded text-emerald-600 focus:ring-emerald-500 mt-0.5 shrink-0"
+                        title={currentUser.role === 'pm' ? 'Validate as PM' : 'Toggle validation status'}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <span className={`text-xs block ${ac.validated ? 'line-through text-emerald-300/80' : 'text-slate-200'}`}>
+                          {ac.text}
+                        </span>
+                        {ac.validatedBy && (
+                          <span className="text-[10px] text-emerald-400/80 block mt-0.5 font-mono">
+                            Validated by {ac.validatedBy} on {ac.validatedAt}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {ac.validated ? (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          VALIDATED
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                          PENDING PM
+                        </span>
+                      )}
+
+                      {isTaskEditable && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAcceptanceCriterion(ac.id)}
+                          className="text-slate-500 hover:text-rose-400 p-1 rounded hover:bg-slate-800"
+                          title="Remove criterion"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input to add new Acceptance Criterion */}
+            {isTaskEditable && (
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  value={newAcText}
+                  onChange={e => setNewAcText(e.target.value)}
+                  placeholder="+ Add specific acceptance criterion (e.g. Unit tests pass 100%)..."
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddAcceptanceCriterion();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAcceptanceCriterion}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center gap-1 shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Criterion</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Linked Bugs (Optional) */}
