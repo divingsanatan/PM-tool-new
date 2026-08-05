@@ -39,6 +39,19 @@ export interface Stakeholder {
 
 export type EpicStatus = 'backlog' | 'in_progress' | 'completed';
 
+export type SprintStatus = 'future' | 'active' | 'completed';
+
+export interface Sprint {
+  id: string;
+  name: string; // e.g. "Sprint 1", "Sprint 2"
+  goal?: string;
+  status: SprintStatus;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  isAutoDates?: boolean; // True if dates auto-calculated from assigned WBS items unless manually overridden
+  capacityPoints?: number;
+}
+
 export interface Epic {
   id: string;
   title: string;
@@ -46,6 +59,7 @@ export interface Epic {
   milestoneId?: string;
   status: EpicStatus;
   color?: string;
+  changeRequestId?: string;
 }
 
 export interface Feature {
@@ -54,10 +68,12 @@ export interface Feature {
   description: string;
   epicId?: string;
   milestoneId?: string;
+  sprintId?: string;
   status: FeatureStatus;
   priority: Priority;
   targetReleaseDate: string;
   color: string;
+  changeRequestId?: string;
 }
 
 export interface Milestone {
@@ -70,6 +86,7 @@ export interface Milestone {
   status: MilestoneStatus;
   baselineCost: number;
   actualCost: number;
+  changeRequestId?: string;
 }
 
 export interface Subtask {
@@ -101,6 +118,23 @@ export interface AcceptanceCriterion {
 
 export type WorkItemType = 'task' | 'bug';
 
+export interface TaskComment {
+  id: string;
+  authorName: string;
+  authorAvatar?: string;
+  authorEmail?: string;
+  text: string;
+  timestamp: string;
+  attachments?: { name: string; url: string }[];
+}
+
+export interface TaskActivity {
+  id: string;
+  authorName: string;
+  action: string;
+  timestamp: string;
+}
+
 export interface Task {
   id: string;
   type?: WorkItemType; // 'task' | 'bug', defaults to 'task'
@@ -109,6 +143,7 @@ export interface Task {
   epicId?: string;
   featureId?: string;
   milestoneId?: string;
+  sprintId?: string;
   status: TaskStatus;
   priority: Priority;
   assigneeIds: string[];
@@ -126,8 +161,11 @@ export interface Task {
   linkedBugIds?: string[]; // Optional linked bug IDs
   acceptanceCriteria?: AcceptanceCriterion[];
   tags: string[];
+  changeRequestId?: string;
   createdBy?: string;
   createdByEmail?: string;
+  comments?: TaskComment[];
+  activityLogs?: TaskActivity[];
 }
 
 export interface RaidItem {
@@ -195,6 +233,9 @@ export interface ChangeRequest {
   fastTrackApproved?: boolean; // Flexible mode approval without full CCB
   
   linkedTaskId?: string;
+  linkedMilestoneId?: string;
+  linkedEpicId?: string;
+  linkedFeatureId?: string;
   linkedRaidId?: string;
   createdBy?: string;
   createdByEmail?: string;
@@ -356,6 +397,7 @@ export interface ProjectData {
   features: Feature[];
   tasks: Task[];
   subtasks: Subtask[];
+  sprints?: Sprint[];
   raidItems: RaidItem[];
   activities: ActivityLog[];
   changeRequests?: ChangeRequest[];

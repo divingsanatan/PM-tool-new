@@ -239,7 +239,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                     Click to browse or drop your CSV file here
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Supports <code className="text-indigo-300 font-mono">.csv</code> format containing Milestones, Epics, Features, Tasks, Subtasks & RAID items
+                    Supports <code className="text-indigo-300 font-mono">.csv</code> format containing Milestones, Epics, Features, Tasks & Subtasks
                   </p>
                 </div>
               </div>
@@ -274,7 +274,7 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
                   <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center gap-2.5">
                     <Database className="w-4 h-4 text-purple-400 shrink-0" />
                     <div>
@@ -312,14 +312,6 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
                     <div>
                       <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Subtasks</div>
                       <div className="text-sm font-bold text-white">{parseResult.stats.subtasksCount}</div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-slate-900 border border-slate-800 rounded-lg flex items-center gap-2.5">
-                    <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
-                    <div>
-                      <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">RAID Items</div>
-                      <div className="text-sm font-bold text-white">{parseResult.stats.raidCount}</div>
                     </div>
                   </div>
                 </div>

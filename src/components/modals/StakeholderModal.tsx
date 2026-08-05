@@ -33,7 +33,6 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
   const [role, setRole] = useState('');
   const [category, setCategory] = useState<StakeholderCategory>('internal');
   const [hourlyRate, setHourlyRate] = useState<number | ''>(90);
-  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState<number | ''>(40);
   const [skillsStr, setSkillsStr] = useState('');
   const [isDummy, setIsDummy] = useState(false);
   const [triggerInvite, setTriggerInvite] = useState(false);
@@ -45,7 +44,6 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
       setRole(stakeholderToEdit.role);
       setCategory(stakeholderToEdit.category || 'internal');
       setHourlyRate(stakeholderToEdit.hourlyRate || '');
-      setWeeklyCapacityHours(stakeholderToEdit.weeklyCapacityHours || '');
       setSkillsStr(stakeholderToEdit.skills.join(', '));
       setIsDummy(Boolean(stakeholderToEdit.isPlaceholder || stakeholderToEdit.status === 'placeholder'));
       setTriggerInvite(Boolean(stakeholderToEdit.status === 'placeholder' || !stakeholderToEdit.email));
@@ -55,7 +53,6 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
       setRole('');
       setCategory('internal');
       setHourlyRate(90);
-      setWeeklyCapacityHours(40);
       setSkillsStr('Agile, React, Management');
       setIsDummy(false);
       setTriggerInvite(true);
@@ -84,7 +81,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
       role: role.trim() || 'Contributor',
       category,
       hourlyRate: hourlyRate === '' ? 0 : Number(hourlyRate),
-      weeklyCapacityHours: weeklyCapacityHours === '' ? 0 : Number(weeklyCapacityHours),
+      weeklyCapacityHours: 40,
       skills,
       status: computedStatus,
       isPlaceholder: isDummy,
@@ -143,7 +140,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
                 Create as Dummy / Placeholder Stakeholder
               </label>
               <p className="text-[11px] text-slate-400">
-                Reserve team capacity before assigning an email address. You can add their email later to send an invitation link.
+                Reserve team allocation before assigning an email address. You can add their email later to send an invitation link.
               </p>
             </div>
             <input
@@ -239,37 +236,21 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                Hourly Rate ($) *
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="any"
-                disabled={!isEditable}
-                value={hourlyRate}
-                onChange={(e) => setHourlyRate(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="e.g. 90"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-semibold mb-1">
-                Weekly Capacity (Hours) <span className="text-slate-400 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="number"
-                disabled={!isEditable}
-                value={weeklyCapacityHours}
-                onChange={(e) => setWeeklyCapacityHours(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="e.g. 40 (Optional)"
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-            </div>
+          <div>
+            <label className="block text-slate-300 font-semibold mb-1">
+              Hourly Rate ($) *
+            </label>
+            <input
+              type="number"
+              required
+              min="0"
+              step="any"
+              disabled={!isEditable}
+              value={hourlyRate}
+              onChange={(e) => setHourlyRate(e.target.value === '' ? '' : Number(e.target.value))}
+              placeholder="e.g. 90"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
+            />
           </div>
 
           <div>

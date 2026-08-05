@@ -1,28 +1,55 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import localforage from 'localforage';
-import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
+import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, Sprint, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
 import { initialProjectData, defaultProjectsMap } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
-import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate } from '../utils/taskCalculations';
+import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate, calculateSprintDates } from '../utils/taskCalculations';
 
 function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
   if (!data) return data;
   const tasks = data.tasks || [];
+  const features = data.features || [];
   const subtasks = data.subtasks || [];
   const stakeholders = data.stakeholders || [];
+  const sprints = data.sprints || [];
 
   const computedBudget = calculateWbsTotalBudget(tasks, subtasks, stakeholders);
   const computedEndDate = calculateWbsProjectEndDate(data.startDate, tasks);
   const finalBudget = (data.budget && data.budget > 0) ? data.budget : (computedBudget > 0 ? computedBudget : 250000);
 
-  if (data.budget === finalBudget && data.targetEndDate === computedEndDate) {
+  let updatedSprints = sprints;
+  let sprintsChanged = false;
+
+  if (sprints.length > 0) {
+    updatedSprints = sprints.map(sprint => {
+      // If user manually set isAutoDates: false, do not override manually entered dates
+      if (sprint.isAutoDates === false) return sprint;
+
+      const calculated = calculateSprintDates(sprint.id, tasks, features);
+      if (calculated) {
+        if (sprint.startDate !== calculated.startDate || sprint.endDate !== calculated.endDate) {
+          sprintsChanged = true;
+          return {
+            ...sprint,
+            startDate: calculated.startDate,
+            endDate: calculated.endDate,
+            isAutoDates: true
+          };
+        }
+      }
+      return sprint;
+    });
+  }
+
+  if (data.budget === finalBudget && data.targetEndDate === computedEndDate && !sprintsChanged) {
     return data;
   }
 
   return {
     ...data,
     budget: finalBudget,
-    targetEndDate: computedEndDate
+    targetEndDate: computedEndDate,
+    sprints: updatedSprints
   };
 }
 
@@ -115,6 +142,10 @@ interface ProjectContextType {
   deleteEpic: (epicId: string) => Promise<void>;
   saveFeature: (feature: Partial<Feature>) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
+  saveSprint: (sprint: Partial<Sprint>, assignedTaskIds?: string[], assignedFeatureIds?: string[]) => Promise<void>;
+  deleteSprint: (sprintId: string) => Promise<void>;
+  assignTaskToSprint: (taskId: string, sprintId?: string) => Promise<void>;
+  assignFeatureToSprint: (featureId: string, sprintId?: string) => Promise<void>;
   saveMilestone: (milestone: Partial<Milestone>) => Promise<void>;
   deleteMilestone: (milestoneId: string) => Promise<void>;
   saveChangeRequest: (cr: Partial<ChangeRequest>) => Promise<void>;
@@ -684,7 +715,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .then(res => res.json())
       .then(res => {
         if (res.success && res.projects) {
-          setProjectsList(prev => (prev && prev.length > 1 ? prev : res.projects));
+          setProjectsList(res.projects);
           if (res.activeProjectId && !localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
             setActiveProjectId(res.activeProjectId);
           }
@@ -948,56 +979,79 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const saveTask = async (task: Partial<Task>) => {
-    // Auto-resolve hierarchy mapping
-    let resolvedEpicId = task.epicId;
-    let resolvedMilestoneId = task.milestoneId;
-
-    if (task.featureId) {
-      const feat = projectData.features.find(f => f.id === task.featureId);
-      if (feat) {
-        if (feat.epicId) resolvedEpicId = feat.epicId;
-        if (feat.milestoneId) resolvedMilestoneId = feat.milestoneId;
-        else if (feat.epicId) {
-          const parentEpic = (projectData.epics || []).find(e => e.id === feat.epicId);
-          if (parentEpic?.milestoneId) resolvedMilestoneId = parentEpic.milestoneId;
-        }
-      }
-    } else if (task.epicId) {
-      const ep = (projectData.epics || []).find(e => e.id === task.epicId);
-      if (ep?.milestoneId) resolvedMilestoneId = ep.milestoneId;
-    }
-
     const taskId = task.id || 'task-' + Date.now();
     const existingTask = projectData.tasks.find(t => t.id === taskId);
+
+    const hasFeatureId = 'featureId' in task;
+    const hasEpicId = 'epicId' in task;
+    const hasMilestoneId = 'milestoneId' in task;
+
+    let targetFeatureId = hasFeatureId ? (task.featureId || undefined) : existingTask?.featureId;
+    let targetEpicId = hasEpicId ? (task.epicId || undefined) : existingTask?.epicId;
+    let targetMilestoneId = hasMilestoneId ? (task.milestoneId || undefined) : existingTask?.milestoneId;
+
+    if (targetFeatureId) {
+      const feat = projectData.features.find(f => f.id === targetFeatureId);
+      if (feat) {
+        if (feat.epicId) targetEpicId = feat.epicId;
+        if (feat.milestoneId) targetMilestoneId = feat.milestoneId;
+        else if (feat.epicId) {
+          const parentEpic = (projectData.epics || []).find(e => e.id === feat.epicId);
+          if (parentEpic?.milestoneId) targetMilestoneId = parentEpic.milestoneId;
+        }
+      }
+    } else if (targetEpicId) {
+      const ep = (projectData.epics || []).find(e => e.id === targetEpicId);
+      if (ep?.milestoneId) targetMilestoneId = ep.milestoneId;
+    }
+
+    let targetCRId = 'changeRequestId' in task ? (task.changeRequestId || undefined) : existingTask?.changeRequestId;
+    if (!targetCRId) {
+      if (targetFeatureId) {
+        const feat = projectData.features.find(f => f.id === targetFeatureId);
+        if (feat?.changeRequestId) targetCRId = feat.changeRequestId;
+      }
+      if (!targetCRId && targetEpicId) {
+        const ep = (projectData.epics || []).find(e => e.id === targetEpicId);
+        if (ep?.changeRequestId) targetCRId = ep.changeRequestId;
+      }
+      if (!targetCRId && targetMilestoneId) {
+        const ms = projectData.milestones.find(m => m.id === targetMilestoneId);
+        if (ms?.changeRequestId) targetCRId = ms.changeRequestId;
+      }
+    }
+
     const timestampCalc = calculateTimestampActualHours(task, existingTask);
 
     const tempTask: Task = {
       id: taskId,
       type: task.type || existingTask?.type || 'task',
-      title: task.title || 'Untitled Task',
-      description: task.description || '',
-      epicId: resolvedEpicId,
-      featureId: task.featureId,
-      milestoneId: resolvedMilestoneId,
-      status: task.status || 'todo',
-      priority: task.priority || 'normal',
-      assigneeIds: task.assigneeIds || [],
-      startDate: task.startDate || new Date().toISOString().split('T')[0],
-      dueDate: task.dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
-      estimatedHours: task.estimatedHours || 10,
+      title: task.title || existingTask?.title || 'Untitled Task',
+      description: task.description !== undefined ? task.description : (existingTask?.description || ''),
+      epicId: targetEpicId,
+      featureId: targetFeatureId,
+      milestoneId: targetMilestoneId,
+      sprintId: 'sprintId' in task ? task.sprintId : existingTask?.sprintId,
+      status: task.status || existingTask?.status || 'todo',
+      priority: task.priority || existingTask?.priority || 'normal',
+      assigneeIds: task.assigneeIds !== undefined ? task.assigneeIds : (existingTask?.assigneeIds || []),
+      startDate: task.startDate || existingTask?.startDate || new Date().toISOString().split('T')[0],
+      dueDate: task.dueDate || existingTask?.dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+      estimatedHours: task.estimatedHours !== undefined ? task.estimatedHours : (existingTask?.estimatedHours || 10),
       actualHours: timestampCalc.actualHours,
       inProgressAt: timestampCalc.inProgressAt,
       demoableAt: timestampCalc.demoableAt,
-      plannedCost: 0,
-      actualCost: 0,
-      completionPercent: task.completionPercent ?? 0,
-      dependencies: task.dependencies || [],
+      plannedCost: existingTask?.plannedCost || 0,
+      actualCost: existingTask?.actualCost || 0,
+      completionPercent: task.completionPercent !== undefined ? task.completionPercent : (existingTask?.completionPercent ?? 0),
+      dependencies: task.dependencies !== undefined ? task.dependencies : (existingTask?.dependencies || []),
       linkedBugIds: task.linkedBugIds || existingTask?.linkedBugIds || [],
-      acceptanceCriteria: task.acceptanceCriteria !== undefined ? task.acceptanceCriteria : existingTask?.acceptanceCriteria || [],
-      tags: task.tags || []
+      acceptanceCriteria: task.acceptanceCriteria !== undefined ? task.acceptanceCriteria : (existingTask?.acceptanceCriteria || []),
+      tags: task.tags !== undefined ? task.tags : (existingTask?.tags || []),
+      changeRequestId: targetCRId
     };
 
-    const eff = getTaskEffectiveValues(tempTask, projectData.subtasks, projectData.stakeholders);
+    const eff = getTaskEffectiveValues(tempTask, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
 
     const newTask: Task = {
       ...tempTask,
@@ -1251,13 +1305,20 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const saveEpic = async (epic: Partial<Epic>) => {
+    let resolvedCRId = 'changeRequestId' in epic ? (epic.changeRequestId || undefined) : undefined;
+    if (!resolvedCRId && epic.milestoneId) {
+      const parentMs = projectData.milestones.find(m => m.id === epic.milestoneId);
+      if (parentMs?.changeRequestId) resolvedCRId = parentMs.changeRequestId;
+    }
+
     const newEpic: Epic = {
       id: epic.id || 'epic-' + Date.now(),
       title: epic.title || 'New Epic',
       description: epic.description || '',
       milestoneId: epic.milestoneId,
       status: epic.status || 'in_progress',
-      color: epic.color || '#8b5cf6'
+      color: epic.color || '#8b5cf6',
+      changeRequestId: resolvedCRId
     };
 
     const epics = projectData.epics || [];
@@ -1271,11 +1332,16 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Cascade milestone updates to features and tasks under this epic
     let updatedFeatures = [...projectData.features];
-    if (newEpic.milestoneId) {
-      updatedFeatures = updatedFeatures.map(f =>
-        f.epicId === newEpic.id ? { ...f, milestoneId: newEpic.milestoneId } : f
-      );
-    }
+    updatedFeatures = updatedFeatures.map(f => {
+      if (f.epicId === newEpic.id) {
+        return {
+          ...f,
+          milestoneId: newEpic.milestoneId || f.milestoneId,
+          changeRequestId: newEpic.changeRequestId || f.changeRequestId
+        };
+      }
+      return f;
+    });
 
     let updatedTasks = [...projectData.tasks];
     updatedTasks = updatedTasks.map(t => {
@@ -1289,7 +1355,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return {
           ...t,
           epicId: newEpic.id,
-          milestoneId: newEpic.milestoneId || t.milestoneId
+          milestoneId: newEpic.milestoneId || t.milestoneId,
+          changeRequestId: newEpic.changeRequestId || t.changeRequestId
         };
       }
       return t;
@@ -1321,6 +1388,18 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (parentEpic?.milestoneId) resolvedMilestoneId = parentEpic.milestoneId;
     }
 
+    let resolvedCRId = 'changeRequestId' in feature ? (feature.changeRequestId || undefined) : undefined;
+    if (!resolvedCRId) {
+      if (feature.epicId) {
+        const parentEpic = (projectData.epics || []).find(e => e.id === feature.epicId);
+        if (parentEpic?.changeRequestId) resolvedCRId = parentEpic.changeRequestId;
+      }
+      if (!resolvedCRId && resolvedMilestoneId) {
+        const parentMs = projectData.milestones.find(m => m.id === resolvedMilestoneId);
+        if (parentMs?.changeRequestId) resolvedCRId = parentMs.changeRequestId;
+      }
+    }
+
     const newFeature: Feature = {
       id: feature.id || 'feat-' + Date.now(),
       title: feature.title || 'New Feature',
@@ -1330,7 +1409,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       status: feature.status || 'in_progress',
       priority: feature.priority || 'normal',
       targetReleaseDate: feature.targetReleaseDate || new Date().toISOString().split('T')[0],
-      color: feature.color || '#3b82f6'
+      color: feature.color || '#3b82f6',
+      changeRequestId: resolvedCRId
     };
 
     const existingIdx = projectData.features.findIndex(f => f.id === newFeature.id);
@@ -1347,7 +1427,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return {
           ...t,
           epicId: newFeature.epicId || t.epicId,
-          milestoneId: newFeature.milestoneId || t.milestoneId
+          milestoneId: newFeature.milestoneId || t.milestoneId,
+          changeRequestId: newFeature.changeRequestId || t.changeRequestId
         };
       }
       return t;
@@ -1366,16 +1447,154 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     broadcastLocalTabSync(updated);
   };
 
+  const saveSprint = async (
+    sprint: Partial<Sprint>,
+    assignedTaskIds?: string[],
+    assignedFeatureIds?: string[]
+  ) => {
+    setProjectData(prev => {
+      const existingSprints = prev.sprints || [];
+      const sprintId = sprint.id || 'sprint-' + Date.now();
+
+      const isAuto = sprint.isAutoDates !== undefined ? sprint.isAutoDates : true;
+
+      // 1. Update Features
+      let updatedFeatures = prev.features || [];
+      if (assignedFeatureIds !== undefined) {
+        updatedFeatures = updatedFeatures.map(f => {
+          const isSelected = assignedFeatureIds.includes(f.id);
+          if (isSelected && f.sprintId !== sprintId) {
+            return { ...f, sprintId };
+          } else if (!isSelected && f.sprintId === sprintId) {
+            return { ...f, sprintId: undefined };
+          }
+          return f;
+        });
+      }
+
+      // 2. Update Tasks
+      let updatedTasks = prev.tasks || [];
+
+      if (assignedFeatureIds !== undefined) {
+        const selectedFeatureSet = new Set(assignedFeatureIds);
+        updatedTasks = updatedTasks.map(t => {
+          if (t.featureId && selectedFeatureSet.has(t.featureId)) {
+            return { ...t, sprintId };
+          } else if (t.featureId && !selectedFeatureSet.has(t.featureId) && t.sprintId === sprintId) {
+            return { ...t, sprintId: undefined };
+          }
+          return t;
+        });
+      }
+
+      if (assignedTaskIds !== undefined) {
+        updatedTasks = updatedTasks.map(t => {
+          const isSelected = assignedTaskIds.includes(t.id);
+          if (isSelected && t.sprintId !== sprintId) {
+            return { ...t, sprintId };
+          } else if (!isSelected && t.sprintId === sprintId && !t.featureId) {
+            return { ...t, sprintId: undefined };
+          }
+          return t;
+        });
+      }
+
+      const autoCalc = calculateSprintDates(sprintId, updatedTasks, updatedFeatures);
+      const defaultStart = prev.startDate || new Date().toISOString().split('T')[0];
+      const defaultEnd = prev.targetEndDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+
+      const finalStartDate = isAuto && autoCalc ? autoCalc.startDate : (sprint.startDate || autoCalc?.startDate || defaultStart);
+      const finalEndDate = isAuto && autoCalc ? autoCalc.endDate : (sprint.endDate || autoCalc?.endDate || defaultEnd);
+
+      const newSprint: Sprint = {
+        id: sprintId,
+        name: sprint.name || `Sprint ${existingSprints.length + 1}`,
+        goal: sprint.goal || '',
+        status: sprint.status || 'future',
+        startDate: finalStartDate,
+        endDate: finalEndDate,
+        isAutoDates: isAuto,
+        capacityPoints: sprint.capacityPoints || 40
+      };
+
+      const existingIdx = existingSprints.findIndex(s => s.id === newSprint.id);
+      const updatedSprints = [...existingSprints];
+      if (existingIdx >= 0) {
+        updatedSprints[existingIdx] = newSprint;
+      } else {
+        updatedSprints.push(newSprint);
+      }
+
+      const updated = {
+        ...prev,
+        sprints: updatedSprints,
+        features: updatedFeatures,
+        tasks: updatedTasks,
+        activities: [
+          {
+            id: 'act-' + Date.now(),
+            timestamp: new Date().toISOString(),
+            user: currentUser.name,
+            action: existingIdx >= 0 ? 'Updated Sprint' : 'Created Sprint',
+            details: `${newSprint.name} (${newSprint.startDate} to ${newSprint.endDate})`
+          },
+          ...(prev.activities || [])
+        ]
+      };
+
+      broadcastLocalTabSync(updated);
+      return updated;
+    });
+  };
+
+  const deleteSprint = async (sprintId: string) => {
+    setProjectData(prev => {
+      const updatedSprints = (prev.sprints || []).filter(s => s.id !== sprintId);
+      const updatedTasks = prev.tasks.map(t => t.sprintId === sprintId ? { ...t, sprintId: undefined } : t);
+      const updatedFeatures = prev.features.map(f => f.sprintId === sprintId ? { ...f, sprintId: undefined } : f);
+
+      const updated = {
+        ...prev,
+        sprints: updatedSprints,
+        tasks: updatedTasks,
+        features: updatedFeatures
+      };
+      broadcastLocalTabSync(updated);
+      return updated;
+    });
+  };
+
+  const assignTaskToSprint = async (taskId: string, sprintId?: string) => {
+    setProjectData(prev => {
+      const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, sprintId } : t);
+      const updated = { ...prev, tasks: updatedTasks };
+      broadcastLocalTabSync(updated);
+      return updated;
+    });
+  };
+
+  const assignFeatureToSprint = async (featureId: string, sprintId?: string) => {
+    setProjectData(prev => {
+      const updatedFeatures = prev.features.map(f => f.id === featureId ? { ...f, sprintId } : f);
+      const updatedTasks = prev.tasks.map(t => t.featureId === featureId ? { ...t, sprintId } : t);
+      const updated = { ...prev, features: updatedFeatures, tasks: updatedTasks };
+      broadcastLocalTabSync(updated);
+      return updated;
+    });
+  };
+
   const saveMilestone = async (milestone: Partial<Milestone>) => {
     const newMilestone: Milestone = {
       id: milestone.id || 'm-' + Date.now(),
       title: milestone.title || 'New Milestone',
       description: milestone.description || '',
       featureId: milestone.featureId,
+      epicId: milestone.epicId,
       dueDate: milestone.dueDate || new Date().toISOString().split('T')[0],
       status: milestone.status || 'upcoming',
       baselineCost: milestone.baselineCost || 10000,
-      actualCost: milestone.actualCost || 0
+      actualCost: milestone.actualCost || 0,
+      changeRequestId: milestone.changeRequestId || undefined
     };
 
     const existingIdx = projectData.milestones.findIndex(m => m.id === newMilestone.id);
@@ -1386,7 +1605,47 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedMilestones.push(newMilestone);
     }
 
-    const updated = { ...projectData, milestones: updatedMilestones };
+    // Cascade changeRequestId (and milestone updates) to lower hierarchy Epics, Features, Tasks
+    const updatedEpics = (projectData.epics || []).map(e => {
+      if (e.milestoneId === newMilestone.id) {
+        return {
+          ...e,
+          changeRequestId: newMilestone.changeRequestId || e.changeRequestId
+        };
+      }
+      return e;
+    });
+
+    const updatedFeatures = projectData.features.map(f => {
+      const parentEp = f.epicId ? updatedEpics.find(e => e.id === f.epicId) : undefined;
+      if (f.milestoneId === newMilestone.id || parentEp?.milestoneId === newMilestone.id) {
+        return {
+          ...f,
+          changeRequestId: newMilestone.changeRequestId || f.changeRequestId
+        };
+      }
+      return f;
+    });
+
+    const updatedTasks = projectData.tasks.map(t => {
+      const parentFeat = t.featureId ? updatedFeatures.find(f => f.id === t.featureId) : undefined;
+      const parentEp = t.epicId ? updatedEpics.find(e => e.id === t.epicId) : undefined;
+      if (t.milestoneId === newMilestone.id || parentFeat?.milestoneId === newMilestone.id || parentEp?.milestoneId === newMilestone.id) {
+        return {
+          ...t,
+          changeRequestId: newMilestone.changeRequestId || t.changeRequestId
+        };
+      }
+      return t;
+    });
+
+    const updated = {
+      ...projectData,
+      milestones: updatedMilestones,
+      epics: updatedEpics,
+      features: updatedFeatures,
+      tasks: updatedTasks
+    };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
   };
@@ -2015,6 +2274,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteEpic,
         saveFeature,
         deleteFeature,
+        saveSprint,
+        deleteSprint,
+        assignTaskToSprint,
+        assignFeatureToSprint,
         saveMilestone,
         deleteMilestone,
         saveChangeRequest,

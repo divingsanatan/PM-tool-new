@@ -345,11 +345,6 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                       <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                       <strong className="text-slate-200">${selectedStakeholder.hourlyRate}</strong>/hr
                     </span>
-                    <span>•</span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                      <strong className="text-slate-200">{selectedStakeholder.weeklyCapacityHours}h</strong>/wk capacity
-                    </span>
                   </div>
                 </div>
               </div>
@@ -543,16 +538,12 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
 
-        {/* KPI 4: Hours Logged & Capacity */}
+        {/* KPI 4: Hours Logged */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
             <span className="font-semibold uppercase tracking-wider text-[11px]">Hours Logged</span>
-            <span className={`px-2 py-0.5 rounded-full font-bold font-mono text-[10px] ${
-              metrics.utilizationPercent > 100
-                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-            }`}>
-              {metrics.utilizationPercent}% Capacity
+            <span className="px-2 py-0.5 rounded-full font-bold font-mono text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              Active Log
             </span>
           </div>
 
@@ -560,14 +551,12 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             <span className="text-2xl sm:text-3xl font-black text-slate-100 font-mono tracking-tight">
               {metrics.totalActualHours}
             </span>
-            <span className="text-xs text-slate-400 font-mono">/ {selectedStakeholder.weeklyCapacityHours || 40}h capacity</span>
+            <span className="text-xs text-slate-400 font-mono">logged hours</span>
           </div>
 
           <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between pt-2 border-t border-slate-800/80">
             <span>Est Total: {metrics.totalEstimatedHours}h</span>
-            <span className={metrics.utilizationPercent > 100 ? 'text-rose-400 font-bold' : 'text-emerald-400'}>
-              {metrics.utilizationPercent > 100 ? 'Overloaded' : 'Optimal Load'}
-            </span>
+            <span className="text-emerald-400 font-semibold">Tracked</span>
           </div>
         </div>
       </div>

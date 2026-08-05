@@ -121,7 +121,7 @@ function MainLayout() {
         />
 
         {/* Central View Canvas */}
-        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 overflow-y-auto md:max-h-[calc(100vh-3.5rem)] max-w-7xl mx-auto w-full min-w-0 min-h-0">
+        <main className="flex-1 p-3 sm:p-4 md:p-5 lg:p-6 overflow-y-auto md:max-h-[calc(100vh-3.5rem)] max-w-[1600px] mx-auto w-full min-w-0 min-h-0">
           {currentView === 'dashboard' && (
             isPM ? (
               <DashboardView

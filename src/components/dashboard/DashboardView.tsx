@@ -4,7 +4,9 @@ import { calculateStakeholderWorkloads } from '../../utils/evm';
 import { getTaskPredecessors } from '../../utils/dependencies';
 import { RaciChartWidget } from './RaciChartWidget';
 import { RiskMatrixWidget } from './RiskMatrixWidget';
-import { PMChecklistWidget } from './PMChecklistWidget';
+import { SprintFilter } from '../common/SprintFilter';
+import { SprintModal } from '../modals/SprintModal';
+import { Sprint } from '../../types';
 import {
   TrendingUp,
   TrendingDown,
@@ -77,6 +79,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showWidgetConfig, setShowWidgetConfig] = useState(false);
   const [suggestionCategory, setSuggestionCategory] = useState<'all' | 'schedule' | 'cost' | 'scope' | 'resource'>('all');
   const [performanceTab, setPerformanceTab] = useState<'features' | 'milestones'>('features');
+  const [selectedSprintIds, setSelectedSprintIds] = useState<string[]>([]);
+  const [isSprintModalOpen, setIsSprintModalOpen] = useState(false);
+  const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
+
+  const sprints = projectData.sprints || [];
+  const isSprintFiltered = selectedSprintIds.length > 0 && selectedSprintIds.length < sprints.length;
+
+  const displayTasks = isSprintFiltered
+    ? projectData.tasks.filter(t => t.sprintId && selectedSprintIds.includes(t.sprintId))
+    : projectData.tasks;
+
+  const displayFeatures = isSprintFiltered
+    ? projectData.features.filter(f =>
+        (f.sprintId && selectedSprintIds.includes(f.sprintId)) ||
+        displayTasks.some(t => t.featureId === f.id)
+      )
+    : projectData.features;
 
   // User Personalization & Role Metrics
   const isPM = currentUser.role === 'pm';
@@ -84,7 +103,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     s => s.id === currentUser.id || s.email.toLowerCase() === currentUser.email.toLowerCase()
   );
 
-  const myTasks = projectData.tasks.filter(t =>
+  const myTasks = displayTasks.filter(t =>
     t.assigneeIds.includes(currentUser.id) ||
     (myStakeholderRecord && t.assigneeIds.includes(myStakeholderRecord.id))
   );
@@ -105,19 +124,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     (myStakeholderRecord && r.ownerId === myStakeholderRecord.id)
   );
 
-  const workloads = calculateStakeholderWorkloads(projectData.stakeholders, projectData.tasks, projectData.subtasks);
+  const workloads = calculateStakeholderWorkloads(projectData.stakeholders, displayTasks, projectData.subtasks);
 
-  // Status counts
-  const totalTasks = projectData.tasks.length;
-  const completedTasks = projectData.tasks.filter(t => t.status === 'done').length;
-  const inProgressTasks = projectData.tasks.filter(t => t.status === 'in_progress').length;
-  const reviewTasks = projectData.tasks.filter(t => t.status === 'review').length;
-  const todoTasks = projectData.tasks.filter(t => t.status === 'todo').length;
-  const blockedTasks = projectData.tasks.filter(t => t.status === 'blocked').length;
+  // Status counts based on displayTasks
+  const totalTasks = displayTasks.length;
+  const completedTasks = displayTasks.filter(t => t.status === 'done').length;
+  const inProgressTasks = displayTasks.filter(t => t.status === 'in_progress').length;
+  const reviewTasks = displayTasks.filter(t => t.status === 'review').length;
+  const todoTasks = displayTasks.filter(t => t.status === 'todo').length;
+  const blockedTasks = displayTasks.filter(t => t.status === 'blocked').length;
   const taskCompletionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  const totalFeatures = projectData.features.length;
-  const completedFeatures = projectData.features.filter(f => f.status === 'completed').length;
+  const totalFeatures = displayFeatures.length;
+  const completedFeatures = displayFeatures.filter(f => f.status === 'completed').length;
 
   const totalMilestones = projectData.milestones.length;
 
@@ -506,7 +525,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div id="dashboard-view" className="space-y-6">
       {/* Top Banner & Quick Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-slate-900 border border-slate-800/80 p-4 sm:p-5 rounded-2xl shadow-sm min-w-0">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 bg-slate-900 border border-slate-800/80 p-4 sm:p-5 rounded-2xl shadow-sm min-w-0">
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-2.5 min-w-0">
             <Activity className="w-5 h-5 text-indigo-400 shrink-0 hidden sm:block" />
@@ -522,11 +541,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-2 flex-wrap min-w-0 max-w-full">
+          <SprintFilter
+            sprints={sprints}
+            selectedSprintIds={selectedSprintIds}
+            onChange={setSelectedSprintIds}
+          />
+
           <button
             id="btn-generate-report"
             onClick={onOpenAiReportModal}
-            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors shrink-0 flex-1 sm:flex-none whitespace-nowrap"
+            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm transition-colors shrink-0 whitespace-nowrap"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0 hidden sm:inline-block" />
             <span>AI Executive Brief</span>
@@ -535,7 +560,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             id="btn-customize-dashboard"
             onClick={() => setShowWidgetConfig(!showWidgetConfig)}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors shrink-0 flex-1 sm:flex-none whitespace-nowrap"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors shrink-0 whitespace-nowrap"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 shrink-0 hidden sm:inline-block" />
             <span>Customize</span>
@@ -595,7 +620,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-left sm:text-right">
               <p className="text-[11px] text-slate-400 font-mono">My Allocated Workload</p>
               <p className="text-xs font-bold text-slate-200 font-mono">
-                {myTotalAssignedHours}h / {myCapacityHours}h ({myWorkloadPct}%)
+                {myTotalAssignedHours}h ({myTasks.length} Work Items)
               </p>
             </div>
             <button
@@ -646,23 +671,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </p>
           </div>
 
-          {/* Stat 3: Capacity Load */}
+          {/* Stat 3: Assigned Workload */}
           <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col justify-between gap-2.5 shadow-inner min-w-0 overflow-hidden h-full">
             <div className="flex items-center justify-between gap-2 text-xs text-slate-400 min-w-0">
               <span className="font-medium flex items-center gap-1.5 min-w-0 truncate">
                 <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0 hidden sm:inline-block" />
-                <span className="truncate">Capacity Load</span>
+                <span className="truncate">Assigned Workload</span>
               </span>
-              <span className={`text-[10px] font-mono font-bold shrink-0 whitespace-nowrap ${myWorkloadPct > 100 ? 'text-rose-400' : 'text-emerald-300'}`}>
-                {myWorkloadPct}%
+              <span className="text-[10px] font-mono font-bold shrink-0 whitespace-nowrap text-emerald-300">
+                Active
               </span>
             </div>
             <div className="flex items-baseline gap-1.5 whitespace-nowrap">
               <span className="text-xl font-extrabold text-slate-100 font-mono">{myTotalAssignedHours}h</span>
-              <span className="text-xs text-slate-400">/ {myCapacityHours}h weekly</span>
+              <span className="text-xs text-slate-400">assigned</span>
             </div>
             <p className="hidden sm:block text-[10px] text-slate-400 truncate">
-              {myWorkloadPct > 100 ? 'Over-allocated capacity' : 'Optimal capacity utilization'}
+              Total effort assigned to work items
             </p>
           </div>
 
@@ -748,11 +773,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
       </div>
-
-      {/* PM Governance & Readiness Checklist Widget */}
-      {(projectData.widgets.find(w => w.id === 'pm-checklist')?.enabled !== false) && (
-        <PMChecklistWidget onNavigate={onNavigate} />
-      )}
 
       {/* 1. Core EVM & Health Metric Cards Grid */}
       <div id="evm-cards-grid" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
@@ -1086,12 +1106,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* GRAPH ROW 3: Stakeholder Workload Heatmap & RAID Risk Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Graph 5: Stakeholder Capacity Load & Weekly Hours */}
+        {/* Graph 5: Stakeholder Workload Distribution */}
         <div className="bg-slate-900 border border-slate-800/80 p-5 rounded-2xl shadow-sm space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-teal-400" />
-              <h3 className="font-bold text-slate-100 text-sm">Stakeholder Capacity Load</h3>
+              <h3 className="font-bold text-slate-100 text-sm">Stakeholder Workload Distribution</h3>
             </div>
             <button
               onClick={() => onNavigate('workload')}
@@ -1112,7 +1132,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', color: '#f8fafc', fontSize: '11px' }}
                 />
                 <Bar dataKey="assigned" name="Assigned Hours" fill="#14b8a6" radius={[4, 4, 0, 0]} />
-                <Line type="step" dataKey="capacity" name="Weekly Capacity Limit" stroke="#f43f5e" strokeWidth={2} strokeDasharray="4 4" />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -1834,7 +1853,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span>Executive Performance Takeaways & Strategic Summary</span>
           </span>
           <p className="text-slate-400 leading-relaxed">
-            Project <span className="text-slate-200 font-semibold">{projectData.projectName} ({projectData.projectCode})</span> is currently tracking with an Earned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.earnedValue)}</span> against a Planned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.plannedValue)}</span>. Overall SPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.spi.toFixed(2)}</span> and CPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.cpi.toFixed(2)}</span> <span className="text-slate-500 font-normal text-[11px]">(Note: "On Hold" work items are excluded from schedule/EVM performance metrics to prevent timeline distortion)</span>. To ensure on-time delivery by <span className="text-slate-200 font-mono">{projectData.targetEndDate}</span>, monitor active RAID items and stakeholder capacity limits in the dedicated view modules.
+            Project <span className="text-slate-200 font-semibold">{projectData.projectName} ({projectData.projectCode})</span> is currently tracking with an Earned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.earnedValue)}</span> against a Planned Value of <span className="text-indigo-300 font-mono font-semibold">{formatCompactCurrency(metrics.plannedValue)}</span>. Overall SPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.spi.toFixed(2)}</span> and CPI stands at <span className="text-emerald-400 font-mono font-bold">{metrics.cpi.toFixed(2)}</span> <span className="text-slate-500 font-normal text-[11px]">(Note: "On Hold" work items are excluded from schedule/EVM performance metrics to prevent timeline distortion)</span>. To ensure on-time delivery by <span className="text-slate-200 font-mono">{projectData.targetEndDate}</span>, monitor active RAID items and project milestones in the dedicated view modules.
           </p>
         </div>
 
@@ -1891,6 +1910,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Sprint Modal */}
+      <SprintModal
+        isOpen={isSprintModalOpen}
+        onClose={() => setIsSprintModalOpen(false)}
+        sprintToEdit={editingSprint}
+      />
     </div>
   );
 };

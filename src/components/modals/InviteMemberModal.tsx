@@ -37,7 +37,6 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   const [role, setRole] = useState<string>('Frontend Engineer');
   const [category, setCategory] = useState<StakeholderCategory>('internal');
   const [hourlyRate, setHourlyRate] = useState<number>(75);
-  const [weeklyCapacityHours, setWeeklyCapacityHours] = useState<number | ''>(40);
   const [personalNote, setPersonalNote] = useState<string>('');
   
   const [copied, setCopied] = useState<boolean>(false);
@@ -64,7 +63,6 @@ ${pmName} (${pmEmail}) has invited you to join the "${projectName}" project team
 Project Highlights:
 • Project: ${projectName} (${projectCode})
 • Role: ${role}
-• Allocated Capacity: ${weeklyCapacityHours} hours/week
 
 ${personalNote ? `Note from ${pmName}:\n"${personalNote}"\n\n` : ''}To accept this invitation and access your project workspace, click the link below:
 ${joinUrl}
@@ -110,7 +108,7 @@ Project Manager, ${projectName}`;
         role: role.trim() || 'Team Member',
         category,
         hourlyRate,
-        weeklyCapacityHours: weeklyCapacityHours === '' ? 0 : Number(weeklyCapacityHours),
+        weeklyCapacityHours: 40,
         skills: ['Team Member', role],
         status: 'invited',
         inviteToken,
@@ -231,8 +229,8 @@ Project Manager, ${projectName}`;
             </div>
 
             {/* Role & Category Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Assigned Project Role *
                 </label>
@@ -258,24 +256,6 @@ Project Manager, ${projectName}`;
                   <option value="internal">🏢 Internal Member</option>
                   <option value="external">🌐 External Stakeholder</option>
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Weekly Capacity (hrs) <span className="text-slate-400 font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <Clock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
-                  <input
-                    type="number"
-                    min="1"
-                    max="80"
-                    value={weeklyCapacityHours}
-                    onChange={(e) => setWeeklyCapacityHours(e.target.value === '' ? '' : Number(e.target.value))}
-                    placeholder="e.g. 40 (Optional)"
-                    className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl pl-8 pr-3 py-2 text-xs text-slate-100 font-mono outline-none"
-                  />
-                </div>
               </div>
             </div>
 

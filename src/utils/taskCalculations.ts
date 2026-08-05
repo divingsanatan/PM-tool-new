@@ -297,7 +297,8 @@ export function getEpicEffectiveValues(
   features: Feature[],
   tasks: Task[],
   subtasks: Subtask[],
-  stakeholders: Stakeholder[]
+  stakeholders: Stakeholder[],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ) {
   const eId = typeof epicOrId === 'string' ? epicOrId : epicOrId.id;
   const epicFeatureIds = new Set(features.filter(f => f.epicId === eId).map(f => f.id));
@@ -311,7 +312,7 @@ export function getEpicEffectiveValues(
   let sumCompletion = 0;
 
   epicTasks.forEach(task => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     totalEstHours += eff.estimatedHours;
     totalActHours += eff.actualHours;
     totalPlannedCost += eff.plannedCost;
@@ -340,7 +341,8 @@ export function getFeatureEffectiveValues(
   featureOrId: Feature | string,
   tasks: Task[],
   subtasks: Subtask[],
-  stakeholders: Stakeholder[]
+  stakeholders: Stakeholder[],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ) {
   const fId = typeof featureOrId === 'string' ? featureOrId : featureOrId.id;
   const featureTasks = tasks.filter(t => t.featureId === fId);
@@ -353,7 +355,7 @@ export function getFeatureEffectiveValues(
   let sumCompletion = 0;
 
   featureTasks.forEach(task => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     totalEstHours += eff.estimatedHours;
     totalActHours += eff.actualHours;
     totalPlannedCost += eff.plannedCost;
@@ -384,10 +386,20 @@ export function getMilestoneEffectiveValues(
   subtasks: Subtask[],
   stakeholders: Stakeholder[],
   epics: Epic[] = [],
-  features: Feature[] = []
+  features: Feature[] = [],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ) {
   const mId = typeof milestoneOrId === 'string' ? milestoneOrId : milestoneOrId.id;
-  const milestoneTasks = tasks.filter(t => t.milestoneId === mId);
+  const milestoneEpicIds = new Set((epics || []).filter(e => e.milestoneId === mId).map(e => e.id));
+  const milestoneFeatureIds = new Set(
+    features.filter(f => f.milestoneId === mId || (f.epicId && milestoneEpicIds.has(f.epicId))).map(f => f.id)
+  );
+
+  const milestoneTasks = tasks.filter(
+    t => t.milestoneId === mId ||
+      (t.epicId && milestoneEpicIds.has(t.epicId)) ||
+      (t.featureId && milestoneFeatureIds.has(t.featureId))
+  );
   const allAssigneeIds = getMilestoneAllAssigneeIds(mId, epics, features, tasks, subtasks);
 
   let totalEstHours = 0;
@@ -397,7 +409,7 @@ export function getMilestoneEffectiveValues(
   let sumCompletion = 0;
 
   milestoneTasks.forEach(task => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     totalEstHours += eff.estimatedHours;
     totalActHours += eff.actualHours;
     totalPlannedCost += eff.plannedCost;
@@ -425,7 +437,8 @@ export function getMilestoneEffectiveValues(
 export function getProjectEffectiveValues(
   tasks: Task[],
   subtasks: Subtask[],
-  stakeholders: Stakeholder[]
+  stakeholders: Stakeholder[],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ) {
   let totalEstHours = 0;
   let totalActHours = 0;
@@ -436,7 +449,7 @@ export function getProjectEffectiveValues(
   const allAssigneeIds = getProjectAllAssigneeIds(tasks, subtasks);
 
   tasks.forEach(task => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     totalEstHours += eff.estimatedHours;
     totalActHours += eff.actualHours;
     totalPlannedCost += eff.plannedCost;
@@ -511,5 +524,45 @@ export function calculateWbsProjectEndDate(startDate: string, tasks: Task[]): st
 
   return new Date(latestDueDateMs).toISOString().split('T')[0];
 }
+
+/**
+ * Calculates start and end dates for a sprint based on assigned tasks and features
+ */
+export function calculateSprintDates(
+  sprintId: string,
+  tasks: Task[] = [],
+  features: Feature[] = []
+): { startDate: string; endDate: string } | null {
+  const assignedTasks = tasks.filter(t => t.sprintId === sprintId);
+  const assignedFeatures = features.filter(f => f.sprintId === sprintId);
+
+  const startDates: string[] = [];
+  const endDates: string[] = [];
+
+  assignedTasks.forEach(t => {
+    if (t.startDate) startDates.push(t.startDate);
+    if (t.dueDate) endDates.push(t.dueDate);
+  });
+
+  assignedFeatures.forEach(f => {
+    if (f.targetReleaseDate) {
+      startDates.push(f.targetReleaseDate);
+      endDates.push(f.targetReleaseDate);
+    }
+  });
+
+  if (startDates.length === 0 && endDates.length === 0) {
+    return null;
+  }
+
+  startDates.sort();
+  endDates.sort();
+
+  const minStart = startDates[0] || endDates[0];
+  const maxEnd = endDates[endDates.length - 1] || startDates[startDates.length - 1];
+
+  return { startDate: minStart, endDate: maxEnd };
+}
+
 
 

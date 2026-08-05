@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Layers, Flag, Bookmark, CheckCircle2, DollarSign, Calendar, Tag, ShieldAlert } from 'lucide-react';
+import { X, Layers, Flag, Bookmark, CheckCircle2, DollarSign, Calendar, Tag, ShieldAlert, GitPullRequest, Info, AlertCircle } from 'lucide-react';
 import { useProject } from '../../context/ProjectContext';
 import { Milestone, Epic, Feature, MilestoneStatus, EpicStatus, FeatureStatus, Priority } from '../../types';
 
@@ -40,6 +40,7 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#3b82f6');
+  const [changeRequestId, setChangeRequestId] = useState('');
 
   // Milestone fields
   const [dueDate, setDueDate] = useState('');
@@ -61,6 +62,7 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
     if (itemToEdit) {
       setTitle(itemToEdit.title || '');
       setDescription(itemToEdit.description || '');
+      setChangeRequestId(itemToEdit.changeRequestId || '');
 
       if ('dueDate' in itemToEdit && 'baselineCost' in itemToEdit) {
         setItemType('milestone');
@@ -87,6 +89,7 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
       setItemType(initialType);
       setTitle('');
       setDescription('');
+      setChangeRequestId('');
       setColor(initialType === 'epic' ? '#8b5cf6' : '#3b82f6');
       setDueDate(new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0]);
       setMilestoneStatus('upcoming');
@@ -103,7 +106,7 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
     }
   }, [itemToEdit, initialType, initialParentMilestoneId, initialParentEpicId, isOpen]);
 
-  // When parent epic changes for a feature, auto-suggest parent milestone
+  // When parent epic changes for a feature, auto-suggest parent milestone & CR
   const handleFeatureEpicChange = (epicId: string) => {
     setFeatureEpicId(epicId);
     if (epicId) {
@@ -111,10 +114,36 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
       if (selectedEpic?.milestoneId) {
         setFeatureMilestoneId(selectedEpic.milestoneId);
       }
+      if (selectedEpic?.changeRequestId && !changeRequestId) {
+        setChangeRequestId(selectedEpic.changeRequestId);
+      }
     }
   };
 
   if (!isOpen) return null;
+
+  // Find selected CR details for validation display
+  const selectedCR = (projectData.changeRequests || []).find(cr => cr.id === changeRequestId);
+
+  // Determine inherited CR if not explicitly selected
+  let inheritedCRId: string | undefined;
+  if (!changeRequestId) {
+    if (itemType === 'epic' && epicMilestoneId) {
+      const ms = projectData.milestones.find(m => m.id === epicMilestoneId);
+      inheritedCRId = ms?.changeRequestId;
+    } else if (itemType === 'feature') {
+      if (featureEpicId) {
+        const ep = (projectData.epics || []).find(e => e.id === featureEpicId);
+        inheritedCRId = ep?.changeRequestId;
+      }
+      if (!inheritedCRId && featureMilestoneId) {
+        const ms = projectData.milestones.find(m => m.id === featureMilestoneId);
+        inheritedCRId = ms?.changeRequestId;
+      }
+    }
+  }
+
+  const inheritedCR = inheritedCRId ? (projectData.changeRequests || []).find(cr => cr.id === inheritedCRId) : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,7 +156,8 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
         description,
         dueDate,
         status: milestoneStatus,
-        baselineCost: Number(baselineCost) || 0
+        baselineCost: Number(baselineCost) || 0,
+        changeRequestId: changeRequestId || undefined
       });
     } else if (itemType === 'epic') {
       await saveEpic({
@@ -136,7 +166,8 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
         description,
         milestoneId: epicMilestoneId || undefined,
         status: epicStatus,
-        color
+        color,
+        changeRequestId: changeRequestId || undefined
       });
     } else if (itemType === 'feature') {
       await saveFeature({
@@ -148,7 +179,8 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
         status: featureStatus,
         priority: featurePriority,
         targetReleaseDate,
-        color
+        color,
+        changeRequestId: changeRequestId || undefined
       });
     }
 
@@ -466,6 +498,69 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* LINKED CHANGE REQUEST (OPTIONAL) */}
+          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2 mt-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                <GitPullRequest className="w-4 h-4 text-indigo-400" /> Linked Change Request <span className="text-slate-400 font-normal text-[11px]">(Optional)</span>
+              </label>
+              {selectedCR && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                  selectedCR.status === 'approved' || selectedCR.status === 'implemented'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : selectedCR.status === 'rejected'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                    : selectedCR.status === 'deferred'
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
+                }`}>
+                  {selectedCR.status.toUpperCase()}
+                </span>
+              )}
+            </div>
+
+            <select
+              value={changeRequestId}
+              onChange={(e) => setChangeRequestId(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="">-- No Linked Change Request (Optional) --</option>
+              {(projectData.changeRequests || []).map((cr) => (
+                <option key={cr.id} value={cr.id}>
+                  {cr.crNumber}: {cr.title} ({cr.status})
+                </option>
+              ))}
+            </select>
+
+            {/* Validation Message & Guidance Notice */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-start gap-2 text-[11px] text-indigo-300/90 leading-relaxed bg-indigo-950/30 p-2.5 rounded-lg border border-indigo-500/20">
+                <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong>Validation Notice:</strong> Linking a Change Request to a {itemType} is optional. Linking will automatically propagate this Change Request to all lower hierarchy items (Epics, Features, and Tasks).
+                </div>
+              </div>
+
+              {selectedCR && (selectedCR.status === 'rejected' || selectedCR.status === 'deferred') && (
+                <div className="flex items-center gap-2 text-[11px] text-amber-300 bg-amber-950/30 p-2.5 rounded-lg border border-amber-500/30">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>
+                    <strong>Warning:</strong> Selected Change Request <strong>{selectedCR.crNumber}</strong> is currently <strong>{selectedCR.status}</strong>. Linking is permitted for traceability, but work execution should follow CCB guidelines.
+                  </span>
+                </div>
+              )}
+
+              {inheritedCR && !changeRequestId && (
+                <div className="flex items-center gap-2 text-[11px] text-emerald-300 bg-emerald-950/30 p-2 rounded-lg border border-emerald-500/30">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>
+                    Auto-inherited from parent hierarchy: <strong>{inheritedCR.crNumber} - {inheritedCR.title}</strong>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800 mt-6">

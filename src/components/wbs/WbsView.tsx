@@ -1,11 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Task, Feature, Epic, Milestone, Subtask, Priority, TaskStatus } from '../../types';
-import { RaciTagCell } from './RaciTagCell';
 import { DEFAULT_STATUS_PERCENTAGES } from '../../utils/taskCalculations';
 import {
   Network,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   FolderGit2,
   CheckSquare,
@@ -49,11 +49,51 @@ import {
   Tag,
   FileText,
   FileSpreadsheet,
-  Bug
+  Bug,
+  GitPullRequest,
+  Columns
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
 import { CsvImportModal } from '../modals/CsvImportModal';
+import { SprintFilter } from '../common/SprintFilter';
+import { SprintModal } from '../modals/SprintModal';
+import { Sprint } from '../../types';
 import { calculateEVMMetrics } from '../../utils/evm';
+
+export type ColumnKey = 'name' | 'assignee' | 'dueDate' | 'status' | 'itemType' | 'cost' | 'priority' | 'actions';
+
+export const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
+  name: 380,
+  assignee: 120,
+  dueDate: 120,
+  status: 130,
+  itemType: 115,
+  cost: 110,
+  priority: 95,
+  actions: 145,
+};
+
+export const DEFAULT_VISIBLE_COLUMNS: Record<ColumnKey, boolean> = {
+  name: true,
+  assignee: true,
+  dueDate: true,
+  status: true,
+  itemType: true,
+  cost: true,
+  priority: true,
+  actions: true,
+};
+
+export const COLUMN_DEFINITIONS: { key: ColumnKey; label: string }[] = [
+  { key: 'name', label: 'Name & Hierarchy' },
+  { key: 'assignee', label: 'Assignee' },
+  { key: 'dueDate', label: 'Due Date' },
+  { key: 'status', label: 'Status' },
+  { key: 'itemType', label: 'Item Type' },
+  { key: 'cost', label: 'Cost' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'actions', label: 'Actions' },
+];
 import {
   getStatusProgress,
   getTaskEffectiveValues,
@@ -76,7 +116,7 @@ interface WbsViewProps {
   onOpenTaskModal: (task?: Task) => void;
 }
 
-type DisplayViewType = 'tree' | 'list' | 'board';
+type DisplayViewType = 'list' | 'board' | 'calendar';
 type GroupByMode = 'milestone-feature' | 'feature-task' | 'status';
 
 export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
@@ -115,9 +155,123 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     return true;
   };
 
-  // Primary View Mode (Tree, List, Board, Table)
-  const [viewType, setViewType] = useState<DisplayViewType>('tree');
+  // Primary View Mode (List, Board, Calendar)
+  const [viewType, setViewType] = useState<DisplayViewType>('list');
   const [groupBy, setGroupBy] = useState<GroupByMode>('milestone-feature');
+
+  // Interactive Column Resizing & Visibility Customisation
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
+    try {
+      const saved = localStorage.getItem('wbs_column_widths');
+      return saved ? { ...DEFAULT_COLUMN_WIDTHS, ...JSON.parse(saved) } : DEFAULT_COLUMN_WIDTHS;
+    } catch {
+      return DEFAULT_COLUMN_WIDTHS;
+    }
+  });
+
+  const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem('wbs_visible_columns');
+      return saved ? { ...DEFAULT_VISIBLE_COLUMNS, ...JSON.parse(saved) } : DEFAULT_VISIBLE_COLUMNS;
+    } catch {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+  });
+
+  const [isColumnsMenuOpen, setIsColumnsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('wbs_column_widths', JSON.stringify(columnWidths));
+  }, [columnWidths]);
+
+  useEffect(() => {
+    localStorage.setItem('wbs_visible_columns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
+
+  const totalTableWidth = useMemo(() => {
+    let width = columnWidths.name;
+    if (visibleColumns.assignee) width += columnWidths.assignee;
+    if (visibleColumns.dueDate) width += columnWidths.dueDate;
+    if (visibleColumns.status) width += columnWidths.status;
+    if (visibleColumns.itemType) width += columnWidths.itemType;
+    if (visibleColumns.cost) width += columnWidths.cost;
+    if (visibleColumns.priority) width += columnWidths.priority;
+    if (visibleColumns.actions) width += columnWidths.actions;
+    return Math.max(900, width + 40);
+  }, [columnWidths, visibleColumns]);
+
+  const handleStartResize = (e: React.MouseEvent | React.TouchEvent, colKey: ColumnKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const startWidth = columnWidths[colKey];
+
+    const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = currentX - startX;
+      const minW = colKey === 'name' ? 240 : 50;
+      const maxW = colKey === 'name' ? 900 : 400;
+      const newW = Math.min(maxW, Math.max(minW, startWidth + deltaX));
+      setColumnWidths(prev => ({ ...prev, [colKey]: newW }));
+    };
+
+    const handleEnd = () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleEnd);
+  };
+
+  const handleResetColumnWidth = (colKey: ColumnKey) => {
+    setColumnWidths(prev => ({ ...prev, [colKey]: DEFAULT_COLUMN_WIDTHS[colKey] }));
+  };
+
+  // Calendar View State
+  const [calendarDate, setCalendarDate] = useState<Date>(new Date());
+  const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
+  const [selectedDayModal, setSelectedDayModal] = useState<{ dateStr: string; tasks: Task[] } | null>(null);
+
+  const formatDateStr = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const handlePrevCalendar = () => {
+    const next = new Date(calendarDate);
+    if (calendarMode === 'month') {
+      next.setMonth(next.getMonth() - 1);
+    } else {
+      next.setDate(next.getDate() - 7);
+    }
+    setCalendarDate(next);
+  };
+
+  const handleNextCalendar = () => {
+    const next = new Date(calendarDate);
+    if (calendarMode === 'month') {
+      next.setMonth(next.getMonth() + 1);
+    } else {
+      next.setDate(next.getDate() + 7);
+    }
+    setCalendarDate(next);
+  };
+
+  const handleTodayCalendar = () => {
+    setCalendarDate(new Date());
+  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,6 +279,12 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'task' | 'bug'>('all');
   const [onlyConflicts, setOnlyConflicts] = useState(false);
+  const [selectedSprintIds, setSelectedSprintIds] = useState<string[]>([]);
+  const [isSprintModalOpen, setIsSprintModalOpen] = useState(false);
+  const [editingSprint, setEditingSprint] = useState<Sprint | null>(null);
+
+  const sprints = projectData.sprints || [];
+  const isSprintFiltered = selectedSprintIds.length > 0 && selectedSprintIds.length < sprints.length;
 
   // Drag & Drop State
   const [draggedItem, setDraggedItem] = useState<{
@@ -651,6 +811,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     const statuses: TaskStatus[] = ['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'];
     const currentIdx = statuses.indexOf(task.status);
     const nextStatus = statuses[(currentIdx + 1) % statuses.length];
+    if (statusFilter !== 'all' && nextStatus !== statusFilter) {
+      setStatusFilter('all');
+    }
     await saveTask({
       ...task,
       status: nextStatus,
@@ -815,8 +978,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   }, [projectData.tasks]);
 
   const isFilterActive = useMemo(() => {
-    return searchQuery.trim() !== '' || statusFilter !== 'all' || priorityFilter !== 'all' || typeFilter !== 'all' || onlyConflicts;
-  }, [searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts]);
+    return searchQuery.trim() !== '' || statusFilter !== 'all' || priorityFilter !== 'all' || typeFilter !== 'all' || onlyConflicts || isSprintFiltered;
+  }, [searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts, isSprintFiltered]);
 
   const isTaskInMilestone = (task: Task, milestoneId: string): boolean => {
     if (task.milestoneId === milestoneId) return true;
@@ -835,7 +998,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     return false;
   };
 
-  // Filter tasks based on search query, status, priority, type, and conflict toggle
+  // Filter tasks based on search query, status, priority, type, sprint, and conflict toggle
   const filteredTasks = useMemo(() => {
     return projectData.tasks.filter(task => {
       const q = searchQuery.trim().toLowerCase();
@@ -865,9 +1028,84 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         matchesConflict = preds.some(p => p.hasConflict);
       }
 
-      return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesConflict;
+      let matchesSprint = true;
+      if (isSprintFiltered) {
+        matchesSprint = !!(task.sprintId && selectedSprintIds.includes(task.sprintId));
+      }
+
+      return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesConflict && matchesSprint;
     });
-  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts]);
+  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts, isSprintFiltered, selectedSprintIds]);
+
+  // Calendar view grid computations
+  const calendarGridDays = useMemo(() => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    const daysInMonth = lastDayOfMonth.getDate();
+
+    const days: Array<{ date: Date; dateStr: string; isCurrentMonth: boolean; isToday: boolean }> = [];
+    const todayStr = formatDateStr(new Date());
+
+    // Previous month padding
+    for (let i = startDayOfWeek - 1; i >= 0; i--) {
+      const d = new Date(year, month, -i);
+      const dStr = formatDateStr(d);
+      days.push({ date: d, dateStr: dStr, isCurrentMonth: false, isToday: dStr === todayStr });
+    }
+
+    // Current month days
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month, day);
+      const dStr = formatDateStr(d);
+      days.push({ date: d, dateStr: dStr, isCurrentMonth: true, isToday: dStr === todayStr });
+    }
+
+    // Next month padding
+    const totalCells = Math.ceil(days.length / 7) * 7;
+    const remaining = totalCells - days.length;
+    for (let day = 1; day <= remaining; day++) {
+      const d = new Date(year, month + 1, day);
+      const dStr = formatDateStr(d);
+      days.push({ date: d, dateStr: dStr, isCurrentMonth: false, isToday: dStr === todayStr });
+    }
+
+    return days;
+  }, [calendarDate]);
+
+  const calendarWeekDays = useMemo(() => {
+    const start = new Date(calendarDate);
+    const dayOfWeek = start.getDay();
+    start.setDate(start.getDate() - dayOfWeek);
+
+    const todayStr = formatDateStr(new Date());
+    const days: Array<{ date: Date; dateStr: string; isToday: boolean }> = [];
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dStr = formatDateStr(d);
+      days.push({ date: d, dateStr: dStr, isToday: dStr === todayStr });
+    }
+
+    return days;
+  }, [calendarDate]);
+
+  const getTasksForDate = (dateStr: string) => {
+    return filteredTasks.filter(task => {
+      if (!task.dueDate && !task.startDate) return false;
+      if (task.dueDate === dateStr) return true;
+      if (task.startDate === dateStr) return true;
+      if (task.startDate && task.dueDate) {
+        return task.startDate <= dateStr && task.dueDate >= dateStr;
+      }
+      return false;
+    });
+  };
 
   // Subtask helper
   const getSubtasksForTask = (taskId: string): Subtask[] => {
@@ -1034,18 +1272,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           </div>
         </div>
 
-        {/* View Switcher Tabs (Tree, List, Board, Table) */}
+        {/* View Switcher Tabs (List, Board, Calendar) */}
         <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 overflow-x-auto max-w-full">
-          <button
-            id="view-tab-tree"
-            onClick={() => setViewType('tree')}
-            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
-              viewType === 'tree' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Network className="w-3.5 h-3.5 shrink-0" />
-            <span>WBS Tree</span>
-          </button>
           <button
             id="view-tab-list"
             onClick={() => setViewType('list')}
@@ -1065,6 +1293,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           >
             <Kanban className="w-3.5 h-3.5 shrink-0" />
             <span>Kanban</span>
+          </button>
+          <button
+            id="view-tab-calendar"
+            onClick={() => setViewType('calendar')}
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+              viewType === 'calendar' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 shrink-0" />
+            <span>Calendar</span>
           </button>
         </div>
       </div>
@@ -1244,6 +1482,26 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               <FileSpreadsheet className="w-3.5 h-3.5 shrink-0" />
               <span>Import / Feed CSV</span>
             </button>
+
+            <div className="h-4 w-px bg-slate-800 hidden sm:block shrink-0" />
+
+            <SprintFilter
+              sprints={sprints}
+              selectedSprintIds={selectedSprintIds}
+              onChange={setSelectedSprintIds}
+            />
+
+            <button
+              onClick={() => {
+                setEditingSprint(null);
+                setIsSprintModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 font-semibold text-xs transition-colors shadow-sm shrink-0 whitespace-nowrap"
+              title="Create, Edit or Delete Sprints for this project"
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span>Manage Sprints</span>
+            </button>
           </div>
         </div>
 
@@ -1308,6 +1566,79 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <option value="task">Tasks Only</option>
             <option value="bug">🐛 Bugs Only</option>
           </select>
+
+          {/* Columns Selector Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsColumnsMenuOpen(!isColumnsMenuOpen)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-indigo-500/50 text-slate-300 hover:text-white text-xs font-semibold transition-all shrink-0 whitespace-nowrap shadow-xs"
+              title="Customise visible columns and drag-resizable layout"
+            >
+              <Columns className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span>Columns</span>
+              <span className="px-1.5 py-0.2 text-[10px] bg-indigo-500/20 text-indigo-300 font-bold rounded-full">
+                {Object.values(visibleColumns).filter(Boolean).length} / {Object.keys(visibleColumns).length}
+              </span>
+              <ChevronDown className={`w-3 h-3 transition-transform ${isColumnsMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isColumnsMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setIsColumnsMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2 text-xs space-y-1 backdrop-blur-md">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-800 px-2 font-bold text-slate-300 text-[11px] uppercase tracking-wider">
+                    <span>Toggle Columns</span>
+                    <button
+                      onClick={() => setVisibleColumns(DEFAULT_VISIBLE_COLUMNS)}
+                      className="text-[10px] text-indigo-400 hover:underline font-normal normal-case"
+                    >
+                      Show All
+                    </button>
+                  </div>
+
+                  <div className="space-y-0.5 pt-1 max-h-64 overflow-y-auto">
+                    {COLUMN_DEFINITIONS.map(col => (
+                      <label
+                        key={col.key}
+                        className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-800/80 cursor-pointer transition-colors ${
+                          col.key === 'name' ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={visibleColumns[col.key]}
+                            disabled={col.key === 'name'}
+                            onChange={() => {
+                              if (col.key !== 'name') {
+                                setVisibleColumns(prev => ({ ...prev, [col.key]: !prev[col.key] }));
+                              }
+                            }}
+                            className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                          />
+                          <span className="text-slate-200 font-medium">{col.label}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-500 font-mono">{columnWidths[col.key]}px</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800 px-2 flex items-center justify-between text-[10px] text-slate-400">
+                    <span>Drag column edges to resize</span>
+                    <button
+                      onClick={() => {
+                        setColumnWidths(DEFAULT_COLUMN_WIDTHS);
+                        setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+                      }}
+                      className="text-amber-400 hover:underline"
+                    >
+                      Reset Default
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1320,6 +1651,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             {searchQuery.trim() && (
               <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">
                 Search: "{searchQuery.trim()}"
+              </span>
+            )}
+            {isSprintFiltered && (
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
+                Sprint: {selectedSprintIds.map(id => sprints.find(s => s.id === id)?.name).filter(Boolean).join(', ')}
               </span>
             )}
             {typeFilter !== 'all' && (
@@ -1352,6 +1688,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               setStatusFilter('all');
               setPriorityFilter('all');
               setOnlyConflicts(false);
+              setSelectedSprintIds([]);
             }}
             className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-colors shrink-0 shadow-sm"
           >
@@ -1360,554 +1697,246 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         </div>
       )}
 
-      {/* ==================== VIEW 1: WBS TREE VIEW ==================== */}
-      {viewType === 'tree' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg min-w-0">
-          <div className="w-full overflow-x-auto custom-scrollbar">
-            <div className="min-w-[860px]">
-              {/* ROOT NODE: Project Level 1.0 */}
+      {/* ==================== VIEW 3: INTERACTIVE CALENDAR VIEW ==================== */}
+      {viewType === 'calendar' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+          {/* Calendar Controls & Navigation Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                <Calendar className="w-5 h-5 shrink-0" />
+              </div>
               <div>
-                <div className="bg-slate-900/90 border-b border-slate-800 py-2.5 px-4 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <button
-                      onClick={() => toggleNode('project')}
-                      className="p-1 rounded bg-indigo-500/10 text-indigo-400 hover:text-white transition-colors shrink-0"
+                <h3 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2">
+                  <span>
+                    {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-400">Task Timeline & Schedule Calendar</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Navigation buttons: Prev, Today, Next */}
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+                <button
+                  onClick={handlePrevCalendar}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+                  title="Previous"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleTodayCalendar}
+                  className="px-2.5 py-1 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={handleNextCalendar}
+                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
+                  title="Next"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* View mode toggle: Month / Week */}
+              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+                <button
+                  onClick={() => setCalendarMode('month')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                    calendarMode === 'month' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Month
+                </button>
+                <button
+                  onClick={() => setCalendarMode('week')}
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                    calendarMode === 'week' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Week
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Month Grid View */}
+          {calendarMode === 'month' && (
+            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950 shadow-inner">
+              {/* Days of week header */}
+              <div className="grid grid-cols-7 bg-slate-900/90 border-b border-slate-800 text-center text-xs font-bold text-slate-400 py-2.5">
+                <div>Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+              </div>
+
+              {/* Grid Cells */}
+              <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-800/60 bg-slate-950">
+                {calendarGridDays.map((cell, idx) => {
+                  const dayTasks = getTasksForDate(cell.dateStr);
+                  const displayTasks = dayTasks.slice(0, 3);
+                  const extraCount = dayTasks.length - 3;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`min-h-[110px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors ${
+                        !cell.isCurrentMonth ? 'bg-slate-950/40 text-slate-600' : 'bg-slate-900/40 hover:bg-slate-900/80'
+                      }`}
                     >
-                      {expandedNodes['project'] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                    </button>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
-                        1.0
-                      </span>
-                      <h3 className="text-sm font-bold text-slate-100 truncate">{projectData.projectName}</h3>
-                      <span className="text-xs font-mono text-slate-400 shrink-0">({projectData.projectCode})</span>
-                    </div>
-                  </div>
+                      <div className="flex items-center justify-between gap-1 mb-1">
+                        <span
+                          className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded-md ${
+                            cell.isToday
+                              ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                              : cell.isCurrentMonth
+                              ? 'text-slate-300'
+                              : 'text-slate-600'
+                          }`}
+                        >
+                          {cell.date.getDate()}
+                        </span>
+                        <button
+                          onClick={() => onOpenTaskModal({ dueDate: cell.dateStr } as any)}
+                          className="p-1 opacity-60 hover:opacity-100 text-slate-500 hover:text-indigo-400 hover:bg-slate-800 rounded transition-all text-[10px]"
+                          title={`Add task for ${cell.dateStr}`}
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
 
-                  {/* Project Rollup Summary */}
-                  <div className="flex flex-wrap items-center gap-2.5 sm:gap-3.5 text-xs font-mono bg-slate-950/80 px-3 py-1.5 rounded-lg border border-slate-800 shrink-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Scope:</span>
-                      <span className="text-slate-200 font-semibold">{projectRollup.doneTasks}/{projectRollup.totalTasks}</span>
-                    </div>
-                    <div className="w-px h-3.5 bg-slate-800" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">BAC:</span>
-                      <span className="text-emerald-400 font-bold">${(projectData.budget || 250000).toLocaleString()}</span>
-                    </div>
-                    <div className="w-px h-3.5 bg-slate-800" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">WBS Planned:</span>
-                      <span className="text-indigo-300 font-semibold">${projectRollup.plannedCost.toLocaleString()}</span>
-                    </div>
-                    <div className="w-px h-3.5 bg-slate-800" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Actual Cost (AC):</span>
-                      <span className="text-amber-400 font-bold">${projectRollup.actualCost.toLocaleString()}</span>
-                    </div>
-                    <div className="w-px h-3.5 bg-slate-800" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-slate-400 uppercase font-sans">Progress:</span>
-                      <span className="text-indigo-400 font-bold">{projectRollup.completionPercent}%</span>
-                    </div>
-                  </div>
-                </div>
+                      {/* Day Task List */}
+                      <div className="flex-1 space-y-1 overflow-hidden">
+                        {displayTasks.map(task => {
+                          const statusBg =
+                            task.status === 'done' ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' :
+                            task.status === 'in_progress' ? 'bg-indigo-950/80 border-indigo-500/40 text-indigo-300' :
+                            task.status === 'demoable' ? 'bg-teal-950/80 border-teal-500/40 text-teal-300' :
+                            task.status === 'review' ? 'bg-purple-950/80 border-purple-500/40 text-purple-300' :
+                            task.status === 'on_hold' ? 'bg-amber-950/80 border-amber-500/40 text-amber-300' :
+                            task.status === 'blocked' ? 'bg-rose-950/80 border-rose-500/40 text-rose-300' :
+                            'bg-slate-900 border-slate-700 text-slate-300';
 
-            {/* TREE BRANCHES & SUB-LEVELS */}
-            {expandedNodes['project'] && (
-              <div className="divide-y divide-slate-200/80 dark:divide-slate-800/60">
-                {/* MODE 1: MILESTONE -> EPIC -> FEATURE -> TASK -> SUBTASK */}
-                {groupBy === 'milestone-feature' && (
-                  <>
-                    {projectData.milestones
-                      .filter(milestone => {
-                        if (!isFilterActive) return true;
-                        const q = searchQuery.trim().toLowerCase();
-                        const mMatchesSearch = q && milestone.title.toLowerCase().includes(q);
-                        const milestoneTasks = filteredTasks.filter(t => isTaskInMilestone(t, milestone.id));
-                        const milestoneFeatures = projectData.features.filter(f => f.milestoneId === milestone.id && (q && f.title.toLowerCase().includes(q)));
-                        const milestoneEpics = (projectData.epics || []).filter(e => e.milestoneId === milestone.id && (q && e.title.toLowerCase().includes(q)));
-                        return mMatchesSearch || milestoneTasks.length > 0 || milestoneFeatures.length > 0 || milestoneEpics.length > 0;
-                      })
-                      .map((milestone, mIdx) => {
-                        const mCode = `1.${mIdx + 1}`;
-                        const isMExpanded = !!expandedNodes[milestone.id];
-                        
-                        const milestoneTasks = filteredTasks.filter(t => isTaskInMilestone(t, milestone.id));
-                        const milestoneEpics = (projectData.epics || []).filter(e => {
-                          if (e.milestoneId !== milestone.id) return false;
-                          if (!isFilterActive) return true;
-                          const q = searchQuery.trim().toLowerCase();
-                          const eMatchesSearch = q && e.title.toLowerCase().includes(q);
-                          const eTasks = milestoneTasks.filter(t => t.epicId === e.id || projectData.features.find(f => f.id === t.featureId)?.epicId === e.id);
-                          return eMatchesSearch || eTasks.length > 0;
-                        });
-                        const milestoneFeatures = projectData.features.filter(f => {
-                          const isInMilestone = f.milestoneId === milestone.id ||
-                            (f.epicId && (projectData.epics || []).find(e => e.id === f.epicId)?.milestoneId === milestone.id) ||
-                            milestoneTasks.some(t => t.featureId === f.id);
-                          if (!isInMilestone) return false;
-
-                          if (!isFilterActive) return true;
-                          const q = searchQuery.trim().toLowerCase();
-                          const fMatchesSearch = q && f.title.toLowerCase().includes(q);
-                          const fTasks = milestoneTasks.filter(t => t.featureId === f.id);
-                          return fMatchesSearch || fTasks.length > 0;
-                        });
-                        const unassignedTasksInMilestone = milestoneTasks.filter(t => !t.featureId && !t.epicId);
-
-                        const mRollup = getMilestoneEffectiveValues(milestone, filteredTasks, projectData.subtasks, projectData.stakeholders);
-
-                      return (
-                        <div key={milestone.id} className="bg-slate-900/60">
-                          {/* MILESTONE NODE (Level 2) */}
-                          <div
-                            onDragOver={(e) => handleDragOver(e, milestone.id)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDropOnMilestone(milestone.id, e)}
-                            className={`py-2 px-3.5 bg-slate-900 hover:bg-slate-800/80 border-b border-slate-800/80 flex flex-col md:flex-row md:items-center justify-between gap-2.5 transition-colors group ${
-                              dragOverTargetId === milestone.id ? 'bg-amber-950/40 ring-1 ring-amber-500/50' : ''
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <button
-                                onClick={() => toggleNode(milestone.id)}
-                                className="p-1 rounded hover:bg-slate-800 text-amber-400 hover:text-white transition-colors shrink-0"
-                              >
-                                {isMExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </button>
-                              <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 shrink-0">
-                                {mCode}
-                              </span>
-                              <Flag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                              <h4 className="text-xs font-bold text-slate-100 truncate" title={milestone.title}>{milestone.title}</h4>
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase shrink-0 ${
-                                milestone.status === 'achieved' ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' :
-                                milestone.status === 'in_progress' ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' :
-                                'bg-slate-800 text-slate-400 border border-slate-700'
-                              }`}>
-                                {milestone.status}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-3 text-xs font-mono shrink-0">
-                              <div className="flex items-center justify-start">
-                                {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
-                              </div>
-                              <span className="text-slate-400 text-[11px]">Due: <span className="text-slate-200">{milestone.dueDate}</span></span>
-                              <span className="text-amber-400 text-[11px] font-semibold">{mRollup.actualHours}/{mRollup.estimatedHours}h</span>
-                              <span className="text-emerald-400 text-[11px] font-semibold" title="Planned Cost">${mRollup.plannedCost.toLocaleString()}</span>
-                              <span className="text-amber-300 text-[11px] font-semibold" title="Actual Cost Incurred">AC: ${mRollup.actualCost.toLocaleString()}</span>
-                              <span className="text-indigo-400 text-[11px] font-bold">{mRollup.completionPercent}%</span>
-
-                              {/* Quick Action Controls */}
-                              <div className="flex items-center gap-1 ml-1">
-                                <button
-                                  onClick={() => openEditModal(milestone)}
-                                  className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-                                  title="Edit Milestone"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => deleteMilestone(milestone.id)}
-                                  className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                                  title="Delete Milestone"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* MILESTONE CHILDREN BRANCHES */}
-                          {isMExpanded && (
-                            <div className="divide-y divide-slate-800/50">
-                              {/* EPICS UNDER MILESTONE */}
-                              {milestoneEpics.map((epic, epIdx) => {
-                                const epCode = `${mCode}.${epIdx + 1}`;
-                                const isEpExpanded = !!expandedNodes[epic.id];
-                                const epicFeatures = milestoneFeatures.filter(f => f.epicId === epic.id);
-                                const epicRollup = getEpicEffectiveValues(epic, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders);
-
-                                return (
-                                  <div key={epic.id} className="border-l-2 border-purple-500/30">
-                                    {/* EPIC NODE (Level 3) */}
-                                    <div
-                                      draggable={true}
-                                      onDragStart={(e) => handleDragStart(e, 'epic', epic.id)}
-                                      onDragOver={(e) => handleDragOver(e, epic.id)}
-                                      onDragLeave={handleDragLeave}
-                                      onDrop={(e) => handleDropOnEpic(epic.id, e)}
-                                      className={`py-1.5 px-3.5 pl-6 bg-slate-900/80 hover:bg-slate-800/60 border-b border-slate-800/60 flex items-center justify-between gap-2.5 transition-colors group ${
-                                        dragOverTargetId === epic.id ? 'bg-purple-950/40 ring-1 ring-purple-500/50' : ''
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div
-                                          className="text-slate-600 hover:text-purple-400 cursor-grab active:cursor-grabbing shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          title="Drag Epic"
-                                        >
-                                          <GripVertical className="w-3.5 h-3.5" />
-                                        </div>
-                                        <button
-                                          onClick={() => toggleNode(epic.id)}
-                                          className="p-0.5 rounded text-purple-400 hover:text-white shrink-0"
-                                        >
-                                          {isEpExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                        </button>
-                                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/30 shrink-0">
-                                          {epCode}
-                                        </span>
-                                        <Bookmark className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                                        <h5 className="text-xs font-semibold text-purple-200 truncate">{epic.title}</h5>
-                                      </div>
-
-                                      <div className="flex items-center gap-2.5 text-xs shrink-0">
-                                        <div className="flex items-center justify-start">
-                                          {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
-                                        </div>
-                                        <span className="font-mono text-slate-400 text-[11px]">{epicFeatures.length} features</span>
-                                        <span className="font-mono text-amber-400 text-[11px] font-semibold">{epicRollup.actualHours}/{epicRollup.estimatedHours}h</span>
-                                        <span className="font-mono text-emerald-400 text-[11px] font-semibold" title="Planned Cost">${epicRollup.plannedCost.toLocaleString()}</span>
-                                        <span className="font-mono text-amber-300 text-[11px] font-semibold" title="Actual Cost Incurred">AC: ${epicRollup.actualCost.toLocaleString()}</span>
-                                        <span className="font-mono text-indigo-300 text-[11px] font-bold">{epicRollup.completionPercent}%</span>
-                                        <button
-                                          onClick={() => openEditModal(epic)}
-                                          className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-                                          title="Edit Epic"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={() => deleteEpic(epic.id)}
-                                          className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                                          title="Delete Epic"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* FEATURES UNDER EPIC */}
-                                    {isEpExpanded && (
-                                      <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                                        {epicFeatures.map((feature, fIdx) => {
-                                          const fCode = `${epCode}.${fIdx + 1}`;
-                                          const isFExpanded = !!expandedNodes[feature.id];
-                                          const featureTasks = milestoneTasks.filter(t => t.featureId === feature.id);
-                                          const fRollup = getFeatureEffectiveValues(feature, filteredTasks, projectData.subtasks, projectData.stakeholders);
-
-                                          return (
-                                            <div key={feature.id}>
-                                              {/* FEATURE NODE */}
-                                              <div
-                                                draggable={true}
-                                                onDragStart={(e) => handleDragStart(e, 'feature', feature.id)}
-                                                onDragOver={(e) => handleDragOver(e, feature.id)}
-                                                onDragLeave={handleDragLeave}
-                                                onDrop={(e) => handleDropOnFeature(feature.id, e)}
-                                                className={`py-1.5 px-3.5 pl-8 bg-slate-900/60 hover:bg-slate-800/60 border-b border-slate-800/50 flex items-center justify-between gap-2.5 transition-colors group ${
-                                                  dragOverTargetId === feature.id ? 'bg-blue-950/40 ring-1 ring-blue-500/50' : ''
-                                                }`}
-                                              >
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                  <div
-                                                    className="text-slate-600 hover:text-blue-400 cursor-grab active:cursor-grabbing shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    title="Drag feature"
-                                                  >
-                                                    <GripVertical className="w-3.5 h-3.5" />
-                                                  </div>
-                                                  <button
-                                                    onClick={() => toggleNode(feature.id)}
-                                                    className="p-0.5 rounded text-blue-400 hover:text-white shrink-0"
-                                                  >
-                                                    {isFExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                                  </button>
-                                                  <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30 shrink-0">
-                                                    {fCode}
-                                                  </span>
-                                                  <FolderGit2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                                  <h5 className="text-xs font-medium text-slate-200 truncate" title={feature.title}>{feature.title}</h5>
-                                                </div>
-
-                                                <div className="flex items-center gap-2.5 text-xs shrink-0">
-                                                  <div className="flex items-center justify-start">
-                                                    {renderAssigneeAvatars(getFeatureAllAssigneeIds(feature.id, filteredTasks, projectData.subtasks))}
-                                                  </div>
-                                                  <span className="font-mono text-slate-400 text-[11px]">{fRollup.totalTasks} items</span>
-                                                  <span className="font-mono text-amber-400 text-[11px] font-medium">{fRollup.actualHours}/{fRollup.estimatedHours}h</span>
-                                                  <span className="font-mono text-emerald-400 text-[11px] font-medium" title="Planned Cost">${fRollup.plannedCost.toLocaleString()}</span>
-                                                  <span className="font-mono text-amber-300 text-[11px] font-medium" title="Actual Cost Incurred">AC: ${fRollup.actualCost.toLocaleString()}</span>
-                                                  <span className="font-mono text-indigo-300 text-[11px] font-bold">{fRollup.completionPercent}%</span>
-                                                  <button
-                                                    onClick={() => onOpenTaskModal({ featureId: feature.id, epicId: epic.id, milestoneId: milestone.id })}
-                                                    className="px-2 py-0.5 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-colors"
-                                                  >
-                                                    <Plus className="w-3 h-3" />
-                                                    <span>Work Item</span>
-                                                  </button>
-                                                  <button
-                                                    onClick={() => openEditModal(feature)}
-                                                    className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-                                                    title="Edit Feature"
-                                                  >
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                  </button>
-                                                  <button
-                                                    onClick={() => deleteFeature(feature.id)}
-                                                    className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                                                    title="Delete Feature"
-                                                  >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                  </button>
-                                                </div>
-                                              </div>
-
-                                              {/* TASKS UNDER FEATURE */}
-                                              {isFExpanded && (
-                                                <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                                                  {featureTasks.map((task, tIdx) => renderTaskNode(task, `${fCode}.${tIdx + 1}`))}
-                                                  {featureTasks.length === 0 && (
-                                                    <div className="p-2.5 text-xs text-slate-400 text-center italic">
-                                                      No tasks assigned under this feature yet.
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-
-                              {/* Features under Milestone without Epic */}
-                              {milestoneFeatures.filter(f => !f.epicId || !milestoneEpics.some(e => e.id === f.epicId)).map((feature, fIdx) => {
-                                const fCode = `${mCode}.F${fIdx + 1}`;
-                                const isFExpanded = !!expandedNodes[feature.id];
-                                const featureTasks = milestoneTasks.filter(t => t.featureId === feature.id);
-                                const fRollup = getFeatureEffectiveValues(feature, filteredTasks, projectData.subtasks, projectData.stakeholders);
-
-                                return (
-                                  <div key={feature.id} className="border-l-2 border-blue-500/30">
-                                    {/* FEATURE NODE */}
-                                    <div
-                                      draggable={true}
-                                      onDragStart={(e) => handleDragStart(e, 'feature', feature.id)}
-                                      onDragOver={(e) => handleDragOver(e, feature.id)}
-                                      onDragLeave={handleDragLeave}
-                                      onDrop={(e) => handleDropOnFeature(feature.id, e)}
-                                      className={`py-1.5 px-3.5 pl-6 bg-slate-900/60 hover:bg-slate-800/60 border-b border-slate-800/50 flex items-center justify-between gap-2.5 transition-colors group ${
-                                        dragOverTargetId === feature.id ? 'bg-blue-950/40 ring-1 ring-blue-500/50' : ''
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div
-                                          className="text-slate-600 hover:text-blue-400 cursor-grab active:cursor-grabbing shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          title="Drag feature"
-                                        >
-                                          <GripVertical className="w-3.5 h-3.5" />
-                                        </div>
-                                        <button
-                                          onClick={() => toggleNode(feature.id)}
-                                          className="p-0.5 rounded text-blue-400 hover:text-white shrink-0"
-                                        >
-                                          {isFExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                                        </button>
-                                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30 shrink-0">
-                                          {fCode}
-                                        </span>
-                                        <FolderGit2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                                        <h5 className="text-xs font-medium text-slate-200 truncate" title={feature.title}>{feature.title}</h5>
-                                      </div>
-
-                                      <div className="flex items-center gap-2.5 text-xs shrink-0">
-                                        <span className="font-mono text-slate-400 text-[11px]">{fRollup.totalTasks} items</span>
-                                        <span className="font-mono text-amber-400 text-[11px] font-medium">{fRollup.actualHours}/{fRollup.estimatedHours}h</span>
-                                        <span className="font-mono text-emerald-400 text-[11px] font-medium">${fRollup.plannedCost.toLocaleString()}</span>
-                                        <span className="font-mono text-indigo-300 text-[11px] font-bold">{fRollup.completionPercent}%</span>
-                                        <button
-                                          onClick={() => onOpenTaskModal({ featureId: feature.id, milestoneId: milestone.id })}
-                                          className="px-2 py-0.5 rounded bg-indigo-600/80 hover:bg-indigo-600 text-white text-[10px] font-semibold flex items-center gap-1 shadow-sm transition-colors"
-                                        >
-                                          <Plus className="w-3 h-3" />
-                                          <span>Work Item</span>
-                                        </button>
-                                        <button
-                                          onClick={() => openEditModal(feature)}
-                                          className="p-1 rounded text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
-                                          title="Edit Feature"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={() => deleteFeature(feature.id)}
-                                          className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                                          title="Delete Feature"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* TASKS UNDER FEATURE */}
-                                    {isFExpanded && (
-                                      <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                                        {featureTasks.map((task, tIdx) => renderTaskNode(task, `${fCode}.${tIdx + 1}`))}
-                                        {featureTasks.length === 0 && (
-                                          <div className="p-2 text-xs text-slate-400 text-center italic">
-                                            No tasks assigned under this feature yet.
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-
-                              {/* Direct Milestone Tasks */}
-                              {unassignedTasksInMilestone.length > 0 && (
-                                <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                                  <div className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider py-1.5 px-4 bg-slate-100/50 dark:bg-slate-900/50">
-                                    Direct Milestone Tasks
-                                  </div>
-                                  {unassignedTasksInMilestone.map((task, tIdx) => renderTaskNode(task, `${mCode}.X.${tIdx + 1}`))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Unassigned Tasks */}
-                    {filteredTasks.filter(t => !t.milestoneId).length > 0 && (
-                      <div className="bg-slate-50/50 dark:bg-slate-950/30">
-                        <div className="py-2.5 px-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => toggleNode('unassigned-milestone')}
-                              className="p-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                          return (
+                            <div
+                              key={task.id}
+                              onClick={() => onOpenTaskModal(task)}
+                              className={`p-1.5 rounded-lg border text-[11px] leading-tight flex items-center justify-between gap-1 cursor-pointer hover:scale-[1.01] transition-all group ${statusBg}`}
+                              title={`${task.title} (${task.status.replace('_', ' ')})`}
                             >
-                              {expandedNodes['unassigned-milestone'] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                            </button>
-                            <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">1.Unassigned</span>
-                            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">General & Unassigned Milestone Tasks</h4>
-                          </div>
-                        </div>
+                              <div className="flex items-center gap-1 min-w-0 flex-1">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  task.priority === 'urgent' ? 'bg-rose-500' :
+                                  task.priority === 'high' ? 'bg-amber-500' : 'bg-indigo-400'
+                                }`} />
+                                <span className="font-medium truncate">{task.title}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
 
-                        {expandedNodes['unassigned-milestone'] && (
-                          <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                            {filteredTasks.filter(t => !t.milestoneId).map((task, tIdx) => renderTaskNode(task, `1.U.${tIdx + 1}`))}
+                        {extraCount > 0 && (
+                          <button
+                            onClick={() => setSelectedDayModal({ dateStr: cell.dateStr, tasks: dayTasks })}
+                            className="w-full text-left font-mono text-[10px] text-indigo-400 hover:text-indigo-300 font-bold px-1 hover:underline"
+                          >
+                            + {extraCount} more task{extraCount > 1 ? 's' : ''}...
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Week Grid View */}
+          {calendarMode === 'week' && (
+            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
+              <div className="grid grid-cols-7 divide-x divide-slate-800">
+                {calendarWeekDays.map((cell, idx) => {
+                  const dayTasks = getTasksForDate(cell.dateStr);
+
+                  return (
+                    <div key={idx} className="min-h-[350px] p-2 sm:p-3 flex flex-col bg-slate-900/30">
+                      <div className="text-center border-b border-slate-800 pb-2 mb-3">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                          {cell.date.toLocaleDateString('default', { weekday: 'short' })}
+                        </span>
+                        <span className={`text-sm font-bold font-mono px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                          cell.isToday ? 'bg-indigo-600 text-white' : 'text-slate-200'
+                        }`}>
+                          {cell.date.getDate()}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 space-y-2 overflow-y-auto">
+                        {dayTasks.map(task => (
+                          <div
+                            key={task.id}
+                            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 space-y-2 text-xs transition-all shadow-xs"
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300' :
+                                task.priority === 'high' ? 'bg-amber-500/20 text-amber-300' : 'bg-indigo-500/20 text-indigo-300'
+                              }`}>
+                                {task.priority}
+                              </span>
+                            </div>
+
+                            <p className="font-bold text-slate-100 text-xs">{task.title}</p>
+                            {task.description && (
+                              <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
+                            )}
+
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
+                              <span className="capitalize text-indigo-300">{task.status.replace('_', ' ')}</span>
+                              <span>${task.plannedCost?.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        ))}
+
+                        {dayTasks.length === 0 && (
+                          <div className="p-4 text-center text-slate-600 text-[11px] border border-dashed border-slate-800/80 rounded-xl">
+                            No tasks
                           </div>
                         )}
                       </div>
-                    )}
-                  </>
-                )}
-
-                {/* MODE 2: FEATURE -> TASK */}
-                {groupBy === 'feature-task' && (
-                  <>
-                    {projectData.features.map((feature, fIdx) => {
-                      const fCode = `1.${fIdx + 1}`;
-                      const isFExpanded = !!expandedNodes[feature.id];
-                      const featureTasks = filteredTasks.filter(t => t.featureId === feature.id);
-                      const fRollup = getFeatureEffectiveValues(feature, filteredTasks, projectData.subtasks, projectData.stakeholders);
-
-                      return (
-                        <div key={feature.id} className="bg-slate-50/50 dark:bg-slate-950/30">
-                          <div className="py-2.5 px-4 bg-blue-500/5 hover:bg-blue-500/10 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => toggleNode(feature.id)}
-                                className="p-1 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:text-white"
-                              >
-                                {isFExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </button>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30">
-                                    {fCode}
-                                  </span>
-                                  <FolderGit2 className="w-4 h-4 text-blue-500 shrink-0" />
-                                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100">{feature.title}</h4>
-                                </div>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{feature.description}</p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 text-xs font-mono">
-                              <span className="text-slate-500 dark:text-slate-400">Tasks: <strong className="text-indigo-600 dark:text-indigo-300">{fRollup.totalTasks}</strong></span>
-                              <span className="text-amber-600 dark:text-amber-400 font-bold">{fRollup.actualHours}/{fRollup.estimatedHours} hrs</span>
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">${fRollup.plannedCost.toLocaleString()}</span>
-                              <span className="text-indigo-600 dark:text-indigo-400 font-bold">{fRollup.completionPercent}%</span>
-                            </div>
-                          </div>
-
-                          {isFExpanded && (
-                            <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                              {featureTasks.map((task, tIdx) => renderTaskNode(task, `${fCode}.${tIdx + 1}`))}
-                              {featureTasks.length === 0 && (
-                                <div className="p-3 text-xs text-slate-400 text-center italic">
-                                  No tasks found under this feature.
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
-
-                {/* MODE 3: STATUS GROUPING */}
-                {groupBy === 'status' && (
-                  <>
-                    {(['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'] as TaskStatus[]).map((status, sIdx) => {
-                      const statusTasks = filteredTasks.filter(t => t.status === status);
-                      const isExpanded = !!expandedNodes[`status-${status}`];
-
-                      return (
-                        <div key={status} className="bg-slate-50/50 dark:bg-slate-950/30">
-                          <div className="py-2.5 px-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => toggleNode(`status-${status}`)}
-                                className="p-1 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-white"
-                              >
-                                {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                              </button>
-                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                                1.{sIdx + 1}
-                              </span>
-                              <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200 capitalize">{status.replace('_', ' ')} Tasks</h4>
-                              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                {statusTasks.length}
-                              </span>
-                            </div>
-                          </div>
-
-                          {isExpanded && (
-                            <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                              {statusTasks.map((task, tIdx) => renderTaskNode(task, `1.${sIdx + 1}.${tIdx + 1}`))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
-  )}
+      )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       {/* ==================== VIEW 2: SLEEK LIST VIEW (ClickUp/Linear/WBS style) ==================== */}
       {viewType === 'list' && (() => {
@@ -1916,17 +1945,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           const featureTasks = filteredTasks.filter(t => t.featureId === feature.id);
           const isFExpanded = expandedNodes[feature.id] !== false; // default expanded
           const featureAssignees: string[] = getFeatureAllAssigneeIds(feature.id, filteredTasks, projectData.subtasks);
-          const completedCount = featureTasks.filter(t => t.status === 'done').length;
-          const completionPercent = featureTasks.length > 0 ? Math.round((completedCount / featureTasks.length) * 100) : 0;
+          const fEff = getFeatureEffectiveValues(feature.id, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+          const completionPercent = fEff.completionPercent;
+          const featureCost = fEff.plannedCost;
 
           return (
             <div key={feature.id} className={`bg-blue-500/5 dark:bg-slate-950/40 ${isNestedInEpic ? 'pl-4 border-l-2 border-indigo-500/30 dark:border-indigo-500/20' : ''}`}>
               {/* Feature Header Row */}
-              <div className="flex items-center justify-between py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group">
-                <div className="flex items-center gap-2.5 flex-1 min-w-[300px] pr-4">
+              <div className="flex items-center justify-between py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0">
+                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
                   <button
                     onClick={() => toggleNode(feature.id)}
-                    className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+                    className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors shrink-0"
                   >
                     {isFExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                   </button>
@@ -1934,7 +1964,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   <PieChart className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span className="font-mono text-[10px] bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">{fCode}</span>
 
-                  <span className="font-bold text-xs text-slate-900 dark:text-slate-100 truncate">
+                  <span
+                    onClick={() => openEditModal(feature)}
+                    className="font-bold text-xs text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer truncate"
+                    title="Click to view/edit Feature screen"
+                  >
                     {feature.title}
                     {featureTasks.length > 0 && (
                       <span className="ml-1.5 text-slate-500 dark:text-slate-400 font-normal">
@@ -1943,67 +1977,115 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     )}
                   </span>
 
-                  <span className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-200/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-full font-mono">
-                    <Zap className="w-3 h-3 text-amber-500" />
-                    {featureTasks.length}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-4 shrink-0 text-xs">
-                  <div className="w-28 flex items-center justify-start">
-                    {renderAssigneeAvatars(featureAssignees)}
-                  </div>
-
-                  <RaciTagCell
-                    itemType="feature"
-                    itemId={feature.id}
-                    stakeholders={projectData.stakeholders}
-                    projectData={projectData}
-                    onSaveTask={saveTask}
-                  />
-
-                  <div className="w-28 text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{feature.targetReleaseDate || 'No date'}</span>
-                  </div>
-
-                  {/* Item Type Dropdown */}
-                  <div className="w-28 flex items-center justify-start">
-                    <select
-                      value="feature"
-                      onChange={(e) => handleConvertItemType(e.target.value as any, { id: feature.id, type: 'feature' })}
-                      className="bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-blue-400 transition-colors shadow-2xs"
-                      title="Convert WBS Item Type"
-                    >
-                      <option value="milestone">Milestone</option>
-                      <option value="epic">Epic</option>
-                      <option value="feature">Feature</option>
-                      <option value="task">Task</option>
-                      <option value="subtask">Subtask</option>
-                    </select>
-                  </div>
-
-                  <div className="w-20 flex items-center justify-start">
-                    <Flag className={`w-3.5 h-3.5 ${
-                      feature.priority === 'urgent' ? 'text-rose-500' :
-                      feature.priority === 'high' ? 'text-amber-500' :
-                      'text-indigo-500'
-                    }`} />
-                  </div>
-
-                  <div className="w-32 flex items-center justify-end">
+                  {/* ClickUp-style Hover Quick Actions inline */}
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                     <button
                       onClick={() => {
                         setActiveInlineFeatureId(feature.id);
                         if (!isFExpanded) toggleNode(feature.id);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-xs font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
-                      title="Add Task to this Feature"
+                      className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                      title="Quick Add Task"
                     >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Task</span>
+                      <Plus className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => openEditModal(feature)}
+                      className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                      title="Open Feature Screen"
+                    >
+                      <Edit2 className="w-3 h-3" />
                     </button>
                   </div>
+
+                  <span className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-200/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-full font-mono shrink-0">
+                    <Zap className="w-3 h-3 text-amber-500" />
+                    {featureTasks.length}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 text-xs">
+                  {visibleColumns.assignee && (
+                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                      {renderAssigneeAvatars(featureAssignees)}
+                    </div>
+                  )}
+
+                  {visibleColumns.dueDate && (
+                    <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{feature.targetReleaseDate || 'No date'}</span>
+                    </div>
+                  )}
+
+                  {visibleColumns.status && (
+                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 overflow-hidden">
+                      <span>{completionPercent}% done</span>
+                    </div>
+                  )}
+
+                  {visibleColumns.itemType && (
+                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                      <select
+                        value="feature"
+                        onChange={(e) => handleConvertItemType(e.target.value as any, { id: feature.id, type: 'feature' })}
+                        className="bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-blue-400 transition-colors shadow-2xs w-full"
+                        title="Convert WBS Item Type"
+                      >
+                        <option value="milestone">Milestone</option>
+                        <option value="epic">Epic</option>
+                        <option value="feature">Feature</option>
+                        <option value="task">Task</option>
+                        <option value="subtask">Subtask</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {visibleColumns.cost && (
+                    <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                      ${featureCost.toLocaleString()}
+                    </div>
+                  )}
+
+                  {visibleColumns.priority && (
+                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                      <Flag className={`w-3.5 h-3.5 ${
+                        feature.priority === 'urgent' ? 'text-rose-500' :
+                        feature.priority === 'high' ? 'text-amber-500' :
+                        'text-indigo-500'
+                      }`} />
+                    </div>
+                  )}
+
+                  {visibleColumns.actions && (
+                    <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
+                      <button
+                        onClick={() => {
+                          setActiveInlineFeatureId(feature.id);
+                          if (!isFExpanded) toggleNode(feature.id);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-[11px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
+                        title="Add Task to this Feature"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Task</span>
+                      </button>
+                      <button
+                        onClick={() => openEditModal(feature)}
+                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                        title="Edit Feature"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => deleteFeature(feature.id)}
+                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                        title="Delete Feature"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -2095,29 +2177,153 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
         return (
           <div className="bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm backdrop-blur-md overflow-x-auto">
-            <div className="min-w-[960px]">
+            <div style={{ minWidth: totalTableWidth }}>
               {/* Column Header Row */}
-              <div className="flex items-center justify-between py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider bg-slate-100/80 dark:bg-slate-900/90 rounded-t-2xl">
-              <div className="flex-1 min-w-[320px] flex items-center justify-between pr-4 gap-2">
-                <span className="whitespace-nowrap">Name & WBS Hierarchy</span>
-                <button
-                  onClick={() => openCreateModal('milestone')}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 text-xs font-bold border border-amber-500/30 transition-all normal-case shadow-2xs whitespace-nowrap shrink-0"
-                  title="Add Top-Level Milestone"
+              <div className="flex items-center justify-between py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider bg-slate-100/80 dark:bg-slate-900/90 rounded-t-2xl relative select-none">
+                <div
+                  style={{ width: columnWidths.name }}
+                  className="flex-1 shrink-0 flex items-center justify-between pr-4 gap-2 relative group/col min-w-0"
                 >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span>New Milestone</span>
-                </button>
+                  <span className="whitespace-nowrap font-bold text-slate-700 dark:text-slate-300">Name & WBS Hierarchy</span>
+                  <div
+                    onMouseDown={(e) => handleStartResize(e, 'name')}
+                    onTouchStart={(e) => handleStartResize(e, 'name')}
+                    onDoubleClick={() => handleResetColumnWidth('name')}
+                    className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                    title="Drag to resize Name column (Double-click to reset)"
+                  >
+                    <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                  </div>
+                </div>
+
+                <div className="flex items-center shrink-0 font-semibold gap-2">
+                  {visibleColumns.assignee && (
+                    <div
+                      style={{ width: columnWidths.assignee }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                    >
+                      <span>Assignee</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'assignee')}
+                        onTouchStart={(e) => handleStartResize(e, 'assignee')}
+                        onDoubleClick={() => handleResetColumnWidth('assignee')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Assignee column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.dueDate && (
+                    <div
+                      style={{ width: columnWidths.dueDate }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                    >
+                      <span>Due date</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'dueDate')}
+                        onTouchStart={(e) => handleStartResize(e, 'dueDate')}
+                        onDoubleClick={() => handleResetColumnWidth('dueDate')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Due date column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.status && (
+                    <div
+                      style={{ width: columnWidths.status }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                    >
+                      <span>Status</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'status')}
+                        onTouchStart={(e) => handleStartResize(e, 'status')}
+                        onDoubleClick={() => handleResetColumnWidth('status')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Status column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.itemType && (
+                    <div
+                      style={{ width: columnWidths.itemType }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                    >
+                      <span>Item Type</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'itemType')}
+                        onTouchStart={(e) => handleStartResize(e, 'itemType')}
+                        onDoubleClick={() => handleResetColumnWidth('itemType')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Item Type column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.cost && (
+                    <div
+                      style={{ width: columnWidths.cost }}
+                      className="relative text-right whitespace-nowrap shrink-0 flex items-center justify-end group/col pr-2"
+                    >
+                      <span>Cost</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'cost')}
+                        onTouchStart={(e) => handleStartResize(e, 'cost')}
+                        onDoubleClick={() => handleResetColumnWidth('cost')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Cost column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.priority && (
+                    <div
+                      style={{ width: columnWidths.priority }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                    >
+                      <span>Priority</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'priority')}
+                        onTouchStart={(e) => handleStartResize(e, 'priority')}
+                        onDoubleClick={() => handleResetColumnWidth('priority')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Priority column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.actions && (
+                    <div
+                      style={{ width: columnWidths.actions }}
+                      className="relative text-right pr-2 whitespace-nowrap shrink-0 flex items-center justify-end group/col"
+                    >
+                      <span>Actions</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'actions')}
+                        onTouchStart={(e) => handleStartResize(e, 'actions')}
+                        onDoubleClick={() => handleResetColumnWidth('actions')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Actions column"
+                      >
+                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-4 shrink-0 font-semibold">
-                <div className="w-28 text-left whitespace-nowrap">Assignee</div>
-                <div className="w-36 text-left whitespace-nowrap">RACI Tagging</div>
-                <div className="w-28 text-left whitespace-nowrap">Due date</div>
-                <div className="w-28 text-left whitespace-nowrap">Item Type</div>
-                <div className="w-20 text-left whitespace-nowrap">Priority</div>
-                <div className="w-32 text-right pr-2 whitespace-nowrap">Actions</div>
-              </div>
-            </div>
 
             <div className="divide-y divide-slate-200/80 dark:divide-slate-800/60">
               {/* 1. MILESTONES SECTION */}
@@ -2126,15 +2332,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 const milestoneEpics = (projectData.epics || []).filter(e => e.milestoneId === milestone.id);
                 const milestoneFeatures = projectData.features.filter(f => f.milestoneId === milestone.id && !f.epicId);
                 const milestoneDirectTasks = filteredTasks.filter(t => t.milestoneId === milestone.id && !t.epicId && !t.featureId);
+                const mEff = getMilestoneEffectiveValues(milestone.id, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.epics || [], projectData.features, projectData.statusPercentages);
+                const mPercent = mEff.completionPercent;
+                const mCost = mEff.plannedCost;
 
                 return (
                   <div key={milestone.id} className="bg-amber-500/5 dark:bg-amber-950/20">
                     {/* Milestone Header Row */}
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group">
-                      <div className="flex items-center gap-2.5 flex-1 min-w-[300px] pr-4">
+                    <div className="flex items-center justify-between py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0">
+                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
                         <button
                           onClick={() => toggleNode(milestone.id)}
-                          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors"
+                          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors shrink-0"
                         >
                           {isMExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
@@ -2142,66 +2351,119 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         <Flag className="w-4 h-4 text-amber-500 shrink-0" />
                         <span className="font-mono text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}</span>
 
-                        <span className="font-bold text-xs text-slate-900 dark:text-amber-200 truncate">
+                        <span
+                          onClick={() => openEditModal(milestone)}
+                          className="font-bold text-xs text-slate-900 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 cursor-pointer truncate"
+                          title="Click to view/edit Milestone screen"
+                        >
                           {milestone.title}
                         </span>
-                      </div>
 
-                      <div className="flex items-center gap-4 shrink-0 text-xs">
-                        <div className="w-28 flex items-center justify-start">
-                          {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
-                        </div>
-                        <RaciTagCell
-                          itemType="milestone"
-                          itemId={milestone.id}
-                          stakeholders={projectData.stakeholders}
-                          projectData={projectData}
-                          onSaveTask={saveTask}
-                        />
-                        <div className="w-28 text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono">
-                          <Calendar className="w-3.5 h-3.5 text-amber-500" />
-                          <span>{milestone.dueDate || 'No date'}</span>
-                        </div>
-
-                        {/* Item Type Dropdown */}
-                        <div className="w-28 flex items-center justify-start">
-                          <select
-                            value="milestone"
-                            onChange={(e) => handleConvertItemType(e.target.value as any, { id: milestone.id, type: 'milestone' })}
-                            className="bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors shadow-2xs"
-                            title="Convert WBS Item Type"
-                          >
-                            <option value="milestone">Milestone</option>
-                            <option value="epic">Epic</option>
-                            <option value="feature">Feature</option>
-                            <option value="task">Task</option>
-                            <option value="subtask">Subtask</option>
-                          </select>
-                        </div>
-
-                        <div className="w-20 flex items-center justify-start">
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                        </div>
-
-                        <div className="w-32 flex items-center justify-end gap-1.5">
+                        {/* Hover Quick Actions */}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                           <button
                             onClick={() => openCreateModal('epic', milestone.id)}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white text-[11px] font-bold border border-purple-500/30 transition-all shrink-0"
-                            title="Add Epic under this Milestone"
+                            className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
+                            title="Add Epic"
                           >
                             <Plus className="w-3 h-3" />
-                            <span>Epic</span>
                           </button>
-
                           <button
-                            onClick={() => openCreateModal('feature', milestone.id)}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                            title="Add Feature under this Milestone"
+                            onClick={() => openEditModal(milestone)}
+                            className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
+                            title="Open Milestone Screen"
                           >
-                            <Plus className="w-3 h-3" />
-                            <span>Feature</span>
+                            <Edit2 className="w-3 h-3" />
                           </button>
                         </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 text-xs">
+                        {visibleColumns.assignee && (
+                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                            {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
+                          </div>
+                        )}
+
+                        {visibleColumns.dueDate && (
+                          <div style={{ width: columnWidths.dueDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                            <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span className="truncate">{milestone.dueDate || 'No date'}</span>
+                          </div>
+                        )}
+
+                        {visibleColumns.status && (
+                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 overflow-hidden">
+                            <span>{mPercent}% done</span>
+                          </div>
+                        )}
+
+                        {visibleColumns.itemType && (
+                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                            <select
+                              value="milestone"
+                              onChange={(e) => handleConvertItemType(e.target.value as any, { id: milestone.id, type: 'milestone' })}
+                              className="bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors shadow-2xs w-full"
+                              title="Convert WBS Item Type"
+                            >
+                              <option value="milestone">Milestone</option>
+                              <option value="epic">Epic</option>
+                              <option value="feature">Feature</option>
+                              <option value="task">Task</option>
+                              <option value="subtask">Subtask</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {visibleColumns.cost && (
+                          <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                            ${mCost.toLocaleString()}
+                          </div>
+                        )}
+
+                        {visibleColumns.priority && (
+                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                          </div>
+                        )}
+
+                        {visibleColumns.actions && (
+                          <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
+                            <button
+                              onClick={() => openCreateModal('epic', milestone.id)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white text-[11px] font-bold border border-purple-500/30 transition-all shrink-0"
+                              title="Add Epic under this Milestone"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Epic</span>
+                            </button>
+
+                            <button
+                              onClick={() => openCreateModal('feature', milestone.id)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
+                              title="Add Feature under this Milestone"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Feature</span>
+                            </button>
+
+                            <button
+                              onClick={() => openEditModal(milestone)}
+                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                              title="Edit Milestone"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => deleteMilestone(milestone.id)}
+                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                              title="Delete Milestone"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2217,11 +2479,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           return (
                             <div key={epic.id} className="pl-3 bg-purple-500/5 dark:bg-purple-950/10">
                               {/* Epic Header Row */}
-                              <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group">
-                                <div className="flex items-center gap-2.5 flex-1 min-w-[300px] pr-4">
+                              <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
+                                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
                                   <button
                                     onClick={() => toggleNode(epic.id)}
-                                    className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors"
+                                    className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0"
                                   >
                                     {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                   </button>
@@ -2229,58 +2491,114 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   <Layers className="w-4 h-4 text-purple-500 shrink-0" />
                                   <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}.E{eIdx + 1}</span>
 
-                                  <span className="font-bold text-xs text-slate-900 dark:text-purple-200 truncate">
+                                  <span
+                                    onClick={() => openEditModal(epic)}
+                                    className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                                    title="Click to view/edit Epic screen"
+                                  >
                                     {epic.title}
                                   </span>
-                                </div>
 
-                                <div className="flex items-center gap-4 shrink-0 text-xs">
-                                  <div className="w-28 flex items-center justify-start">
-                                    {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
-                                  </div>
-
-                                  <RaciTagCell
-                                    itemType="epic"
-                                    itemId={epic.id}
-                                    stakeholders={projectData.stakeholders}
-                                    projectData={projectData}
-                                    onSaveTask={saveTask}
-                                  />
-
-                                  <div className="w-28 text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono">
-                                    <Calendar className="w-3.5 h-3.5 text-purple-500" />
-                                    <span>{epic.targetReleaseDate || 'No date'}</span>
-                                  </div>
-
-                                  <div className="w-28 flex items-center justify-start">
-                                    <select
-                                      value="epic"
-                                      onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
-                                      className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs"
-                                      title="Convert WBS Item Type"
-                                    >
-                                      <option value="milestone">Milestone</option>
-                                      <option value="epic">Epic</option>
-                                      <option value="feature">Feature</option>
-                                      <option value="task">Task</option>
-                                      <option value="subtask">Subtask</option>
-                                    </select>
-                                  </div>
-
-                                  <div className="w-20 flex items-center justify-start">
-                                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                                  </div>
-
-                                  <div className="w-32 flex items-center justify-end">
+                                  {/* Hover Quick Actions */}
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
                                     <button
                                       onClick={() => openCreateModal('feature', milestone.id, epic.id)}
-                                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                                      title="Add Feature under this Epic"
+                                      className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                      title="Add Feature"
                                     >
                                       <Plus className="w-3 h-3" />
-                                      <span>Feature</span>
+                                    </button>
+                                    <button
+                                      onClick={() => openEditModal(epic)}
+                                      className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                      title="Open Epic Screen"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
                                     </button>
                                   </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0 text-xs">
+                                  {visibleColumns.assignee && (
+                                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                                      {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.dueDate && (
+                                    <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                                      <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                      <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.status && (
+                                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden">
+                                      {(() => {
+                                        const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                        return <span>{eEff.completionPercent}% done</span>;
+                                      })()}
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.itemType && (
+                                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                                      <select
+                                        value="epic"
+                                        onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
+                                        className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
+                                        title="Convert WBS Item Type"
+                                      >
+                                        <option value="milestone">Milestone</option>
+                                        <option value="epic">Epic</option>
+                                        <option value="feature">Feature</option>
+                                        <option value="task">Task</option>
+                                        <option value="subtask">Subtask</option>
+                                      </select>
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.cost && (
+                                    <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                                      {(() => {
+                                        const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                        return `$${eEff.plannedCost.toLocaleString()}`;
+                                      })()}
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.priority && (
+                                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.actions && (
+                                    <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
+                                      <button
+                                        onClick={() => openCreateModal('feature', milestone.id, epic.id)}
+                                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
+                                        title="Add Feature under this Epic"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        <span>Feature</span>
+                                      </button>
+                                      <button
+                                        onClick={() => openEditModal(epic)}
+                                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                                        title="Edit Epic"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => deleteEpic(epic.id)}
+                                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                                        title="Delete Epic"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -2314,48 +2632,90 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
                 return (
                   <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
-                    <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group">
-                      <div className="flex items-center gap-2.5 flex-1 min-w-[300px] pr-4">
-                        <button onClick={() => toggleNode(epic.id)} className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors">
+                    <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
+                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+                        <button onClick={() => toggleNode(epic.id)} className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0">
                           {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
                         <Layers className="w-4 h-4 text-purple-500 shrink-0" />
                         <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">E{eIdx + 1}</span>
                         <span className="font-bold text-xs text-slate-900 dark:text-purple-200 truncate">{epic.title}</span>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0 text-xs">
-                        <div className="w-28 flex items-center justify-start">
-                          {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
-                        </div>
-                        <div className="w-28 text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono">
-                          <Calendar className="w-3.5 h-3.5 text-purple-500" />
-                          <span>{epic.targetReleaseDate || 'No date'}</span>
-                        </div>
-                        <div className="w-28 flex items-center justify-start">
-                          <select
-                            value="epic"
-                            onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
-                            className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs"
-                          >
-                            <option value="milestone">Milestone</option>
-                            <option value="epic">Epic</option>
-                            <option value="feature">Feature</option>
-                            <option value="task">Task</option>
-                            <option value="subtask">Subtask</option>
-                          </select>
-                        </div>
-                        <div className="w-20 flex items-center justify-start">
-                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                        </div>
-                        <div className="w-32 flex items-center justify-end">
-                          <button
-                            onClick={() => openCreateModal('feature', '', epic.id)}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Feature</span>
-                          </button>
-                        </div>
+                      <div className="flex items-center gap-2 shrink-0 text-xs">
+                        {visibleColumns.assignee && (
+                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                            {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
+                          </div>
+                        )}
+                        {visibleColumns.dueDate && (
+                          <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                            <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                            <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                          </div>
+                        )}
+                        {visibleColumns.status && (
+                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden">
+                            {(() => {
+                              const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                              return <span>{eEff.completionPercent}% done</span>;
+                            })()}
+                          </div>
+                        )}
+                        {visibleColumns.itemType && (
+                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                            <select
+                              value="epic"
+                              onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
+                              className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
+                              title="Convert WBS Item Type"
+                            >
+                              <option value="milestone">Milestone</option>
+                              <option value="epic">Epic</option>
+                              <option value="feature">Feature</option>
+                              <option value="task">Task</option>
+                              <option value="subtask">Subtask</option>
+                            </select>
+                          </div>
+                        )}
+                        {visibleColumns.cost && (
+                          <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                            {(() => {
+                              const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                              return `$${eEff.plannedCost.toLocaleString()}`;
+                            })()}
+                          </div>
+                        )}
+                        {visibleColumns.priority && (
+                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                          </div>
+                        )}
+                        {visibleColumns.actions && (
+                          <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
+                            <button
+                              onClick={() => openCreateModal('feature', '', epic.id)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
+                              title="Add Feature under this Epic"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Feature</span>
+                            </button>
+                            <button
+                              onClick={() => openEditModal(epic)}
+                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                              title="Edit Epic"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteEpic(epic.id)}
+                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                              title="Delete Epic"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -2491,6 +2851,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                             value={task.status}
                             onChange={(e) => {
                               const newSt = e.target.value as TaskStatus;
+                              if (statusFilter !== 'all' && newSt !== statusFilter) {
+                                setStatusFilter('all');
+                              }
                               saveTask({ ...task, status: newSt, completionPercent: getStatusProgress(newSt, projectData.statusPercentages) });
                               showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')}`);
                             }}
@@ -2573,6 +2936,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       <CsvImportModal
         isOpen={isCsvModalOpen}
         onClose={() => setIsCsvModalOpen(false)}
+      />
+
+      {/* Sprint CRUD Management Modal */}
+      <SprintModal
+        isOpen={isSprintModalOpen}
+        onClose={() => setIsSprintModalOpen(false)}
+        sprintToEdit={editingSprint}
       />
 
       {/* Project Manager Status Completion Thresholds Modal */}
@@ -2674,7 +3044,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             isDragTarget ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-400' : ''
           }`}
         >
-          <div className="flex items-center gap-2 flex-1 min-w-[300px] pr-4">
+          <div style={{ width: columnWidths.name }} className="flex items-center gap-2 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
             {/* Grip handle on hover */}
             <div
               className="text-slate-400 hover:text-indigo-500 dark:text-slate-600 dark:hover:text-indigo-400 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
@@ -2716,14 +3086,68 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 className={`text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer truncate ${
                   task.status === 'done' ? 'line-through text-slate-400 dark:text-slate-500' : ''
                 }`}
+                title="Click to open ClickUp Task Screen"
               >
                 {task.title}
               </span>
+
+              {/* ClickUp Hover Quick Actions inline next to Title */}
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveInlineTaskId(task.id);
+                    if (!isExpanded) toggleNode(task.id);
+                  }}
+                  className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                  title="Add Subtask"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenTaskModal(task);
+                  }}
+                  className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                  title="Open ClickUp Task Detail View"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteTask(task.id);
+                  }}
+                  className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                  title="Delete Task"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
 
               {task.type === 'bug' && (
                 <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0">
                   <Bug className="w-3 h-3 text-rose-400" />
                   <span>Bug</span>
+                </span>
+              )}
+
+              {task.sprintId && (
+                <span
+                  className="bg-purple-500/10 text-purple-300 border border-purple-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20"
+                  title="Sprint assignment. Click to manage sprint."
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const sp = (projectData.sprints || []).find(s => s.id === task.sprintId);
+                    if (sp) {
+                      setEditingSprint(sp);
+                      setIsSprintModalOpen(true);
+                    }
+                  }}
+                >
+                  <Layers className="w-3 h-3 text-purple-400" />
+                  <span>{(projectData.sprints || []).find(s => s.id === task.sprintId)?.name || 'Sprint'}</span>
                 </span>
               )}
 
@@ -2757,140 +3181,145 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           </div>
 
           {/* Right Aligned Columns */}
-          <div className="flex items-center gap-4 shrink-0 text-xs">
+          <div className="flex items-center gap-2 shrink-0 text-xs">
             {/* Assignees Avatars */}
-            <div className="w-28 flex items-center justify-start">
-              {renderAssigneeAvatars(getTaskAllAssigneeIds(task, projectData.subtasks))}
-            </div>
-
-            {/* RACI Tagging Cell */}
-            <RaciTagCell
-              itemType="task"
-              itemId={task.id}
-              task={task}
-              stakeholders={projectData.stakeholders}
-              projectData={projectData}
-              onSaveTask={saveTask}
-            />
+            {visibleColumns.assignee && (
+              <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                {renderAssigneeAvatars(getTaskAllAssigneeIds(task, projectData.subtasks))}
+              </div>
+            )}
 
             {/* Due date */}
-            <div className="w-28 text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono">
-              <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500" />
-              <span>{task.dueDate ? task.dueDate : 'No date'}</span>
-            </div>
+            {visibleColumns.dueDate && (
+              <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                <span className="truncate">{task.dueDate ? task.dueDate : 'No date'}</span>
+              </div>
+            )}
 
             {/* Direct Status Selector Dropdown */}
-            <div className="w-28 flex items-center justify-start">
-              <select
-                value={task.status}
-                onChange={(e) => {
-                  const newSt = e.target.value as TaskStatus;
-                  saveTask({
-                    ...task,
-                    status: newSt,
-                    completionPercent: getStatusProgress(newSt, projectData.statusPercentages)
-                  });
-                  showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')} (${getStatusProgress(newSt, projectData.statusPercentages)}%)`);
-                }}
-                className={`border rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer transition-colors shadow-2xs ${
-                  task.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40' :
-                  task.status === 'in_progress' ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/40' :
-                  task.status === 'demoable' ? 'bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-500/40' :
-                  task.status === 'review' ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40' :
-                  task.status === 'on_hold' ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40' :
-                  task.status === 'blocked' ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/40' :
-                  'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                }`}
-                title="Update Work Item Status"
-              >
-                <option value="todo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">To Do</option>
-                <option value="in_progress" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">In Progress</option>
-                <option value="demoable" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Demo-able</option>
-                <option value="review" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Testing</option>
-                <option value="on_hold" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">On Hold</option>
-                <option value="blocked" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Blocked</option>
-                <option value="done" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Done</option>
-              </select>
-            </div>
+            {visibleColumns.status && (
+              <div style={{ width: columnWidths.status }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                <select
+                  value={task.status}
+                  onChange={(e) => {
+                    const newSt = e.target.value as TaskStatus;
+                    if (statusFilter !== 'all' && newSt !== statusFilter) {
+                      setStatusFilter('all');
+                    }
+                    saveTask({
+                      ...task,
+                      status: newSt,
+                      completionPercent: getStatusProgress(newSt, projectData.statusPercentages)
+                    });
+                    showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')} (${getStatusProgress(newSt, projectData.statusPercentages)}%)`);
+                  }}
+                  className={`border rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer transition-colors shadow-2xs w-full ${
+                    task.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/40' :
+                    task.status === 'in_progress' ? 'bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/40' :
+                    task.status === 'demoable' ? 'bg-teal-50 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-500/40' :
+                    task.status === 'review' ? 'bg-purple-50 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-500/40' :
+                    task.status === 'on_hold' ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-500/40' :
+                    task.status === 'blocked' ? 'bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-500/40' :
+                    'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                  }`}
+                  title="Update Work Item Status"
+                >
+                  <option value="todo" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">To Do</option>
+                  <option value="in_progress" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">In Progress</option>
+                  <option value="demoable" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Demo-able</option>
+                  <option value="review" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Testing</option>
+                  <option value="on_hold" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">On Hold</option>
+                  <option value="blocked" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Blocked</option>
+                  <option value="done" className="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200">Done</option>
+                </select>
+              </div>
+            )}
 
             {/* Item Type Dropdown before Priority */}
-            <div className="w-28 flex items-center justify-start">
-              <select
-                value="task"
-                onChange={(e) => handleConvertItemType(e.target.value as any, { id: task.id, type: 'task' })}
-                className="bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-indigo-400 transition-colors shadow-2xs"
-                title="Convert WBS Item Type"
-              >
-                <option value="milestone">Milestone</option>
-                <option value="epic">Epic</option>
-                <option value="feature">Feature</option>
-                <option value="task">Task</option>
-                <option value="subtask">Subtask</option>
-              </select>
-            </div>
+            {visibleColumns.itemType && (
+              <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                <select
+                  value="task"
+                  onChange={(e) => handleConvertItemType(e.target.value as any, { id: task.id, type: 'task' })}
+                  className="bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-indigo-400 transition-colors shadow-2xs w-full"
+                  title="Convert WBS Item Type"
+                >
+                  <option value="milestone">Milestone</option>
+                  <option value="epic">Epic</option>
+                  <option value="feature">Feature</option>
+                  <option value="task">Task</option>
+                  <option value="subtask">Subtask</option>
+                </select>
+              </div>
+            )}
 
             {/* Task Planned & Actual Cost (AC) */}
-            <div className="w-24 text-right font-mono text-[11px] shrink-0">
-              <span className="text-emerald-400 font-semibold block" title="Planned Cost">
-                ${taskEff.plannedCost.toLocaleString()}
-              </span>
-              <span className="text-amber-400/90 text-[10px] block" title="Actual Cost Incurred">
-                AC: ${taskEff.actualCost.toLocaleString()}
-              </span>
-            </div>
+            {visibleColumns.cost && (
+              <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] shrink-0 overflow-hidden pr-2">
+                <span className="text-emerald-400 font-semibold block truncate" title="Planned Cost">
+                  ${taskEff.plannedCost.toLocaleString()}
+                </span>
+                <span className="text-amber-400/90 text-[10px] block truncate" title="Actual Cost Incurred">
+                  AC: ${taskEff.actualCost.toLocaleString()}
+                </span>
+              </div>
+            )}
 
             {/* Priority flag */}
-            <div className="w-20 flex items-center justify-start">
-              <button
-                onClick={() => {
-                  const priorities: Priority[] = ['low', 'normal', 'high', 'urgent'];
-                  const nextPriority = priorities[(priorities.indexOf(task.priority) + 1) % priorities.length];
-                  saveTask({ ...task, priority: nextPriority });
-                }}
-                title={`Priority: ${task.priority}. Click to change.`}
-                className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1"
-              >
-                <Flag className={`w-3.5 h-3.5 ${
-                  task.priority === 'urgent' ? 'text-rose-500 fill-rose-500/20' :
-                  task.priority === 'high' ? 'text-amber-500 fill-amber-500/20' :
-                  task.priority === 'normal' ? 'text-indigo-500' :
-                  'text-slate-400'
-                }`} />
-                <span className="text-[10px] capitalize text-slate-500 dark:text-slate-400 font-medium">{task.priority}</span>
-              </button>
-            </div>
+            {visibleColumns.priority && (
+              <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                <button
+                  onClick={() => {
+                    const priorities: Priority[] = ['low', 'normal', 'high', 'urgent'];
+                    const nextPriority = priorities[(priorities.indexOf(task.priority) + 1) % priorities.length];
+                    saveTask({ ...task, priority: nextPriority });
+                  }}
+                  title={`Priority: ${task.priority}. Click to change.`}
+                  className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors flex items-center gap-1 truncate"
+                >
+                  <Flag className={`w-3.5 h-3.5 shrink-0 ${
+                    task.priority === 'urgent' ? 'text-rose-500 fill-rose-500/20' :
+                    task.priority === 'high' ? 'text-amber-500 fill-amber-500/20' :
+                    task.priority === 'normal' ? 'text-indigo-500' :
+                    'text-slate-400'
+                  }`} />
+                  <span className="text-[10px] capitalize text-slate-500 dark:text-slate-400 font-medium truncate">{task.priority}</span>
+                </button>
+              </div>
+            )}
 
             {/* Quick Actions & Add Subtask */}
-            <div className="w-32 flex items-center justify-end gap-1.5">
-              <button
-                onClick={() => {
-                  setActiveInlineTaskId(task.id);
-                  if (!isExpanded) toggleNode(task.id);
-                }}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-[11px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
-                title="Add Subtask"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Subtask</span>
-              </button>
+            {visibleColumns.actions && (
+              <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
+                <button
+                  onClick={() => {
+                    setActiveInlineTaskId(task.id);
+                    if (!isExpanded) toggleNode(task.id);
+                  }}
+                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-[11px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
+                  title="Add Subtask"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Subtask</span>
+                </button>
 
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
                 <button
                   onClick={() => onOpenTaskModal(task)}
-                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
                   title="Edit Task Specs"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => deleteTask(task.id)}
-                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors"
+                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
                   title="Delete Task"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

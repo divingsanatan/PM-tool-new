@@ -46,14 +46,10 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
 
   const workloads = calculateStakeholderWorkloads(projectData.stakeholders, projectData.tasks, projectData.subtasks);
 
-  const overloadedCount = workloads.filter(w => w.overloaded).length;
-
   const chartData = workloads.map(w => ({
     name: w.stakeholder.name,
     role: w.stakeholder.role,
-    Assigned: w.assignedHours,
-    Capacity: w.capacityHours,
-    utilization: w.utilizationPercent
+    Assigned: w.assignedHours
   }));
 
   return (
@@ -63,10 +59,10 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-teal-400 shrink-0" />
-            <h2 className="text-base sm:text-xl font-bold text-slate-100 truncate">Stakeholder Load Distribution & Capacity Heatmap</h2>
+            <h2 className="text-base sm:text-xl font-bold text-slate-100 truncate">Stakeholder Workload & Task Distribution</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-            Monitor weekly capacity limits, workload balance across team members, and prevent resource burnout.
+            Monitor assigned workload balance across team members and track active task allocations.
           </p>
         </div>
 
@@ -92,25 +88,10 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
         )}
       </div>
 
-      {/* Overload Alert Warning if any member is overloaded */}
-      {overloadedCount > 0 && (
-        <div className="bg-rose-500/10 border border-rose-500/30 p-3.5 sm:p-4 rounded-xl flex items-center justify-between text-xs text-rose-300 min-w-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
-            <div className="min-w-0">
-              <span className="font-bold block">Capacity Overload Detected!</span>
-              <p className="text-rose-200/80 mt-0.5 leading-relaxed">
-                {overloadedCount} team member(s) are allocated over 100% of their weekly capacity. Consider reassigning tasks.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Capacity Heatmap Bar Chart */}
+      {/* Main Workload Bar Chart */}
       <div className="bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm min-w-0">
-        <h3 className="font-bold text-slate-100 text-sm sm:text-base mb-1 truncate">Weekly Assigned Hours vs Max Capacity</h3>
-        <p className="text-xs text-slate-400 mb-4">Assigned active task workload (Hours) versus scheduled availability</p>
+        <h3 className="font-bold text-slate-100 text-sm sm:text-base mb-1 truncate">Assigned Workload per Team Member</h3>
+        <p className="text-xs text-slate-400 mb-4">Assigned active task workload (Hours) per stakeholder</p>
 
         <div className="h-64 sm:h-72 w-full min-w-0">
           <ResponsiveContainer width="100%" height="100%">
@@ -123,7 +104,6 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
               <Bar dataKey="Assigned" name="Assigned Workload (Hours)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Capacity" name="Max Capacity (Hours)" fill="#64748b" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -140,11 +120,7 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
           return (
             <div
               key={sh.id}
-              className={`p-5 rounded-2xl border bg-slate-900 transition-all min-w-0 overflow-hidden flex flex-col justify-between ${
-                wl.overloaded
-                  ? 'border-rose-500/50 shadow-lg shadow-rose-500/10'
-                  : 'border-slate-800'
-              }`}
+              className="p-5 rounded-2xl border border-slate-800 bg-slate-900 transition-all min-w-0 overflow-hidden flex flex-col justify-between"
             >
               <div className="flex items-start justify-between gap-2 min-w-0">
                 <div className="flex items-center gap-3 min-w-0">
@@ -174,20 +150,18 @@ export const WorkloadView: React.FC<WorkloadViewProps> = ({
                 )}
               </div>
 
-              {/* Load Bar Gauge */}
+              {/* Workload Indicator */}
               <div className="mt-4 space-y-1.5">
                 <div className="flex items-center justify-between text-xs gap-2">
-                  <span className="text-slate-400 shrink-0">Capacity Load</span>
-                  <span className={`font-bold font-mono text-right truncate ${wl.overloaded ? 'text-rose-400' : 'text-teal-400'}`}>
-                    {wl.assignedHours}h / {wl.capacityHours}h ({wl.utilizationPercent}%)
+                  <span className="text-slate-400 shrink-0">Assigned Workload</span>
+                  <span className="font-bold font-mono text-teal-400">
+                    {wl.assignedHours} hours
                   </span>
                 </div>
-                <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all ${
-                      wl.overloaded ? 'bg-rose-500' : 'bg-teal-500'
-                    }`}
-                    style={{ width: `${Math.min(wl.utilizationPercent, 100)}%` }}
+                    className="h-full rounded-full bg-teal-500"
+                    style={{ width: `${Math.min(wl.assignedHours * 2.5, 100)}%` }}
                   />
                 </div>
               </div>

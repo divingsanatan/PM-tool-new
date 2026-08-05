@@ -189,7 +189,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header id="app-header" className="w-full max-w-full bg-slate-900/90 dark:bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-3 md:px-4 py-2 text-slate-100 flex items-center justify-between gap-2 transition-colors min-w-0 overflow-x-clip">
+      <header id="app-header" className="w-full max-w-full bg-slate-900/90 dark:bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-3 md:px-4 py-2 text-slate-100 flex items-center justify-between gap-2 transition-colors min-w-0">
         {/* App Branding & Multi-Project Switcher */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">

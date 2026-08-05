@@ -28,10 +28,37 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
-let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap };
-let activeProjectId: string = 'proj-1';
+const STORE_PATH = path.join(process.cwd(), 'projects_store.json');
+
+function loadProjectsFromDisk(): Record<string, ProjectData> {
+  try {
+    if (fs.existsSync(STORE_PATH)) {
+      const raw = fs.readFileSync(STORE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('[Disk Store] Failed to load projects from disk:', e);
+  }
+  return {};
+}
+
+function saveProjectsToDisk(projects: Record<string, ProjectData>) {
+  try {
+    fs.writeFileSync(STORE_PATH, JSON.stringify(projects, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Disk Store] Failed to save projects to disk:', e);
+  }
+}
+
+const diskProjects = loadProjectsFromDisk();
+let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap, ...diskProjects };
+let activeProjectId: string = Object.keys(allProjectsMap)[0] || 'proj-1';
 let isSupabaseConnected = false;
 let lastLocalStateHash = '';
+let lastSupabaseErrorLogged = '';
 
 // Helper to compute quick hash of current in-memory data state
 function getProjectsStateHash(): string {
@@ -48,6 +75,7 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
     const { data, error } = await supabase.from('app_projects').select('*');
     if (!error && data && data.length > 0) {
       isSupabaseConnected = true;
+      lastSupabaseErrorLogged = '';
       const loadedMap: Record<string, ProjectData> = {};
       data.forEach((row: any) => {
         if (row.id && row.data) {
@@ -56,24 +84,39 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
       });
 
       if (Object.keys(loadedMap).length > 0) {
-        const newHash = JSON.stringify(loadedMap);
+        // Preserve any in-memory/disk created projects so they are never lost if Supabase is missing them
+        allProjectsMap = { ...defaultProjectsMap, ...loadedMap, ...allProjectsMap };
+        saveProjectsToDisk(allProjectsMap);
+
+        const newHash = JSON.stringify(allProjectsMap);
         if (newHash !== lastLocalStateHash) {
           lastLocalStateHash = newHash;
-          allProjectsMap = { ...defaultProjectsMap, ...loadedMap };
           if (!allProjectsMap[activeProjectId]) {
             activeProjectId = Object.keys(allProjectsMap)[0];
           }
-          console.log(`[Supabase Auto-Sync] Hydrated ${data.length} project(s) from Supabase database.`);
+          console.log(`[Supabase Auto-Sync] Hydrated & merged ${data.length} project(s) from Supabase database.`);
           if (shouldBroadcast) {
             broadcastDataChange(undefined, false);
           }
         }
       }
+    } else if (!error) {
+      isSupabaseConnected = true;
+      lastSupabaseErrorLogged = '';
     } else if (error) {
-      console.warn('[Supabase Auto-Sync] Initial query notice:', error.message);
+      isSupabaseConnected = false;
+      if (lastSupabaseErrorLogged !== error.message) {
+        lastSupabaseErrorLogged = error.message;
+        console.info(`[Supabase Notice] Local disk persistence active. Remote sync notice: ${error.message}`);
+      }
     }
   } catch (err: any) {
-    console.warn('[Supabase Auto-Sync] Connection notice:', err.message || err);
+    isSupabaseConnected = false;
+    const msg = err.message || String(err);
+    if (lastSupabaseErrorLogged !== msg) {
+      lastSupabaseErrorLogged = msg;
+      console.info(`[Supabase Notice] Local disk persistence active. Remote connection notice: ${msg}`);
+    }
   }
 }
 
@@ -82,9 +125,7 @@ initSupabaseHydration(false);
 
 // Continuous background polling sync (every 5 seconds) to keep Live and Dev containers automatically synchronized via Supabase
 setInterval(() => {
-  initSupabaseHydration(true).catch(err => {
-    console.warn('[Supabase Auto-Poll Notice]', err?.message || err);
-  });
+  initSupabaseHydration(true).catch(() => {});
 }, 5000);
 
 // Supabase Real-Time Listener
@@ -105,8 +146,8 @@ try {
       }
     )
     .subscribe();
-} catch (err) {
-  console.warn('[Supabase Realtime] Could not subscribe:', err);
+} catch (_err) {
+  // Silent fallback
 }
 
 // Background sync to Supabase
@@ -121,12 +162,20 @@ async function syncToSupabase() {
     const { error } = await supabase.from('app_projects').upsert(rows, { onConflict: 'id' });
     if (!error) {
       isSupabaseConnected = true;
+      lastSupabaseErrorLogged = '';
       lastLocalStateHash = getProjectsStateHash();
     } else {
-      console.warn('[Supabase] Upsert warning:', error.message);
+      if (lastSupabaseErrorLogged !== error.message) {
+        lastSupabaseErrorLogged = error.message;
+        console.info('[Supabase Upsert Notice]', error.message);
+      }
     }
   } catch (err: any) {
-    console.warn('[Supabase] Upsert exception:', err.message || err);
+    const msg = err.message || String(err);
+    if (lastSupabaseErrorLogged !== msg) {
+      lastSupabaseErrorLogged = msg;
+      console.info('[Supabase Upsert Notice]', msg);
+    }
   }
 }
 
@@ -143,6 +192,7 @@ function getActiveProject(): ProjectData {
 
 // Helper to broadcast state changes to all connected clients and save to Supabase
 function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true) {
+  saveProjectsToDisk(allProjectsMap);
   if (syncToRemote) {
     syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
   }
@@ -666,7 +716,11 @@ app.post('/api/ai/generate', async (req, res) => {
 
 app.post('/api/ai/report', async (req, res) => {
   try {
-    const { metrics, project, customAiConfig } = req.body;
+    const { metrics, project, customAiConfig, selectedSprintNames, sprintData } = req.body;
+
+    const sprintContextText = selectedSprintNames && selectedSprintNames.length > 0
+      ? `\nSprint Scope Filter Applied: ${selectedSprintNames.join(', ')}\nSprint Specific Highlights:\n${sprintData ? JSON.stringify(sprintData, null, 2) : 'Active Sprint Tasks filtered'}\n`
+      : '\nSprint Scope: Entire Project (All Sprints)\n';
 
     const prompt = `
 You are an expert Chief Project Officer and EVM Project Management Advisor.
@@ -674,6 +728,7 @@ Analyze the following project status data and generate an executive status repor
 
 Project Name: ${project?.projectName || 'Cloud Portal'}
 Budget: $${project?.budget?.toLocaleString() || '250,000'}
+${sprintContextText}
 EVM Metrics:
 - Schedule Performance Index (SPI): ${metrics?.spi} (${metrics?.spi >= 1 ? 'On/Ahead of Schedule' : 'Behind Schedule'})
 - Cost Performance Index (CPI): ${metrics?.cpi} (${metrics?.cpi >= 1 ? 'On/Under Budget' : 'Over Budget'})
@@ -692,7 +747,7 @@ ${project?.raidItems?.slice(0, 4).map((r: any) => `- [${r.type.toUpperCase()}] $
 Please format the response in clean Markdown with the following sections:
 1. Executive Summary & Health Rating (Green / Amber / Red)
 2. EVM Cost & Schedule Assessment (Explain SPI/CPI in plain business terms)
-3. Key Accomplishments & Progress
+3. Key Sprint Accomplishments & Progress ${selectedSprintNames ? `(Focused on ${selectedSprintNames.join(', ')})` : ''}
 4. RAID Risk Mitigation Recommendations
 5. Strategic Action Items for Next Sprint
 `;

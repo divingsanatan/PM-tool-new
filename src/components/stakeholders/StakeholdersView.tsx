@@ -27,7 +27,6 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   const [quickRole, setQuickRole] = useState('Developer');
   const [quickCategory, setQuickCategory] = useState<StakeholderCategory>('internal');
   const [quickRate, setQuickRate] = useState(85);
-  const [quickCapacity, setQuickCapacity] = useState(40);
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'internal' | 'external'>('all');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -42,7 +41,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
       category: quickCategory,
       avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80`,
       hourlyRate: Number(quickRate) || 85,
-      weeklyCapacityHours: Number(quickCapacity) || 40,
+      weeklyCapacityHours: 40,
       skills: [quickRole, 'Agile'],
       status: 'active',
       createdBy: currentUser?.id,
@@ -70,7 +69,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
             <h2 className="text-xl font-bold text-slate-100 min-w-0 truncate sm:whitespace-normal">Project Stakeholders & Team Directory</h2>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Manage team roles, internal & external categories, capacity limits, billable rates, and skills.
+            Manage team roles, internal & external categories, billable rates, and skills.
           </p>
         </div>
 
@@ -160,17 +159,6 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                   className="w-12 bg-transparent text-emerald-400 font-mono text-xs outline-none"
                 />
                 <span className="text-[10px] text-slate-500 font-mono">/hr</span>
-              </div>
-
-              <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl min-h-[40px]">
-                <input
-                  type="number"
-                  title="Weekly Capacity Hours"
-                  value={quickCapacity}
-                  onChange={(e) => setQuickCapacity(Number(e.target.value))}
-                  className="w-10 bg-transparent text-purple-300 font-mono text-xs outline-none"
-                />
-                <span className="text-[10px] text-slate-500 font-mono">hrs/wk</span>
               </div>
 
               <button
@@ -342,14 +330,6 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="flex items-center gap-1.5 text-slate-400">
-                      <Clock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Capacity:</span>
-                    </span>
-                    <span className="font-mono font-bold text-slate-200">{sh.weeklyCapacityHours}h / week</span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-slate-400">
                       <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Billing Rate:</span>

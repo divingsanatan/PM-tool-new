@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, ProjectData } from '../../types';
 import { FolderPlus, Check, Trash2, Layers, Calendar, DollarSign, X, Pencil, Save } from 'lucide-react';
@@ -180,8 +181,8 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
     setIsCreating(false);
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/60 backdrop-blur-md animate-fade-in overflow-hidden">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-hidden">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col h-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)]">
         {/* Header */}
         <div className="p-5 bg-slate-950/60 border-b border-slate-800/80 flex items-center justify-between">
@@ -522,6 +523,7 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

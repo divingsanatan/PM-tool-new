@@ -196,6 +196,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-1",
       featureId: "feat-1",
       milestoneId: "m-1",
+      sprintId: "sprint-1",
       status: "done",
       priority: "urgent",
       assigneeIds: ["sh-2", "sh-3"],
@@ -222,6 +223,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-1",
       featureId: "feat-1",
       milestoneId: "m-1",
+      sprintId: "sprint-1",
       status: "done",
       priority: "high",
       assigneeIds: ["sh-4"],
@@ -248,6 +250,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-2",
       featureId: "feat-2",
       milestoneId: "m-2",
+      sprintId: "sprint-2",
       status: "in_progress",
       priority: "urgent",
       assigneeIds: ["sh-1", "sh-3"],
@@ -280,6 +283,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-2",
       featureId: "feat-2",
       milestoneId: "m-2",
+      sprintId: "sprint-2",
       status: "demoable",
       priority: "urgent",
       assigneeIds: ["sh-3", "sh-4"],
@@ -311,6 +315,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-2",
       featureId: "feat-2",
       milestoneId: "m-2",
+      sprintId: "sprint-2",
       status: "in_progress",
       priority: "high",
       assigneeIds: ["sh-1", "sh-5"],
@@ -337,6 +342,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-3",
       featureId: "feat-3",
       milestoneId: "m-3",
+      sprintId: "sprint-3",
       status: "in_progress",
       priority: "high",
       assigneeIds: ["sh-1", "sh-2"],
@@ -363,6 +369,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-1",
       featureId: "feat-1",
       milestoneId: "m-1",
+      sprintId: "sprint-1",
       status: "done",
       priority: "high",
       assigneeIds: ["sh-3", "sh-5"],
@@ -389,6 +396,7 @@ export const initialProjectData: ProjectData = {
       epicId: "epic-4",
       featureId: "feat-4",
       milestoneId: "m-4",
+      sprintId: "sprint-3",
       status: "todo",
       priority: "normal",
       assigneeIds: ["sh-1", "sh-3"],
@@ -472,6 +480,38 @@ export const initialProjectData: ProjectData = {
     { id: "sub-6", taskId: "task-104", title: "SVG dependency connector lines", completed: false, assigneeId: "sh-4", estimatedHours: 25, actualHours: 10 },
     { id: "sub-7", taskId: "task-106", title: "Probability vs Impact 4x4 Risk Matrix renderer", completed: true, assigneeId: "sh-1", estimatedHours: 15, actualHours: 12 },
     { id: "sub-8", taskId: "task-106", title: "Mitigation plan entry form and status filter", completed: false, assigneeId: "sh-2", estimatedHours: 15, actualHours: 5 }
+  ],
+  sprints: [
+    {
+      id: "sprint-1",
+      name: "Sprint 1 - Foundation & Core Architecture",
+      goal: "Establish relational data model, real-time WebSocket sync engine, and design system.",
+      status: "completed",
+      startDate: "2026-06-01",
+      endDate: "2026-06-25",
+      isAutoDates: true,
+      capacityPoints: 50
+    },
+    {
+      id: "sprint-2",
+      name: "Sprint 2 - EVM Analytics & Interactive Gantt",
+      goal: "Deliver Earned Value Management calculations, interactive Gantt chart, and workload heatmaps.",
+      status: "active",
+      startDate: "2026-07-01",
+      endDate: "2026-08-15",
+      isAutoDates: true,
+      capacityPoints: 65
+    },
+    {
+      id: "sprint-3",
+      name: "Sprint 3 - RAID Risk & AI Executive Reporting",
+      goal: "Implement RAID risk mitigation matrix, change control CCB flow, and Gemini executive reporting.",
+      status: "future",
+      startDate: "2026-08-16",
+      endDate: "2026-10-30",
+      isAutoDates: true,
+      capacityPoints: 60
+    }
   ],
   raidItems: [
     {
@@ -635,13 +675,12 @@ export const initialProjectData: ProjectData = {
     }
   ],
   widgets: [
-    { id: "pm-checklist", title: "PM Governance & Readiness Checklist", enabled: true, order: 1, width: "full" },
-    { id: "evm-summary", title: "EVM Performance Index (SPI & CPI)", enabled: true, order: 2, width: "full" },
-    { id: "gantt-chart", title: "Interactive Gantt Timeline & Critical Path", enabled: true, order: 3, width: "full" },
-    { id: "workload-distribution", title: "Stakeholder Workload Distribution & Load Heatmap", enabled: true, order: 4, width: "half" },
-    { id: "raid-matrix", title: "RAID Risk & Oversight Matrix", enabled: true, order: 5, width: "half" },
-    { id: "completion-metrics", title: "Work Item Completion Progress (Features, Milestones, Tasks)", enabled: true, order: 6, width: "half" },
-    { id: "ai-assistant", title: "AI Executive Project Summary & Risk Advisor", enabled: true, order: 7, width: "half" }
+    { id: "evm-summary", title: "EVM Performance Index (SPI & CPI)", enabled: true, order: 1, width: "full" },
+    { id: "gantt-chart", title: "Interactive Gantt Timeline & Critical Path", enabled: true, order: 2, width: "full" },
+    { id: "workload-distribution", title: "Stakeholder Workload Distribution & Load Heatmap", enabled: true, order: 3, width: "half" },
+    { id: "raid-matrix", title: "RAID Risk & Oversight Matrix", enabled: true, order: 4, width: "half" },
+    { id: "completion-metrics", title: "Work Item Completion Progress (Features, Milestones, Tasks)", enabled: true, order: 5, width: "half" },
+    { id: "ai-assistant", title: "AI Executive Project Summary & Risk Advisor", enabled: true, order: 6, width: "half" }
   ],
   pmChecklist: {
     scopeDetails: "Enterprise cloud application featuring ClickUp-grade execution tracking, automated EVM reporting, and real-time collaboration.",

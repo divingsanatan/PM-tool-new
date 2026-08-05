@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useProject } from '../../context/ProjectContext';
 import { UserProfile, UserRole } from '../../types';
 import {
@@ -60,7 +61,6 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
     phone: currentUser.phone || '',
     bio: currentUser.bio || '',
     hourlyRate: currentUser.hourlyRate ?? 85,
-    weeklyCapacityHours: currentUser.weeklyCapacityHours ?? 40,
     skills: currentUser.skills || ['Project Management', 'Agile', 'EVM']
   });
 
@@ -80,7 +80,6 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
         phone: currentUser.phone || '',
         bio: currentUser.bio || '',
         hourlyRate: currentUser.hourlyRate ?? 85,
-        weeklyCapacityHours: currentUser.weeklyCapacityHours ?? 40,
         skills: currentUser.skills || ['Project Management', 'Agile', 'EVM']
       });
       setShowSaveSuccess(false);
@@ -159,7 +158,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
         phone: formData.phone.trim(),
         bio: formData.bio.trim(),
         hourlyRate: Number(formData.hourlyRate),
-        weeklyCapacityHours: Number(formData.weeklyCapacityHours),
+        weeklyCapacityHours: 40,
         skills: formData.skills
       });
 
@@ -172,8 +171,8 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-hidden">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-hidden">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col h-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)]">
         {/* Header */}
         <div className="p-4 sm:p-5 bg-slate-950/80 border-b border-slate-800/80 flex items-center justify-between shrink-0">
@@ -444,41 +443,24 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
                 </div>
               </div>
 
-              {/* EVM Rates & Capacity Modeling */}
+              {/* EVM Rates & Cost Modeling */}
               <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/80 space-y-3">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-emerald-400" />
-                  <span>Cost Modeling & Capacity</span>
+                  <span>Cost Modeling</span>
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Hourly Billing Rate ($/hr)</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-xs text-slate-500">$</span>
-                      <input
-                        type="number"
-                        min="0"
-                        step="5"
-                        value={formData.hourlyRate}
-                        onChange={(e) => setFormData(prev => ({ ...prev, hourlyRate: Number(e.target.value) }))}
-                        className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Weekly Capacity (Hours/Week)</label>
-                    <div className="relative">
-                      <Clock className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
-                      <input
-                        type="number"
-                        min="5"
-                        max="80"
-                        value={formData.weeklyCapacityHours}
-                        onChange={(e) => setFormData(prev => ({ ...prev, weeklyCapacityHours: Number(e.target.value) }))}
-                        className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
-                      />
-                    </div>
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Hourly Billing Rate ($/hr)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-xs text-slate-500">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5"
+                      value={formData.hourlyRate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, hourlyRate: Number(e.target.value) }))}
+                      className="w-full pl-7 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                    />
                   </div>
                 </div>
               </div>
@@ -727,7 +709,8 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

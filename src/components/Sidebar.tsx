@@ -143,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'workload',
-      label: 'Workload & Capacity',
+      label: 'Workload & Tasks',
       shortLabel: 'Workload',
       category: 'team',
       pmOnly: true,
@@ -212,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const categories = [
     { key: 'core', name: 'Core Workspace' },
-    { key: 'team', name: 'Team & Capacity' },
+    { key: 'team', name: 'Team & Directory' },
     { key: 'governance', name: 'PMI Governance' },
     { key: 'analytics', name: 'Analytics & Logs' }
   ];
