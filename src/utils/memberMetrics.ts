@@ -1,4 +1,4 @@
-import { Task, Subtask, Milestone, Stakeholder, Feature, Epic } from '../types';
+import { Task, Subtask, Milestone, Stakeholder, Feature, Epic, TaskStatus } from '../types';
 import { getTaskEffectiveValues } from './taskCalculations';
 
 export interface MemberMetrics {
@@ -43,7 +43,8 @@ export function calculateMemberMetrics(
   stakeholders: Stakeholder[],
   tasks: Task[],
   subtasks: Subtask[] = [],
-  milestones: Milestone[] = []
+  milestones: Milestone[] = [],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ): MemberMetrics {
   const currentStakeholder = stakeholders.find(s => s.id === stakeholderId) || {
     id: stakeholderId,
@@ -82,7 +83,7 @@ export function calculateMemberMetrics(
   const activeAssignedTasks = assignedTasks.filter(t => t.status !== 'on_hold');
 
   activeAssignedTasks.forEach((task) => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     const assigneesCount = Math.max(1, task.assigneeIds.length);
     
     // Member's share of hours

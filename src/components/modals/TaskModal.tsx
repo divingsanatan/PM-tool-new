@@ -808,7 +808,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     {isTimerRunning ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
                     <span>{isTimerRunning ? formatTimerTime(timerSeconds) : 'Start Timer'}</span>
                   </button>
-                  <span className="text-slate-400 font-mono text-[11px]">Logged: {actualHours}h</span>
+                  <span className="text-slate-400 font-mono text-[11px]">Logged: {Math.round(actualHours * 100) / 100}h</span>
                 </div>
               </div>
 

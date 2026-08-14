@@ -100,9 +100,10 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
       projectData.stakeholders,
       projectData.tasks,
       projectData.subtasks,
-      projectData.milestones
+      projectData.milestones,
+      projectData.statusPercentages
     );
-  }, [selectedStakeholder, projectData.stakeholders, projectData.tasks, projectData.subtasks, projectData.milestones]);
+  }, [selectedStakeholder, projectData.stakeholders, projectData.tasks, projectData.subtasks, projectData.milestones, projectData.statusPercentages]);
 
   if (!selectedStakeholder || !metrics) {
     return (

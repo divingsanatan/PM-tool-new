@@ -91,7 +91,7 @@ export const RaciChartWidget: React.FC = () => {
       </div>
 
       {/* 4 RACI Graphical Role Summary Cards */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Responsible (R) Card */}
         <div className="bg-slate-950/80 p-3.5 rounded-xl border border-emerald-500/30 space-y-2">
           <div className="flex items-center justify-between">

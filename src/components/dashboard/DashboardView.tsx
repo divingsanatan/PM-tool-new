@@ -112,8 +112,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const myInProgressTasks = myTasks.filter(t => t.status === 'in_progress');
   const myPendingTasks = myTasks.filter(t => t.status === 'todo' || t.status === 'review' || t.status === 'blocked' || t.status === 'in_progress');
 
-  const myTotalAssignedHours = myTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
-  const myTotalActualHours = myTasks.reduce((sum, t) => sum + (t.actualHours || 0), 0);
+  const myTotalAssignedHours = Math.round(myTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) * 100) / 100;
+  const myTotalActualHours = Math.round(myTasks.reduce((sum, t) => sum + (t.actualHours || 0), 0) * 100) / 100;
   const myCompletionRate = myTasks.length > 0 ? Math.round((myCompletedTasks.length / myTasks.length) * 100) : 0;
 
   const myCapacityHours = myStakeholderRecord?.weeklyCapacityHours || 40;
@@ -175,10 +175,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const activeTaskIds = new Set(activeTasksForEffort.map(t => t.id));
   const activeSubtasksForEffort = projectData.subtasks.filter(st => activeTaskIds.has(st.taskId));
 
-  const totalEstimatedHours = activeTasksForEffort.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) +
-    activeSubtasksForEffort.reduce((sum, st) => sum + (st.estimatedHours || 0), 0);
-  const totalActualHours = activeTasksForEffort.reduce((sum, t) => sum + (t.actualHours || 0), 0) +
-    activeSubtasksForEffort.reduce((sum, st) => sum + (st.actualHours || 0), 0);
+  const totalEstimatedHours = Math.round((activeTasksForEffort.reduce((sum, t) => sum + (t.estimatedHours || 0), 0) +
+    activeSubtasksForEffort.reduce((sum, st) => sum + (st.estimatedHours || 0), 0)) * 100) / 100;
+  const totalActualHours = Math.round((activeTasksForEffort.reduce((sum, t) => sum + (t.actualHours || 0), 0) +
+    activeSubtasksForEffort.reduce((sum, st) => sum + (st.actualHours || 0), 0)) * 100) / 100;
   const effortRatio = totalEstimatedHours > 0 ? totalActualHours / totalEstimatedHours : 1.0;
 
   // 2. Identify Dependency Schedule Conflicts

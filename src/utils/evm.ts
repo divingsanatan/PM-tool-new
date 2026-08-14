@@ -1,11 +1,12 @@
-import { Task, Subtask, EVMMetrics, Stakeholder, StakeholderWorkload } from '../types';
+import { Task, Subtask, EVMMetrics, Stakeholder, StakeholderWorkload, TaskStatus } from '../types';
 import { getTaskEffectiveValues, getTaskAllAssigneeIds, calculateWbsTotalBudget } from './taskCalculations';
 
 export function calculateEVMMetrics(
   tasks: Task[],
   projectBudget: number,
   subtasks: Subtask[] = [],
-  stakeholders: Stakeholder[] = []
+  stakeholders: Stakeholder[] = [],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ): EVMMetrics {
   const today = new Date().toISOString().split('T')[0];
 
@@ -17,7 +18,7 @@ export function calculateEVMMetrics(
   const activeTasks = tasks.filter((task) => task.status !== 'on_hold');
 
   activeTasks.forEach((task) => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
 
     // 1. Planned Value (PV)
     // If task start date is past today, compute prorated planned value based on schedule

@@ -221,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({
             {isProjectDropdownOpen && (
               <div
                 ref={projectDropdownRef}
-                className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 animate-fade-in space-y-1.5"
+                className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 animate-fade-in space-y-1.5"
               >
                 <div className="px-2.5 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span>Switch Project ({projectsList.length})</span>

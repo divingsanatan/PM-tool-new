@@ -271,7 +271,7 @@ export const AuditTrailView: React.FC = () => {
       </div>
 
       {/* KPI Cards Summary Grid */}
-      <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2 min-w-0">
           <div className="min-w-0 flex-1">
             <span className="text-xs font-medium text-slate-400 block truncate">Total Audit Events</span>

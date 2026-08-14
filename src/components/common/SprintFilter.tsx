@@ -83,19 +83,6 @@ export const SprintFilter: React.FC<SprintFilterProps> = ({
           <span className="hidden sm:inline">Sprint Scope:</span>
         </div>
 
-        {/* Quick Pill Buttons */}
-        <button
-          onClick={handleToggleAll}
-          className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 shrink-0 ${
-            isAllSelected
-              ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 font-semibold'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5 shrink-0" />
-          <span className="whitespace-nowrap">Entire Project</span>
-        </button>
-
         {/* Sprint selector dropdown button */}
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -113,7 +100,7 @@ export const SprintFilter: React.FC<SprintFilterProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2 space-y-1">
+        <div className="absolute left-0 md:left-auto md:right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2 space-y-1">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800">
             <span className="text-xs font-semibold text-slate-300">Select Sprints</span>
             {!isAllSelected && (

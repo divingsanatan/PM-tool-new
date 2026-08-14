@@ -60,39 +60,45 @@ import { SprintModal } from '../modals/SprintModal';
 import { Sprint } from '../../types';
 import { calculateEVMMetrics } from '../../utils/evm';
 
-export type ColumnKey = 'name' | 'assignee' | 'dueDate' | 'status' | 'itemType' | 'cost' | 'priority' | 'actions';
+export type ColumnKey = 'name' | 'assignee' | 'startDate' | 'dueDate' | 'estHours' | 'status' | 'itemType' | 'cost' | 'priority' | 'tags';
 
 export const DEFAULT_COLUMN_WIDTHS: Record<ColumnKey, number> = {
-  name: 380,
+  name: 480,
   assignee: 120,
+  startDate: 110,
   dueDate: 120,
+  estHours: 100,
   status: 130,
   itemType: 115,
   cost: 110,
   priority: 95,
-  actions: 145,
+  tags: 120,
 };
 
 export const DEFAULT_VISIBLE_COLUMNS: Record<ColumnKey, boolean> = {
   name: true,
   assignee: true,
+  startDate: false,
   dueDate: true,
+  estHours: false,
   status: true,
   itemType: true,
   cost: true,
   priority: true,
-  actions: true,
+  tags: false,
 };
 
 export const COLUMN_DEFINITIONS: { key: ColumnKey; label: string }[] = [
   { key: 'name', label: 'Name & Hierarchy' },
   { key: 'assignee', label: 'Assignee' },
+  { key: 'startDate', label: 'Start Date' },
   { key: 'dueDate', label: 'Due Date' },
+  { key: 'estHours', label: 'Est. Hours' },
   { key: 'status', label: 'Status' },
   { key: 'itemType', label: 'Item Type' },
   { key: 'cost', label: 'Cost' },
   { key: 'priority', label: 'Priority' },
-  { key: 'actions', label: 'Actions' },
+  { key: 'tags', label: 'Tags' },
 ];
 import {
   getStatusProgress,
@@ -138,9 +144,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
   const [showStatusConfigModal, setShowStatusConfigModal] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
-  const [tempPercentages, setTempPercentages] = useState<Record<string, number>>(
+  const [tempPercentages, setTempPercentages] = useState<Record<string, number | string>>(
     projectData.statusPercentages || DEFAULT_STATUS_PERCENTAGES
   );
+
+  useEffect(() => {
+    if (showStatusConfigModal) {
+      setTempPercentages(projectData.statusPercentages || DEFAULT_STATUS_PERCENTAGES);
+    }
+  }, [showStatusConfigModal, projectData.statusPercentages]);
 
   const isPM = currentUser.role === 'pm';
 
@@ -191,13 +203,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const totalTableWidth = useMemo(() => {
     let width = columnWidths.name;
     if (visibleColumns.assignee) width += columnWidths.assignee;
+    if (visibleColumns.startDate) width += columnWidths.startDate;
     if (visibleColumns.dueDate) width += columnWidths.dueDate;
+    if (visibleColumns.estHours) width += columnWidths.estHours;
     if (visibleColumns.status) width += columnWidths.status;
     if (visibleColumns.itemType) width += columnWidths.itemType;
     if (visibleColumns.cost) width += columnWidths.cost;
     if (visibleColumns.priority) width += columnWidths.priority;
-    if (visibleColumns.actions) width += columnWidths.actions;
-    return Math.max(900, width + 40);
+    if (visibleColumns.tags) width += columnWidths.tags;
+    return Math.max(800, width + 60);
   }, [columnWidths, visibleColumns]);
 
   const handleStartResize = (e: React.MouseEvent | React.TouchEvent, colKey: ColumnKey) => {
@@ -491,7 +505,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         await saveTask({
           ...task,
           status: targetStatus,
-          completionPercent: getStatusProgress(targetStatus)
+          completionPercent: getStatusProgress(targetStatus, projectData.statusPercentages)
         });
         showNotice(`Updated Task "${task.title}" status to ${targetStatus.toUpperCase().replace('_', ' ')}`);
       }
@@ -902,7 +916,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       actualHours: 0,
       plannedCost: 1000,
       actualCost: 0,
-      completionPercent: getStatusProgress(statusToUse),
+      completionPercent: getStatusProgress(statusToUse, projectData.statusPercentages),
       tags: ['WorkItem']
     });
 
@@ -1159,17 +1173,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
   // Effective Cascading Project Rollups
   const projectRollup = useMemo(() => {
-    return getProjectEffectiveValues(filteredTasks, projectData.subtasks, projectData.stakeholders);
-  }, [filteredTasks, projectData.subtasks, projectData.stakeholders]);
+    return getProjectEffectiveValues(filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+  }, [filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages]);
 
   const evmMetrics = useMemo(() => {
     return calculateEVMMetrics(
       filteredTasks,
       projectData.budget,
       projectData.subtasks,
-      projectData.stakeholders
+      projectData.stakeholders,
+      projectData.statusPercentages
     );
-  }, [filteredTasks, projectData.budget, projectData.subtasks, projectData.stakeholders]);
+  }, [filteredTasks, projectData.budget, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages]);
 
   // Subtask Add Handler
   const handleAddSubtask = async (taskId: string) => {
@@ -1220,7 +1235,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       actualHours: 0,
       plannedCost: Number(quickPlannedCost) || 1000,
       actualCost: 0,
-      completionPercent: getStatusProgress(quickStatus),
+      completionPercent: getStatusProgress(quickStatus, projectData.statusPercentages),
       tags: ['WorkItem']
     });
 
@@ -1247,7 +1262,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       actualHours: 0,
       plannedCost: 1000,
       actualCost: 0,
-      completionPercent: getStatusProgress(status),
+      completionPercent: getStatusProgress(status, projectData.statusPercentages),
       tags: ['BoardItem']
     });
 
@@ -1308,7 +1323,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       </div>
 
       {/* Financial Baseline & EVM Summary Bar on WBS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-3">
         <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
           <div>
             <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
@@ -1332,19 +1347,6 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               ${projectRollup.plannedCost.toLocaleString()}
             </div>
             <span className="text-[10px] text-slate-500">Sum of All WBS Tasks</span>
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Actual Cost (AC)</span>
-            </div>
-            <div className="text-base font-bold font-mono text-amber-400 mt-1">
-              ${projectRollup.actualCost.toLocaleString()}
-            </div>
-            <span className="text-[10px] text-slate-500">Incurred Work ({projectRollup.actualHours}h)</span>
           </div>
         </div>
 
@@ -1408,7 +1410,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       <div className="flex flex-col gap-3 bg-slate-900 border border-slate-800 p-3 sm:p-4 rounded-2xl text-xs shadow-sm min-w-0">
         {/* Top Row: GroupBy Switcher & Quick Create Action Buttons */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 min-w-0">
-          {viewType === 'tree' && (
+          {viewType === 'list' && (
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 overflow-x-auto max-w-full no-scrollbar shrink-0">
               <button
                 onClick={() => setGroupBy('milestone-feature')}
@@ -1484,12 +1486,6 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             </button>
 
             <div className="h-4 w-px bg-slate-800 hidden sm:block shrink-0" />
-
-            <SprintFilter
-              sprints={sprints}
-              selectedSprintIds={selectedSprintIds}
-              onChange={setSelectedSprintIds}
-            />
 
             <button
               onClick={() => {
@@ -1585,7 +1581,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             {isColumnsMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsColumnsMenuOpen(false)} />
-                <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2 text-xs space-y-1 backdrop-blur-md">
+                <div className="absolute left-0 md:left-auto md:right-0 mt-2 w-56 max-w-[calc(100vw-2rem)] bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-50 p-2 text-xs space-y-1 backdrop-blur-md">
                   <div className="flex items-center justify-between pb-2 border-b border-slate-800 px-2 font-bold text-slate-300 text-[11px] uppercase tracking-wider">
                     <span>Toggle Columns</span>
                     <button
@@ -1950,10 +1946,10 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           const featureCost = fEff.plannedCost;
 
           return (
-            <div key={feature.id} className={`bg-blue-500/5 dark:bg-slate-950/40 ${isNestedInEpic ? 'pl-4 border-l-2 border-indigo-500/30 dark:border-indigo-500/20' : ''}`}>
+            <div key={feature.id} className={`bg-blue-500/5 dark:bg-slate-950/40 ${isNestedInEpic ? 'border-l-2 border-indigo-500/30 dark:border-indigo-500/20' : ''}`}>
               {/* Feature Header Row */}
-              <div className="flex items-center justify-between py-2.5 px-3 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0">
-                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+              <div className="flex items-center justify-between py-2.5 px-4 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0">
+                <div style={{ width: columnWidths.name }} className={`flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden ${isNestedInEpic ? 'pl-8' : 'pl-4'}`}>
                   <button
                     onClick={() => toggleNode(feature.id)}
                     className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors shrink-0"
@@ -1996,6 +1992,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     >
                       <Edit2 className="w-3 h-3" />
                     </button>
+                    <button
+                      onClick={() => deleteFeature(feature.id)}
+                      className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                      title="Delete Feature"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
                   </div>
 
                   <span className="flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 bg-slate-200/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-full font-mono shrink-0">
@@ -2004,28 +2007,41 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 text-xs">
+                <div className="flex items-center shrink-0 text-xs">
                   {visibleColumns.assignee && (
-                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                       {renderAssigneeAvatars(featureAssignees)}
                     </div>
                   )}
 
-                  {visibleColumns.dueDate && (
-                    <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                  {visibleColumns.startDate && (
+                    <div style={{ width: columnWidths.startDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
                       <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">{feature.targetReleaseDate || 'No date'}</span>
                     </div>
                   )}
 
+                  {visibleColumns.dueDate && (
+                    <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                      <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{feature.targetReleaseDate || 'No date'}</span>
+                    </div>
+                  )}
+
+                  {visibleColumns.estHours && (
+                    <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300 shrink-0 overflow-hidden px-2.5">
+                      {fEff.estimatedHours}h
+                    </div>
+                  )}
+
                   {visibleColumns.status && (
-                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 overflow-hidden">
+                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 shrink-0 overflow-hidden px-2.5">
                       <span>{completionPercent}% done</span>
                     </div>
                   )}
 
                   {visibleColumns.itemType && (
-                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
                       <select
                         value="feature"
                         onChange={(e) => handleConvertItemType(e.target.value as any, { id: feature.id, type: 'feature' })}
@@ -2042,13 +2058,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   )}
 
                   {visibleColumns.cost && (
-                    <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                    <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
                       ${featureCost.toLocaleString()}
                     </div>
                   )}
 
                   {visibleColumns.priority && (
-                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
                       <Flag className={`w-3.5 h-3.5 ${
                         feature.priority === 'urgent' ? 'text-rose-500' :
                         feature.priority === 'high' ? 'text-amber-500' :
@@ -2057,33 +2073,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     </div>
                   )}
 
-                  {visibleColumns.actions && (
-                    <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
-                      <button
-                        onClick={() => {
-                          setActiveInlineFeatureId(feature.id);
-                          if (!isFExpanded) toggleNode(feature.id);
-                        }}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-[11px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
-                        title="Add Task to this Feature"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Task</span>
-                      </button>
-                      <button
-                        onClick={() => openEditModal(feature)}
-                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                        title="Edit Feature"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => deleteFeature(feature.id)}
-                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                        title="Delete Feature"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                  {visibleColumns.tags && (
+                    <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
+                      —
                     </div>
                   )}
                 </div>
@@ -2182,7 +2174,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               <div className="flex items-center justify-between py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider bg-slate-100/80 dark:bg-slate-900/90 rounded-t-2xl relative select-none">
                 <div
                   style={{ width: columnWidths.name }}
-                  className="flex-1 shrink-0 flex items-center justify-between pr-4 gap-2 relative group/col min-w-0"
+                  className="shrink-0 flex items-center justify-between pr-4 gap-2 relative group/col min-w-0"
                 >
                   <span className="whitespace-nowrap font-bold text-slate-700 dark:text-slate-300">Name & WBS Hierarchy</span>
                   <div
@@ -2192,15 +2184,15 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                     title="Drag to resize Name column (Double-click to reset)"
                   >
-                    <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                    <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                   </div>
                 </div>
 
-                <div className="flex items-center shrink-0 font-semibold gap-2">
+                <div className="flex items-center shrink-0 font-semibold">
                   {visibleColumns.assignee && (
                     <div
                       style={{ width: columnWidths.assignee }}
-                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
                       <span>Assignee</span>
                       <div
@@ -2210,7 +2202,25 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                         title="Drag to resize Assignee column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.startDate && (
+                    <div
+                      style={{ width: columnWidths.startDate }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
+                    >
+                      <span>Start Date</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'startDate')}
+                        onTouchStart={(e) => handleStartResize(e, 'startDate')}
+                        onDoubleClick={() => handleResetColumnWidth('startDate')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Start Date column"
+                      >
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
@@ -2218,17 +2228,35 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   {visibleColumns.dueDate && (
                     <div
                       style={{ width: columnWidths.dueDate }}
-                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
-                      <span>Due date</span>
+                      <span>Due Date</span>
                       <div
                         onMouseDown={(e) => handleStartResize(e, 'dueDate')}
                         onTouchStart={(e) => handleStartResize(e, 'dueDate')}
                         onDoubleClick={() => handleResetColumnWidth('dueDate')}
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
-                        title="Drag to resize Due date column"
+                        title="Drag to resize Due Date column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
+                      </div>
+                    </div>
+                  )}
+
+                  {visibleColumns.estHours && (
+                    <div
+                      style={{ width: columnWidths.estHours }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center justify-start group/col px-2.5"
+                    >
+                      <span>Est. Hours</span>
+                      <div
+                        onMouseDown={(e) => handleStartResize(e, 'estHours')}
+                        onTouchStart={(e) => handleStartResize(e, 'estHours')}
+                        onDoubleClick={() => handleResetColumnWidth('estHours')}
+                        className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
+                        title="Drag to resize Est. Hours column"
+                      >
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
@@ -2236,7 +2264,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   {visibleColumns.status && (
                     <div
                       style={{ width: columnWidths.status }}
-                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
                       <span>Status</span>
                       <div
@@ -2246,7 +2274,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                         title="Drag to resize Status column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
@@ -2254,7 +2282,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   {visibleColumns.itemType && (
                     <div
                       style={{ width: columnWidths.itemType }}
-                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
                       <span>Item Type</span>
                       <div
@@ -2264,7 +2292,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                         title="Drag to resize Item Type column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
@@ -2272,7 +2300,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   {visibleColumns.cost && (
                     <div
                       style={{ width: columnWidths.cost }}
-                      className="relative text-right whitespace-nowrap shrink-0 flex items-center justify-end group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center justify-start group/col px-2.5"
                     >
                       <span>Cost</span>
                       <div
@@ -2282,7 +2310,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                         title="Drag to resize Cost column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
@@ -2290,7 +2318,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   {visibleColumns.priority && (
                     <div
                       style={{ width: columnWidths.priority }}
-                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col pr-2"
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
                       <span>Priority</span>
                       <div
@@ -2300,28 +2328,30 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
                         title="Drag to resize Priority column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
 
-                  {visibleColumns.actions && (
+                  {visibleColumns.tags && (
                     <div
-                      style={{ width: columnWidths.actions }}
-                      className="relative text-right pr-2 whitespace-nowrap shrink-0 flex items-center justify-end group/col"
+                      style={{ width: columnWidths.tags }}
+                      className="relative text-left whitespace-nowrap shrink-0 flex items-center group/col px-2.5"
                     >
-                      <span>Actions</span>
+                      <span>Tags</span>
                       <div
-                        onMouseDown={(e) => handleStartResize(e, 'actions')}
-                        onTouchStart={(e) => handleStartResize(e, 'actions')}
-                        onDoubleClick={() => handleResetColumnWidth('actions')}
+                        onMouseDown={(e) => handleStartResize(e, 'tags')}
+                        onTouchStart={(e) => handleStartResize(e, 'tags')}
+                        onDoubleClick={() => handleResetColumnWidth('tags')}
                         className="absolute -right-2 top-0 bottom-0 w-4 cursor-col-resize hover:bg-indigo-500/30 active:bg-indigo-600/50 z-20 flex items-center justify-center group/handle transition-colors"
-                        title="Drag to resize Actions column"
+                        title="Drag to resize Tags column"
                       >
-                        <div className="w-0.5 h-3.5 bg-slate-400/40 group-hover/handle:bg-indigo-400 rounded-full" />
+                        <div className="w-0.5 h-3.5 opacity-0 group-hover/col:opacity-100 group-hover/handle:opacity-100 bg-slate-400/60 dark:bg-slate-500 group-hover/handle:bg-indigo-400 rounded-full transition-opacity" />
                       </div>
                     </div>
                   )}
+
+
                 </div>
               </div>
 
@@ -2339,8 +2369,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 return (
                   <div key={milestone.id} className="bg-amber-500/5 dark:bg-amber-950/20">
                     {/* Milestone Header Row */}
-                    <div className="flex items-center justify-between py-2.5 px-3 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0">
-                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0">
+                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
                         <button
                           onClick={() => toggleNode(milestone.id)}
                           className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors shrink-0"
@@ -2375,31 +2405,51 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           >
                             <Edit2 className="w-3 h-3" />
                           </button>
+                          <button
+                            onClick={() => deleteMilestone(milestone.id)}
+                            className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                            title="Delete Milestone"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0 text-xs">
+                      <div className="flex items-center shrink-0 text-xs">
                         {visibleColumns.assignee && (
-                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                             {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
                           </div>
                         )}
 
-                        {visibleColumns.dueDate && (
-                          <div style={{ width: columnWidths.dueDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                        {visibleColumns.startDate && (
+                          <div style={{ width: columnWidths.startDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
                             <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                             <span className="truncate">{milestone.dueDate || 'No date'}</span>
                           </div>
                         )}
 
+                        {visibleColumns.dueDate && (
+                          <div style={{ width: columnWidths.dueDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                            <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            <span className="truncate">{milestone.dueDate || 'No date'}</span>
+                          </div>
+                        )}
+
+                        {visibleColumns.estHours && (
+                          <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-300 shrink-0 overflow-hidden px-2.5">
+                            {mEff.estimatedHours}h
+                          </div>
+                        )}
+
                         {visibleColumns.status && (
-                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 overflow-hidden">
+                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 overflow-hidden px-2.5">
                             <span>{mPercent}% done</span>
                           </div>
                         )}
 
                         {visibleColumns.itemType && (
-                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
                             <select
                               value="milestone"
                               onChange={(e) => handleConvertItemType(e.target.value as any, { id: milestone.id, type: 'milestone' })}
@@ -2416,52 +2466,20 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         )}
 
                         {visibleColumns.cost && (
-                          <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                          <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
                             ${mCost.toLocaleString()}
                           </div>
                         )}
 
                         {visibleColumns.priority && (
-                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
                           </div>
                         )}
 
-                        {visibleColumns.actions && (
-                          <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
-                            <button
-                              onClick={() => openCreateModal('epic', milestone.id)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-500/15 hover:bg-purple-600 text-purple-700 dark:text-purple-300 hover:text-white text-[11px] font-bold border border-purple-500/30 transition-all shrink-0"
-                              title="Add Epic under this Milestone"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Epic</span>
-                            </button>
-
-                            <button
-                              onClick={() => openCreateModal('feature', milestone.id)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                              title="Add Feature under this Milestone"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Feature</span>
-                            </button>
-
-                            <button
-                              onClick={() => openEditModal(milestone)}
-                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                              title="Edit Milestone"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-
-                            <button
-                              onClick={() => deleteMilestone(milestone.id)}
-                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                              title="Delete Milestone"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                        {visibleColumns.tags && (
+                          <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
+                            —
                           </div>
                         )}
                       </div>
@@ -2477,10 +2495,10 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
 
                           return (
-                            <div key={epic.id} className="pl-3 bg-purple-500/5 dark:bg-purple-950/10">
+                            <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
                               {/* Epic Header Row */}
-                              <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
-                                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+                              <div className="flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
+                                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 pl-4 min-w-0 overflow-hidden">
                                   <button
                                     onClick={() => toggleNode(epic.id)}
                                     className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0"
@@ -2515,25 +2533,45 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                     >
                                       <Edit2 className="w-3 h-3" />
                                     </button>
+                                    <button
+                                      onClick={() => deleteEpic(epic.id)}
+                                      className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                                      title="Delete Epic"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 shrink-0 text-xs">
+                                <div className="flex items-center shrink-0 text-xs">
                                   {visibleColumns.assignee && (
-                                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                                       {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
                                     </div>
                                   )}
 
-                                  {visibleColumns.dueDate && (
-                                    <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                                  {visibleColumns.startDate && (
+                                    <div style={{ width: columnWidths.startDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
                                       <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                                       <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
                                     </div>
                                   )}
 
+                                  {visibleColumns.dueDate && (
+                                    <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                      <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                      <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                                    </div>
+                                  )}
+
+                                  {visibleColumns.estHours && (
+                                    <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-300 shrink-0 overflow-hidden px-2.5">
+                                      {getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages).estimatedHours}h
+                                    </div>
+                                  )}
+
                                   {visibleColumns.status && (
-                                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden">
+                                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
                                       {(() => {
                                         const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
                                         return <span>{eEff.completionPercent}% done</span>;
@@ -2542,7 +2580,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   )}
 
                                   {visibleColumns.itemType && (
-                                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
                                       <select
                                         value="epic"
                                         onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
@@ -2559,7 +2597,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   )}
 
                                   {visibleColumns.cost && (
-                                    <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                                    <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
                                       {(() => {
                                         const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
                                         return `$${eEff.plannedCost.toLocaleString()}`;
@@ -2568,35 +2606,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   )}
 
                                   {visibleColumns.priority && (
-                                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
                                       <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
                                     </div>
                                   )}
 
-                                  {visibleColumns.actions && (
-                                    <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
-                                      <button
-                                        onClick={() => openCreateModal('feature', milestone.id, epic.id)}
-                                        className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                                        title="Add Feature under this Epic"
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                        <span>Feature</span>
-                                      </button>
-                                      <button
-                                        onClick={() => openEditModal(epic)}
-                                        className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                                        title="Edit Epic"
-                                      >
-                                        <Edit2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => deleteEpic(epic.id)}
-                                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                                        title="Delete Epic"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
+                                  {visibleColumns.tags && (
+                                    <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
+                                      —
                                     </div>
                                   )}
                                 </div>
@@ -2632,29 +2649,60 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
                 return (
                   <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
-                    <div className="flex items-center justify-between py-2 px-3 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
-                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+                    <div className="flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
+                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
                         <button onClick={() => toggleNode(epic.id)} className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0">
                           {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                         </button>
                         <Layers className="w-4 h-4 text-purple-500 shrink-0" />
                         <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">E{eIdx + 1}</span>
-                        <span className="font-bold text-xs text-slate-900 dark:text-purple-200 truncate">{epic.title}</span>
+                        <span
+                          onClick={() => openEditModal(epic)}
+                          className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                          title="Click to view/edit Epic screen"
+                        >
+                          {epic.title}
+                        </span>
+
+                        {/* Hover Quick Actions */}
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                          <button
+                            onClick={() => openCreateModal('feature', undefined, epic.id)}
+                            className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                            title="Add Feature"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => openEditModal(epic)}
+                            className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                            title="Open Epic Screen"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </button>
+                          <button
+                            onClick={() => deleteEpic(epic.id)}
+                            className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                            title="Delete Epic"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0 text-xs">
+                      <div className="flex items-center shrink-0 text-xs">
                         {visibleColumns.assignee && (
-                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                             {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
                           </div>
                         )}
                         {visibleColumns.dueDate && (
-                          <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+                          <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
                             <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
                             <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
                           </div>
                         )}
                         {visibleColumns.status && (
-                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden">
+                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
                             {(() => {
                               const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
                               return <span>{eEff.completionPercent}% done</span>;
@@ -2662,7 +2710,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           </div>
                         )}
                         {visibleColumns.itemType && (
-                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
                             <select
                               value="epic"
                               onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
@@ -2678,7 +2726,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           </div>
                         )}
                         {visibleColumns.cost && (
-                          <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden pr-2">
+                          <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
                             {(() => {
                               const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
                               return `$${eEff.plannedCost.toLocaleString()}`;
@@ -2686,34 +2734,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           </div>
                         )}
                         {visibleColumns.priority && (
-                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                          </div>
-                        )}
-                        {visibleColumns.actions && (
-                          <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
-                            <button
-                              onClick={() => openCreateModal('feature', '', epic.id)}
-                              className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-500/15 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white text-[11px] font-bold border border-blue-500/30 transition-all shrink-0"
-                              title="Add Feature under this Epic"
-                            >
-                              <Plus className="w-3 h-3" />
-                              <span>Feature</span>
-                            </button>
-                            <button
-                              onClick={() => openEditModal(epic)}
-                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                              title="Edit Epic"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => deleteEpic(epic.id)}
-                              className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                              title="Delete Epic"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         )}
                       </div>
@@ -2982,10 +3004,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       type="number"
                       min={0}
                       max={100}
-                      value={tempPercentages[item.key] ?? item.defaultVal}
+                      value={tempPercentages[item.key] !== undefined ? tempPercentages[item.key] : item.defaultVal}
                       onChange={(e) => {
-                        const val = Math.min(100, Math.max(0, Number(e.target.value)));
-                        setTempPercentages(prev => ({ ...prev, [item.key]: val }));
+                        const rawVal = e.target.value;
+                        if (rawVal === '') {
+                          setTempPercentages(prev => ({ ...prev, [item.key]: '' }));
+                        } else {
+                          const num = parseInt(rawVal, 10);
+                          if (!isNaN(num)) {
+                            const clamped = Math.min(100, Math.max(0, num));
+                            setTempPercentages(prev => ({ ...prev, [item.key]: clamped }));
+                          }
+                        }
                       }}
                       className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 font-mono text-center outline-none focus:border-indigo-500"
                     />
@@ -3006,7 +3036,25 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               <button
                 type="button"
                 onClick={async () => {
-                  await updateStatusPercentages(tempPercentages);
+                  const finalPercentages: Record<string, number> = {};
+                  [
+                    { key: 'todo', defaultVal: 0 },
+                    { key: 'in_progress', defaultVal: 40 },
+                    { key: 'demoable', defaultVal: 80 },
+                    { key: 'review', defaultVal: 80 },
+                    { key: 'on_hold', defaultVal: 0 },
+                    { key: 'blocked', defaultVal: 50 },
+                    { key: 'done', defaultVal: 100 },
+                  ].forEach(item => {
+                    const val = tempPercentages[item.key];
+                    if (val === '' || val === undefined || val === null || isNaN(Number(val))) {
+                      finalPercentages[item.key] = item.defaultVal;
+                    } else {
+                      finalPercentages[item.key] = Math.min(100, Math.max(0, Number(val)));
+                    }
+                  });
+
+                  await updateStatusPercentages(finalPercentages);
                   setShowStatusConfigModal(false);
                   showNotice('Status completion percentages updated successfully!');
                 }}
@@ -3027,7 +3075,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     const subtasks = getSubtasksForTask(task.id);
     const predecessors = getTaskPredecessors(task, projectData.tasks);
     const isDragTarget = dragOverTargetId === task.id;
-    const taskEff = getTaskEffectiveValues(task, subtasks, projectData.stakeholders);
+    const taskEff = getTaskEffectiveValues(task, subtasks, projectData.stakeholders, projectData.statusPercentages);
 
     return (
       <div
@@ -3040,11 +3088,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         <div
           draggable={true}
           onDragStart={(e) => handleDragStart(e, 'task', task.id)}
-          className={`flex items-center justify-between py-2 px-3.5 pl-10 border-b border-slate-200/80 dark:border-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/40 transition-colors group ${
+          className={`flex items-center justify-between py-2 px-4 border-b border-slate-200/80 dark:border-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/40 transition-colors group ${
             isDragTarget ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-400' : ''
           }`}
         >
-          <div style={{ width: columnWidths.name }} className="flex items-center gap-2 flex-1 shrink-0 pr-4 min-w-0 overflow-hidden">
+          <div style={{ width: columnWidths.name }} className="flex items-center gap-2 shrink-0 pr-4 pl-8 min-w-0 overflow-hidden">
             {/* Grip handle on hover */}
             <div
               className="text-slate-400 hover:text-indigo-500 dark:text-slate-600 dark:hover:text-indigo-400 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
@@ -3077,129 +3125,154 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             </button>
 
             {/* Task Title & Code */}
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 shrink-0">
-                {code}
-              </span>
-              <span
-                onClick={() => onOpenTaskModal(task)}
-                className={`text-xs font-medium text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer truncate ${
-                  task.status === 'done' ? 'line-through text-slate-400 dark:text-slate-500' : ''
-                }`}
-                title="Click to open ClickUp Task Screen"
-              >
-                {task.title}
-              </span>
-
-              {/* ClickUp Hover Quick Actions inline next to Title */}
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveInlineTaskId(task.id);
-                    if (!isExpanded) toggleNode(task.id);
-                  }}
-                  className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
-                  title="Add Subtask"
+            <div className="flex items-center justify-between gap-2 min-w-0 flex-1 overflow-hidden">
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 shrink-0 font-semibold">
+                  {code}
+                </span>
+                <span
+                  onClick={() => onOpenTaskModal(task)}
+                  className={`text-xs font-semibold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer min-w-0 flex-1 truncate ${
+                    task.status === 'done' ? 'line-through text-slate-400 dark:text-slate-500' : ''
+                  }`}
+                  title={`${task.title} (Click to open details)`}
                 >
-                  <Plus className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenTaskModal(task);
-                  }}
-                  className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
-                  title="Open ClickUp Task Detail View"
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteTask(task.id);
-                  }}
-                  className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
-                  title="Delete Task"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                  {task.title}
+                </span>
               </div>
 
-              {task.type === 'bug' && (
-                <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0">
-                  <Bug className="w-3 h-3 text-rose-400" />
-                  <span>Bug</span>
-                </span>
-              )}
+              {/* Badges & Actions group */}
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                {task.type === 'bug' && (
+                  <span className="bg-rose-500/10 text-rose-400 border border-rose-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0">
+                    <Bug className="w-3 h-3 text-rose-400 shrink-0" />
+                    <span>Bug</span>
+                  </span>
+                )}
 
-              {task.sprintId && (
-                <span
-                  className="bg-purple-500/10 text-purple-300 border border-purple-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20"
-                  title="Sprint assignment. Click to manage sprint."
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const sp = (projectData.sprints || []).find(s => s.id === task.sprintId);
-                    if (sp) {
-                      setEditingSprint(sp);
-                      setIsSprintModalOpen(true);
-                    }
-                  }}
-                >
-                  <Layers className="w-3 h-3 text-purple-400" />
-                  <span>{(projectData.sprints || []).find(s => s.id === task.sprintId)?.name || 'Sprint'}</span>
-                </span>
-              )}
+                {task.sprintId && (() => {
+                  const sp = (projectData.sprints || []).find(s => s.id === task.sprintId);
+                  const spName = sp?.name || 'Sprint';
+                  return (
+                    <span
+                      className="bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 font-medium px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 max-w-[110px] cursor-pointer hover:bg-purple-500/20 transition-colors"
+                      title={`Sprint: ${spName} (Click to manage)`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (sp) {
+                          setEditingSprint(sp);
+                          setIsSprintModalOpen(true);
+                        }
+                      }}
+                    >
+                      <Layers className="w-3 h-3 text-purple-400 shrink-0" />
+                      <span className="truncate">{spName}</span>
+                    </span>
+                  );
+                })()}
 
-              {task.linkedBugIds && task.linkedBugIds.length > 0 && (
-                <span
-                  className="bg-purple-500/10 text-purple-300 border border-purple-500/30 font-semibold px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20"
-                  title={`${task.linkedBugIds.length} linked bug(s)`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onOpenTaskModal(task);
-                  }}
-                >
-                  <Bug className="w-3 h-3 text-purple-400" />
-                  <span>{task.linkedBugIds.length} linked bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
-                </span>
-              )}
+                {task.linkedBugIds && task.linkedBugIds.length > 0 && (
+                  <span
+                    className="bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 font-medium px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                    title={`${task.linkedBugIds.length} linked bug(s)`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTaskModal(task);
+                    }}
+                  >
+                    <Bug className="w-3 h-3 text-purple-400 shrink-0" />
+                    <span>{task.linkedBugIds.length}</span>
+                  </span>
+                )}
 
-              {subtasks.length > 0 && (
-                <button
-                  onClick={() => toggleNode(task.id)}
-                  className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono hover:underline shrink-0"
-                >
-                  ({subtasks.filter(st => st.completed).length}/{subtasks.length} subtasks)
-                </button>
-              )}
+                {subtasks.length > 0 && (
+                  <button
+                    onClick={() => toggleNode(task.id)}
+                    className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono hover:underline shrink-0 bg-indigo-50 dark:bg-indigo-950/60 px-1 py-0.5 rounded border border-indigo-200 dark:border-indigo-800/50"
+                    title="Toggle subtasks view"
+                  >
+                    {subtasks.filter(st => st.completed).length}/{subtasks.length}
+                  </button>
+                )}
 
-              {predecessors.some(p => p.hasConflict) && (
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" title="Schedule conflict" />
-              )}
+                {predecessors.some(p => p.hasConflict) && (
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" title="Schedule conflict" />
+                )}
+
+                {/* Hover Quick Actions */}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveInlineTaskId(task.id);
+                      if (!isExpanded) toggleNode(task.id);
+                    }}
+                    className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                    title="Add Subtask"
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTaskModal(task);
+                    }}
+                    className="p-0.5 text-slate-500 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950 rounded transition-colors"
+                    title="Open Task Details"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteTask(task.id);
+                    }}
+                    className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                    title="Delete Task"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Right Aligned Columns */}
-          <div className="flex items-center gap-2 shrink-0 text-xs">
+          <div className="flex items-center shrink-0 text-xs">
             {/* Assignees Avatars */}
             {visibleColumns.assignee && (
-              <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden">
+              <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                 {renderAssigneeAvatars(getTaskAllAssigneeIds(task, projectData.subtasks))}
+              </div>
+            )}
+
+            {/* Start Date */}
+            {visibleColumns.startDate && (
+              <div style={{ width: columnWidths.startDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                <span className="truncate">{task.startDate ? task.startDate : 'No date'}</span>
               </div>
             )}
 
             {/* Due date */}
             {visibleColumns.dueDate && (
-              <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden">
+              <div style={{ width: columnWidths.dueDate }} className="text-slate-600 dark:text-slate-400 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
                 <Calendar className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
                 <span className="truncate">{task.dueDate ? task.dueDate : 'No date'}</span>
               </div>
             )}
 
+            {/* Est. Hours */}
+            {visibleColumns.estHours && (
+              <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] text-slate-600 dark:text-slate-300 shrink-0 overflow-hidden px-2.5">
+                <span className="font-semibold block truncate">{taskEff.estimatedHours}h</span>
+                <span className="text-[10px] text-slate-400 block truncate">{taskEff.actualHours}h act</span>
+              </div>
+            )}
+
             {/* Direct Status Selector Dropdown */}
             {visibleColumns.status && (
-              <div style={{ width: columnWidths.status }} className="flex items-center justify-start shrink-0 overflow-hidden">
+              <div style={{ width: columnWidths.status }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
                 <select
                   value={task.status}
                   onChange={(e) => {
@@ -3238,7 +3311,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
             {/* Item Type Dropdown before Priority */}
             {visibleColumns.itemType && (
-              <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0">
+              <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
                 <select
                   value="task"
                   onChange={(e) => handleConvertItemType(e.target.value as any, { id: task.id, type: 'task' })}
@@ -3256,7 +3329,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
             {/* Task Planned & Actual Cost (AC) */}
             {visibleColumns.cost && (
-              <div style={{ width: columnWidths.cost }} className="text-right font-mono text-[11px] shrink-0 overflow-hidden pr-2">
+              <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] shrink-0 overflow-hidden px-2.5">
                 <span className="text-emerald-400 font-semibold block truncate" title="Planned Cost">
                   ${taskEff.plannedCost.toLocaleString()}
                 </span>
@@ -3268,7 +3341,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
             {/* Priority flag */}
             {visibleColumns.priority && (
-              <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0">
+              <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
                 <button
                   onClick={() => {
                     const priorities: Priority[] = ['low', 'normal', 'high', 'urgent'];
@@ -3289,35 +3362,17 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               </div>
             )}
 
-            {/* Quick Actions & Add Subtask */}
-            {visibleColumns.actions && (
-              <div style={{ width: columnWidths.actions }} className="flex items-center justify-end gap-1 shrink-0 pr-2">
-                <button
-                  onClick={() => {
-                    setActiveInlineTaskId(task.id);
-                    if (!isExpanded) toggleNode(task.id);
-                  }}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white text-[11px] font-bold border border-indigo-200 dark:border-indigo-500/30 transition-all shrink-0 shadow-2xs"
-                  title="Add Subtask"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Subtask</span>
-                </button>
-
-                <button
-                  onClick={() => onOpenTaskModal(task)}
-                  className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                  title="Edit Task Specs"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => deleteTask(task.id)}
-                  className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                  title="Delete Task"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+            {/* Tags */}
+            {visibleColumns.tags && (
+              <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5 gap-1">
+                {task.tags && task.tags.length > 0 ? (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 truncate" title={task.tags.join(', ')}>
+                    {task.tags[0]}
+                    {task.tags.length > 1 && ` +${task.tags.length - 1}`}
+                  </span>
+                ) : (
+                  <span className="text-slate-500 text-[11px]">—</span>
+                )}
               </div>
             )}
           </div>

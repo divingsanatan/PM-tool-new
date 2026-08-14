@@ -140,7 +140,7 @@ export const RaciTagCell: React.FC<RaciTagCellProps> = ({
       {isOpen && task && (
         <div
           ref={popoverRef}
-          className="absolute left-0 top-full mt-1.5 z-40 w-72 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-3 space-y-2 text-xs"
+          className="absolute left-0 top-full mt-1.5 z-40 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-xl p-3 space-y-2 text-xs"
         >
           <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
             <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-slate-100">

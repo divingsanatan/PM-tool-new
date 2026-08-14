@@ -189,16 +189,18 @@ export function getTaskEffectiveValues(
 
     let completionPercent = 0;
     if (task.status === 'done') {
-      completionPercent = 100;
+      completionPercent = getStatusProgress('done', statusPercentages);
     } else if (task.status === 'todo') {
-      completionPercent = 0;
+      completionPercent = getStatusProgress('todo', statusPercentages);
     } else {
-      completionPercent = Math.round((completedCount / taskSubtasks.length) * 100);
+      const subtaskPct = Math.round((completedCount / taskSubtasks.length) * 100);
+      const statusPct = getStatusProgress(task.status, statusPercentages);
+      completionPercent = Math.max(subtaskPct, statusPct);
     }
 
     return {
-      estimatedHours: totalEstHours,
-      actualHours: totalActHours,
+      estimatedHours: Math.round(totalEstHours * 100) / 100,
+      actualHours: Math.round(totalActHours * 100) / 100,
       plannedCost: Math.round(totalPlannedCost),
       actualCost: Math.round(totalActualCost),
       completionPercent,
@@ -216,8 +218,8 @@ export function getTaskEffectiveValues(
     const completionPercent = getStatusProgress(task.status, statusPercentages);
 
     return {
-      estimatedHours: estH,
-      actualHours: actH,
+      estimatedHours: Math.round(estH * 100) / 100,
+      actualHours: Math.round(actH * 100) / 100,
       plannedCost,
       actualCost,
       completionPercent,
@@ -325,8 +327,8 @@ export function getEpicEffectiveValues(
   return {
     taskCount: epicTasks.length,
     totalTasks: epicTasks.length,
-    estimatedHours: totalEstHours,
-    actualHours: totalActHours,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
     plannedCost: totalPlannedCost,
     actualCost: totalActualCost,
     completionPercent: completion,
@@ -368,8 +370,8 @@ export function getFeatureEffectiveValues(
   return {
     taskCount: featureTasks.length,
     totalTasks: featureTasks.length,
-    estimatedHours: totalEstHours,
-    actualHours: totalActHours,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
     plannedCost: totalPlannedCost,
     actualCost: totalActualCost,
     completionPercent: completion,
@@ -422,8 +424,8 @@ export function getMilestoneEffectiveValues(
   return {
     taskCount: milestoneTasks.length,
     totalTasks: milestoneTasks.length,
-    estimatedHours: totalEstHours,
-    actualHours: totalActHours,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
     plannedCost: totalPlannedCost,
     actualCost: totalActualCost,
     completionPercent: completion,
@@ -465,8 +467,8 @@ export function getProjectEffectiveValues(
   return {
     totalTasks: tasks.length,
     completedTasksCount,
-    estimatedHours: totalEstHours,
-    actualHours: totalActHours,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
     plannedCost: totalPlannedCost,
     actualCost: totalActualCost,
     completionPercent: completion,
@@ -480,11 +482,12 @@ export function getProjectEffectiveValues(
 export function calculateWbsTotalBudget(
   tasks: Task[],
   subtasks: Subtask[] = [],
-  stakeholders: Stakeholder[] = []
+  stakeholders: Stakeholder[] = [],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
 ): number {
   if (!tasks || tasks.length === 0) return 0;
   return tasks.reduce((sum, task) => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders);
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
     return sum + eff.plannedCost;
   }, 0);
 }

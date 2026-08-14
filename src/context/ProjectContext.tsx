@@ -3,7 +3,7 @@ import localforage from 'localforage';
 import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, Sprint, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
 import { initialProjectData, defaultProjectsMap } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
-import { getTaskEffectiveValues, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate, calculateSprintDates } from '../utils/taskCalculations';
+import { getTaskEffectiveValues, getStatusProgress, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate, calculateSprintDates } from '../utils/taskCalculations';
 
 function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
   if (!data) return data;
@@ -1053,13 +1053,20 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const eff = getTaskEffectiveValues(tempTask, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
 
+    const statusChanged = existingTask && tempTask.status !== existingTask.status;
+
+    let resolvedCompletionPercent = eff.completionPercent;
+    if (!statusChanged && task.completionPercent !== undefined && task.completionPercent !== existingTask?.completionPercent) {
+      resolvedCompletionPercent = task.completionPercent;
+    }
+
     const newTask: Task = {
       ...tempTask,
       estimatedHours: eff.hasSubtasks ? eff.estimatedHours : tempTask.estimatedHours,
       actualHours: eff.hasSubtasks ? eff.actualHours : tempTask.actualHours,
       plannedCost: eff.plannedCost,
       actualCost: eff.actualCost,
-      completionPercent: task.completionPercent !== undefined ? task.completionPercent : eff.completionPercent
+      completionPercent: resolvedCompletionPercent
     };
 
     const existingIdx = projectData.tasks.findIndex(t => t.id === newTask.id);
@@ -1674,13 +1681,23 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const updateStatusPercentages = async (percentages: Record<string, number>) => {
-    const newPercentages = { ...DEFAULT_STATUS_PERCENTAGES, ...percentages };
+    const newPercentages: Record<TaskStatus, number> = { ...DEFAULT_STATUS_PERCENTAGES };
+    (Object.keys(DEFAULT_STATUS_PERCENTAGES) as TaskStatus[]).forEach(status => {
+      if (percentages[status] !== undefined && percentages[status] !== null) {
+        const val = Number(percentages[status]);
+        if (!isNaN(val)) {
+          newPercentages[status] = Math.min(100, Math.max(0, val));
+        }
+      }
+    });
+
     const updatedTasks = projectData.tasks.map(task => {
-      const newPct = newPercentages[task.status as TaskStatus] ?? task.completionPercent;
+      const newPct = getStatusProgress(task.status, newPercentages);
       return { ...task, completionPercent: newPct };
     });
+
     await updateProjectDetails({
-      statusPercentages: newPercentages as Record<TaskStatus, number>,
+      statusPercentages: newPercentages,
       tasks: updatedTasks
     });
     addAuditNote('Status Percentages Updated', 'Project Manager updated task completion thresholds.', 'wbs');
