@@ -830,13 +830,19 @@ export function calculateCrossProjectPMPerformance(
 ): CrossProjectPMPerformance[] {
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Identify all PMs in the organization
+  // 1. Identify all PMs in the organization (strictly exclude Admin users)
+  const adminEmails = new Set(
+    allUsers.filter(u => u.role === 'admin').map(u => u.email.toLowerCase())
+  );
+  adminEmails.add('admin@apex.io');
+  adminEmails.add('sarah.c@apex.io');
+
   const pmUsersList: UserProfile[] = [];
   const seenIds = new Set<string>();
 
-  // Add users with PM or Admin role
+  // Add only users with explicit PM role (never Admin)
   allUsers.forEach(u => {
-    if ((u.role === 'pm' || u.role === 'admin') && !seenIds.has(u.id)) {
+    if (u.role === 'pm' && !seenIds.has(u.id) && !adminEmails.has(u.email.toLowerCase())) {
       seenIds.add(u.id);
       pmUsersList.push(u);
     }
@@ -845,9 +851,14 @@ export function calculateCrossProjectPMPerformance(
   // Also scan project stakeholders for any PM roles if not in allUsers
   projects.forEach(p => {
     (p.stakeholders || []).forEach(sh => {
+      const emailLower = (sh.email || '').toLowerCase();
+      if (adminEmails.has(emailLower) || sh.id === 'sh-admin' || (sh.role || '').toLowerCase().includes('admin')) {
+        return;
+      }
+
       const isPMRole = sh.role.toLowerCase().includes('project manager') ||
         sh.role.toLowerCase().includes('scrum master') ||
-        sh.role.toLowerCase().includes('pm') ||
+        sh.role.toLowerCase().includes('lead pm') ||
         sh.role.toLowerCase().includes('program director');
       if (isPMRole && !seenIds.has(sh.id)) {
         seenIds.add(sh.id);

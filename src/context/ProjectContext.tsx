@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import localforage from 'localforage';
 import {
   ProjectData,
@@ -45,6 +45,7 @@ import {
   INITIAL_LEAVES,
   DEFAULT_RATE_CARDS
 } from '../utils/portfolioAndLeaveUtils';
+import { queryClient, queryKeys } from '../lib/queryClient';
 
 export const ADMIN_STAKEHOLDER: Stakeholder = {
   id: "sh-admin",
@@ -295,6 +296,7 @@ interface ProjectContextType {
   pendingInvite: PendingInvite | null;
   acceptPendingInvite: (userOverride?: UserProfile) => Promise<void>;
   clearPendingInvite: () => void;
+  queryClient: typeof queryClient;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -514,6 +516,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
+  const clientIdRef = useRef<string>('c_' + Math.random().toString(36).slice(2, 9));
+  const localStorageDebounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   const broadcastLocalTabSync = useCallback((data: ProjectData, pList?: ProjectMeta[], activeId?: string) => {
     try {
       const channel = new BroadcastChannel('apex_pm_sync_channel');
@@ -521,7 +526,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         type: 'LOCAL_STATE_UPDATE',
         data,
         projects: pList || projectsList,
-        activeProjectId: activeId || activeProjectId
+        activeProjectId: activeId || activeProjectId,
+        senderClientId: clientIdRef.current
       });
       channel.close();
     } catch (e) {
@@ -649,27 +655,47 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const wsRef = useRef<WebSocket | null>(null);
+  const wsReconnectAttempts = useRef<number>(0);
+  const wsReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const localForageTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Sync state to local storage and localForage immediately on every change
+  // Sync state to local storage asynchronously and localForage with debounce
   useEffect(() => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projectData));
-      localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(projectsList));
       localStorage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId);
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
-      localStorage.setItem(USERS_LIST_KEY, JSON.stringify(allUsers));
       localStorage.setItem('apex_pm_is_authenticated', JSON.stringify(isAuthenticated));
-      localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(customAiConfig));
 
-      localforage.setItem(LOCAL_STORAGE_KEY, projectData).catch(() => {});
-      localforage.setItem(PROJECTS_LIST_KEY, projectsList).catch(() => {});
-      localforage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId).catch(() => {});
-      localforage.setItem(USER_STORAGE_KEY, currentUser).catch(() => {});
-      localforage.setItem(USERS_LIST_KEY, allUsers).catch(() => {});
-      localforage.setItem('apex_pm_is_authenticated', isAuthenticated).catch(() => {});
-      localforage.setItem(AI_CONFIG_STORAGE_KEY, customAiConfig).catch(() => {});
+      // Micro-debounce local storage serialization off the critical rendering path
+      if (localStorageDebounceTimerRef.current) {
+        clearTimeout(localStorageDebounceTimerRef.current);
+      }
+      localStorageDebounceTimerRef.current = setTimeout(() => {
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projectData));
+          localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(projectsList));
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
+          localStorage.setItem(USERS_LIST_KEY, JSON.stringify(allUsers));
+          localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(customAiConfig));
+        } catch (e) {
+          console.warn('Deferred localStorage save warning:', e);
+        }
+      }, 150);
+
+      // Debounce heavy async IndexedDB writes
+      if (localForageTimerRef.current) {
+        clearTimeout(localForageTimerRef.current);
+      }
+      localForageTimerRef.current = setTimeout(() => {
+        localforage.setItem(LOCAL_STORAGE_KEY, projectData).catch(() => {});
+        localforage.setItem(PROJECTS_LIST_KEY, projectsList).catch(() => {});
+        localforage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId).catch(() => {});
+        localforage.setItem(USER_STORAGE_KEY, currentUser).catch(() => {});
+        localforage.setItem(USERS_LIST_KEY, allUsers).catch(() => {});
+        localforage.setItem('apex_pm_is_authenticated', isAuthenticated).catch(() => {});
+        localforage.setItem(AI_CONFIG_STORAGE_KEY, customAiConfig).catch(() => {});
+      }, 400);
     } catch (e) {
-      console.error('Failed to save to localForage / localStorage:', e);
+      console.error('Failed to schedule local persistence:', e);
     }
   }, [projectData, projectsList, activeProjectId, currentUser, allUsers, isAuthenticated, customAiConfig]);
 
@@ -793,6 +819,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const channel = new BroadcastChannel('apex_pm_sync_channel');
     channel.onmessage = (event) => {
       if (event.data && event.data.type === 'LOCAL_STATE_UPDATE') {
+        if (event.data.senderClientId && event.data.senderClientId === clientIdRef.current) {
+          return;
+        }
         if (event.data.data) setProjectData(event.data.data);
         if (event.data.activeProjectId) setActiveProjectId(event.data.activeProjectId);
         if (event.data.projects) setProjectsList(event.data.projects);
@@ -803,8 +832,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  // Setup WebSocket connection for real-time synchronization
+  // Setup WebSocket connection for real-time synchronization with exponential backoff
   const connectWebSocket = useCallback(() => {
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
 
@@ -815,15 +847,39 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       socket.onopen = () => {
         setIsWsConnected(true);
         setIsOffline(false);
+        wsReconnectAttempts.current = 0;
       };
 
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          if (message.senderClientId && message.senderClientId === clientIdRef.current) {
+            // Avoid duplicate tree re-render for locally triggered updates
+            return;
+          }
           if (message.type === 'INIT_STATE' || message.type === 'DATA_UPDATED') {
-            if (message.data) setProjectData(message.data);
+            if (message.data) {
+              setProjectData(message.data);
+              queryClient.setQueryData(queryKeys.project('active'), {
+                activeProjectId: message.activeProjectId || message.data.id || 'proj-1',
+                data: message.data
+              });
+              if (message.data.id) {
+                queryClient.setQueryData(queryKeys.project(message.data.id), {
+                  activeProjectId: message.data.id,
+                  data: message.data
+                });
+              }
+            }
             if (message.activeProjectId) setActiveProjectId(message.activeProjectId);
-            if (message.projects) setProjectsList(message.projects);
+            if (message.projects) {
+              setProjectsList(message.projects);
+              queryClient.setQueryData(queryKeys.projectsList, {
+                activeProjectId: message.activeProjectId || 'proj-1',
+                projects: message.projects
+              });
+            }
+            queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
           }
         } catch (err) {
           console.error('Error parsing WS message:', err);
@@ -832,11 +888,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       socket.onclose = () => {
         setIsWsConnected(false);
-        setTimeout(() => {
+        if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
+        const delay = Math.min(15000, 2000 * Math.pow(1.5, wsReconnectAttempts.current));
+        wsReconnectAttempts.current += 1;
+        wsReconnectTimerRef.current = setTimeout(() => {
           if (navigator.onLine) {
             connectWebSocket();
           }
-        }, 3000);
+        }, delay);
       };
 
       socket.onerror = () => {
@@ -852,11 +911,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
+      wsReconnectAttempts.current = 0;
       connectWebSocket();
     };
     const handleOffline = () => {
       setIsOffline(true);
       setIsWsConnected(false);
+      if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
     };
 
     window.addEventListener('online', handleOnline);
@@ -867,19 +928,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
+      if (localForageTimerRef.current) clearTimeout(localForageTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
   }, [connectWebSocket]);
 
-  // Initial fetch from REST API with local persistence preference
+  // Initial fetch from REST API with local persistence preference and TanStack Query cache priming
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
       .then(res => {
         if (res.success && res.projects) {
           setProjectsList(res.projects);
+          queryClient.setQueryData(queryKeys.projectsList, {
+            activeProjectId: res.activeProjectId || 'proj-1',
+            projects: res.projects
+          });
           if (res.activeProjectId && !localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
             setActiveProjectId(res.activeProjectId);
           }
@@ -891,6 +958,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       .then(res => res.json())
       .then(res => {
         if (res.success && res.data) {
+          queryClient.setQueryData(queryKeys.project('active'), {
+            activeProjectId: res.activeProjectId || res.data.id || 'proj-1',
+            data: res.data
+          });
           const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
           if (!cached) {
             setProjectData(res.data);
@@ -916,13 +987,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
   }, []);
 
-  // Calculated EVM Metrics
-  const metrics = calculateEVMMetrics(
+  // Calculated EVM Metrics (Memoized for high-performance rendering)
+  const metrics = useMemo(() => calculateEVMMetrics(
     projectData.tasks,
     projectData.budget,
     projectData.subtasks,
     projectData.stakeholders
-  );
+  ), [projectData.tasks, projectData.budget, projectData.subtasks, projectData.stakeholders]);
 
   // Switch Active Project
   const switchProject = async (projectId: string) => {
@@ -932,6 +1003,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const targetLocal = defaultProjectsMap[projectId];
     if (targetLocal) {
       setProjectData(targetLocal);
+      queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: projectId, data: targetLocal });
+      queryClient.setQueryData(queryKeys.project(projectId), { activeProjectId: projectId, data: targetLocal });
       broadcastLocalTabSync(targetLocal, projectsList, projectId);
     }
 
@@ -945,11 +1018,16 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const json = await res.json();
         if (json.success && json.data) {
           setProjectData(json.data);
+          queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: json.activeProjectId || projectId, data: json.data });
+          queryClient.setQueryData(queryKeys.project(projectId), { activeProjectId: projectId, data: json.data });
           broadcastLocalTabSync(json.data, projectsList, projectId);
         } else if (!targetLocal) {
           // If server switch returned error and we don't have local default, push active project state
           fetch('/api/project').then(r => r.json()).then(r => {
-            if (r.data) setProjectData(r.data);
+            if (r.data) {
+              setProjectData(r.data);
+              queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: r.activeProjectId || projectId, data: r.data });
+            }
           }).catch(() => {});
         }
       } catch (err) {
@@ -1049,6 +1127,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     ];
     setProjectsList(newMetaList);
+    queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: newProject.id, data: newProject });
+    queryClient.setQueryData(queryKeys.project(newProject.id), { activeProjectId: newProject.id, data: newProject });
+    queryClient.setQueryData(queryKeys.projectsList, { activeProjectId: newProject.id, projects: newMetaList });
+    queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
     broadcastLocalTabSync(newProject, newMetaList, newProject.id);
 
     if (navigator.onLine) {
@@ -1069,6 +1151,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (projectsList.length <= 1) return;
     const updatedList = projectsList.filter(p => p.id !== projectId);
     setProjectsList(updatedList);
+    queryClient.setQueryData(queryKeys.projectsList, { activeProjectId, projects: updatedList });
+    queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
 
     if (navigator.onLine) {
       try {
@@ -1077,6 +1161,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (json.success && json.data) {
           setProjectData(json.data);
           setActiveProjectId(json.activeProjectId);
+          queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: json.activeProjectId, data: json.data });
+          queryClient.setQueryData(queryKeys.project(json.activeProjectId), { activeProjectId: json.activeProjectId, data: json.data });
           broadcastLocalTabSync(json.data, updatedList, json.activeProjectId);
         }
       } catch (err) {
@@ -1096,7 +1182,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await fetch('/api/project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: updated })
+          body: JSON.stringify({ data: updated, senderClientId: clientIdRef.current })
         });
       } catch (err) {
         console.warn('Server sync failed, saved locally:', err);
@@ -1118,7 +1204,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await fetch('/api/project', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: updated })
+          body: JSON.stringify({ data: updated, senderClientId: clientIdRef.current })
         });
       } catch (err) {
         console.warn('Server sync failed, saved locally:', err);
@@ -1270,7 +1356,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await fetch('/api/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...newTask, updatedBy: currentUser.name })
+          body: JSON.stringify({ ...newTask, updatedBy: currentUser.name, senderClientId: clientIdRef.current })
         });
       } catch (err) {
         console.warn('Failed to sync task to server:', err);
@@ -1304,7 +1390,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (navigator.onLine) {
       try {
-        await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+        await fetch(`/api/tasks/${taskId}?senderClientId=${clientIdRef.current}`, { method: 'DELETE' });
       } catch (err) {
         console.warn('Failed to delete task on server:', err);
       }
@@ -1394,7 +1480,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await fetch('/api/raid', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newItem)
+          body: JSON.stringify({ ...newItem, senderClientId: clientIdRef.current })
         });
       } catch (err) {
         console.warn('Failed to save RAID item to server:', err);
@@ -1426,7 +1512,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     if (navigator.onLine) {
       try {
-        await fetch(`/api/raid/${id}`, { method: 'DELETE' });
+        await fetch(`/api/raid/${id}?senderClientId=${clientIdRef.current}`, { method: 'DELETE' });
       } catch (err) {
         console.warn('Failed to delete RAID item on server:', err);
       }
@@ -1466,7 +1552,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         await fetch('/api/stakeholders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newSh)
+          body: JSON.stringify({ ...newSh, senderClientId: clientIdRef.current })
         });
       } catch (err) {
         console.warn('Failed to save stakeholder to server:', err);
@@ -2739,7 +2825,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         updateCustomAiConfig,
         pendingInvite,
         acceptPendingInvite,
-        clearPendingInvite
+        clearPendingInvite,
+        queryClient
       }}
     >
       {children}

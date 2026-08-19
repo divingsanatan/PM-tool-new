@@ -45,12 +45,21 @@ function loadProjectsFromDisk(): Record<string, ProjectData> {
   return {};
 }
 
+let diskSaveDebounceTimer: NodeJS.Timeout | null = null;
+
 function saveProjectsToDisk(projects: Record<string, ProjectData>) {
-  try {
-    fs.writeFileSync(STORE_PATH, JSON.stringify(projects, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn('[Disk Store] Failed to save projects to disk:', e);
+  if (diskSaveDebounceTimer) {
+    clearTimeout(diskSaveDebounceTimer);
   }
+  diskSaveDebounceTimer = setTimeout(() => {
+    try {
+      fs.writeFile(STORE_PATH, JSON.stringify(projects), 'utf-8', (err) => {
+        if (err) console.warn('[Disk Store] Async save warning:', err);
+      });
+    } catch (e) {
+      console.warn('[Disk Store] Failed to save projects:', e);
+    }
+  }, 1000);
 }
 
 const diskProjects = loadProjectsFromDisk();
@@ -59,6 +68,8 @@ let activeProjectId: string = Object.keys(allProjectsMap)[0] || 'proj-1';
 let isSupabaseConnected = false;
 let lastLocalStateHash = '';
 let lastSupabaseErrorLogged = '';
+let isSyncInProgress = false;
+let syncDebounceTimer: NodeJS.Timeout | null = null;
 
 // Helper to compute quick hash of current in-memory data state
 function getProjectsStateHash(): string {
@@ -71,6 +82,8 @@ function getProjectsStateHash(): string {
 
 // Async initial hydration and continuous sync from Supabase
 async function initSupabaseHydration(shouldBroadcast: boolean = false) {
+  if (isSyncInProgress) return;
+  isSyncInProgress = true;
   try {
     const { data, error } = await supabase.from('app_projects').select('*');
     if (!error && data && data.length > 0) {
@@ -117,16 +130,18 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
       lastSupabaseErrorLogged = msg;
       console.info(`[Supabase Notice] Local disk persistence active. Remote connection notice: ${msg}`);
     }
+  } finally {
+    isSyncInProgress = false;
   }
 }
 
 // Initial hydration on server start
 initSupabaseHydration(false);
 
-// Continuous background polling sync (every 5 seconds) to keep Live and Dev containers automatically synchronized via Supabase
+// Background reconciliation heartbeat (every 30 seconds, non-blocking) to keep Live and Dev containers synchronized
 setInterval(() => {
   initSupabaseHydration(true).catch(() => {});
-}, 5000);
+}, 30000);
 
 // Supabase Real-Time Listener
 try {
@@ -150,7 +165,7 @@ try {
   // Silent fallback
 }
 
-// Background sync to Supabase
+// Background sync to Supabase with debounce to batch high-frequency edits
 async function syncToSupabase() {
   try {
     const rows = Object.values(allProjectsMap).map(p => ({
@@ -179,6 +194,15 @@ async function syncToSupabase() {
   }
 }
 
+function debouncedSyncToSupabase(delayMs: number = 600) {
+  if (syncDebounceTimer) {
+    clearTimeout(syncDebounceTimer);
+  }
+  syncDebounceTimer = setTimeout(() => {
+    syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
+  }, delayMs);
+}
+
 // Helper to get active project data
 function getActiveProject(): ProjectData {
   if (!allProjectsMap[activeProjectId]) {
@@ -191,10 +215,10 @@ function getActiveProject(): ProjectData {
 }
 
 // Helper to broadcast state changes to all connected clients and save to Supabase
-function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true) {
+function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true, senderClientId?: string) {
   saveProjectsToDisk(allProjectsMap);
   if (syncToRemote) {
-    syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
+    debouncedSyncToSupabase(600);
   }
   const currentData = getActiveProject();
   const projectsList = Object.values(allProjectsMap).map(p => ({
@@ -213,11 +237,12 @@ function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true)
     activeProjectId,
     projects: projectsList,
     data: currentData,
+    senderClientId,
     timestamp: new Date().toISOString()
   });
 
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === WebSocket.OPEN && client !== senderWs) {
       client.send(payload);
     }
   });
@@ -254,7 +279,7 @@ wss.on('connection', (ws) => {
         } else {
           allProjectsMap[activeProjectId] = parsed.data;
         }
-        broadcastDataChange(ws);
+        broadcastDataChange(ws, true, parsed.senderClientId);
       }
     } catch (err) {
       console.error('Error handling WS message:', err);
@@ -397,7 +422,7 @@ app.post('/api/project', (req, res) => {
   if (req.body.data) {
     const projId = req.body.data.id || activeProjectId;
     allProjectsMap[projId] = { ...req.body.data, id: projId };
-    broadcastDataChange();
+    broadcastDataChange(undefined, true, req.body.senderClientId);
     res.json({ success: true, data: allProjectsMap[projId] });
   } else {
     res.status(400).json({ error: 'Missing data payload' });
@@ -412,7 +437,7 @@ app.post('/api/projects/create', (req, res) => {
   }
   allProjectsMap[newProj.id] = newProj;
   activeProjectId = newProj.id;
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, req.body?.senderClientId);
   res.json({ success: true, activeProjectId, data: newProj });
 });
 
@@ -462,7 +487,7 @@ app.post('/api/tasks', (req, res) => {
     details: `${task.title} (${task.status.toUpperCase()})`
   });
 
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, req.body?.senderClientId);
   res.json({ success: true, task });
 });
 
@@ -483,7 +508,7 @@ app.delete('/api/tasks/:id', (req, res) => {
     });
   }
 
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, (req.query?.senderClientId as string) || (req.body?.senderClientId as string));
   res.json({ success: true, deletedId: id });
 });
 
@@ -509,7 +534,7 @@ app.post('/api/raid', (req, res) => {
     details: `[${raidItem.type.toUpperCase()}] ${raidItem.title}`
   });
 
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, req.body?.senderClientId);
   res.json({ success: true, raidItem });
 });
 
@@ -529,7 +554,7 @@ app.delete('/api/raid/:id', (req, res) => {
     });
   }
 
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, (req.query?.senderClientId as string) || (req.body?.senderClientId as string));
   res.json({ success: true, deletedId: id });
 });
 
@@ -555,7 +580,7 @@ app.post('/api/stakeholders', (req, res) => {
     details: `${stakeholder.name} (${stakeholder.role})`
   });
 
-  broadcastDataChange();
+  broadcastDataChange(undefined, true, req.body?.senderClientId);
   res.json({ success: true, stakeholder });
 });
 
@@ -689,7 +714,7 @@ async function executeAiCall(
   });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.6-flash',
+    model: 'gemini-2.5-flash',
     contents: prompt,
     config: systemInstruction ? { systemInstruction } : undefined
   });

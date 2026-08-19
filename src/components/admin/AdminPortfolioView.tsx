@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import {
   ProjectData,
@@ -91,6 +91,13 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
   const [activeTab, setActiveTab] = useState<
     'portfolio' | 'resources' | 'stakeholders' | 'leaves' | 'commercials' | 'insights' | 'access'
   >('portfolio');
+
+  // Guard against non-admin accessing admin-only tabs
+  useEffect(() => {
+    if (!isAdmin && (activeTab === 'commercials' || activeTab === 'access')) {
+      setActiveTab('portfolio');
+    }
+  }, [isAdmin, activeTab]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -230,8 +237,9 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
       });
     });
 
-    // Ensure all registered system users from allUsers are also represented
+    // Ensure all non-admin registered system users from allUsers are also represented
     allUsers.forEach(u => {
+      if (u.role === 'admin' || u.email.toLowerCase() === 'admin@apex.io') return;
       const key = u.email.toLowerCase();
       const roleLower = (u.title || u.role).toLowerCase();
       const isPmRole = u.role === 'pm' || roleLower.includes('pm') || roleLower.includes('manager');
@@ -244,7 +252,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
             id: u.id,
             name: u.name,
             email: u.email,
-            role: u.title || (u.role === 'admin' ? 'Executive Admin' : u.role === 'pm' ? 'Project Manager' : 'Team Contributor'),
+            role: u.title || (u.role === 'pm' ? 'Project Manager' : 'Team Contributor'),
             avatar: u.avatar,
             hourlyRate: u.hourlyRate || 95,
             weeklyCapacityHours: u.weeklyCapacityHours || 40,

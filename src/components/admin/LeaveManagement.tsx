@@ -1272,65 +1272,65 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
       {/* INSPECT LEAVE DETAILS & CONFLICTS MODAL */}
       {/* ========================================================================= */}
       {inspectingLeave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[86vh]">
             {/* Modal Header */}
-            <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
-                  <CalendarDays className="w-5 h-5" />
+            <div className="p-3.5 sm:p-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shrink-0">
+                  <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">Leave Allocation Details</h3>
-                  <p className="text-xs text-slate-400">{inspectingLeave.userName} • {inspectingLeave.role}</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-bold text-white truncate">Leave Allocation Details</h3>
+                  <p className="text-[11px] sm:text-xs text-slate-400 truncate">{inspectingLeave.userName} • {inspectingLeave.role}</p>
                 </div>
               </div>
               <button
                 onClick={() => setInspectingLeave(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="p-5 space-y-4 text-xs">
+            {/* Modal Body (Scrollable) */}
+            <div className="p-3.5 sm:p-4 space-y-3 text-xs overflow-y-auto custom-scrollbar flex-1 min-h-0">
               {/* Governance & Routing Banner */}
               {inspectingLeave.applicantRole === 'pm' ? (
-                <div className="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold">PM</span>
-                    <div>
-                      <span className="font-bold text-white block">Project Manager Leave Request</span>
-                      <span className="text-[11px] text-indigo-300">Requires Executive Admin (Sophia Martinez) Sign-Off</span>
+                <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-1.5 py-0.5 rounded-md bg-indigo-600/30 text-indigo-300 font-bold text-[10px]">PM</span>
+                    <div className="min-w-0">
+                      <span className="font-bold text-white block text-xs truncate">Project Manager Leave Request</span>
+                      <span className="text-[10px] text-indigo-300 block truncate">Requires Executive Admin Sign-Off</span>
                     </div>
                   </div>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 font-bold">
-                    Admin Approval Tier
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-200 border border-indigo-500/30 font-bold shrink-0">
+                    Admin Tier
                   </span>
                 </div>
               ) : (
-                <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="p-1.5 rounded-lg bg-slate-800 text-slate-300 font-bold">Team</span>
-                    <div>
-                      <span className="font-bold text-slate-200 block">Team Member Availability Request</span>
-                      <span className="text-[11px] text-slate-400">Reviewable by Project Manager or Executive Admin</span>
+                <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 font-bold text-[10px]">Team</span>
+                    <div className="min-w-0">
+                      <span className="font-bold text-slate-200 block text-xs truncate">Team Member Availability Request</span>
+                      <span className="text-[10px] text-slate-400 block truncate">Reviewable by Project Manager or Executive Admin</span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Leave Meta Details */}
-              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
+              {/* Leave Meta Details (Responsive 2 to 4 columns) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800">
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase font-semibold">Leave Type</span>
-                  <span className="font-bold text-indigo-300 capitalize">{inspectingLeave.leaveType}</span>
+                  <span className="font-bold text-indigo-300 capitalize text-xs">{inspectingLeave.leaveType}</span>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase font-semibold">Approval Status</span>
                   <span
-                    className={`font-bold capitalize ${
+                    className={`font-bold capitalize text-xs ${
                       inspectingLeave.status === 'approved'
                         ? 'text-emerald-400'
                         : inspectingLeave.status === 'pending'
@@ -1343,74 +1343,74 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase font-semibold">Duration & Unit</span>
-                  <span className="font-mono font-bold text-slate-200">
+                  <span className="font-mono font-bold text-slate-200 text-xs">
                     {inspectingLeave.durationType === 'hours' 
-                      ? `${inspectingLeave.hoursCount} Hours (Partial Day)`
-                      : `${inspectingLeave.daysCount} Days (${inspectingLeave.hoursCount} Hours)`}
+                      ? `${inspectingLeave.hoursCount}h (Partial)`
+                      : `${inspectingLeave.daysCount}d (${inspectingLeave.hoursCount}h)`}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-500 block text-[10px] uppercase font-semibold">
-                    {inspectingLeave.durationType === 'hours' ? 'Date & Time Slot' : 'Date Span'}
+                    {inspectingLeave.durationType === 'hours' ? 'Date & Time' : 'Date Span'}
                   </span>
-                  <span className="font-mono text-slate-300 block">
+                  <span className="font-mono text-slate-300 block text-[11px] truncate">
                     {inspectingLeave.startDate === inspectingLeave.endDate
                       ? inspectingLeave.startDate
                       : `${inspectingLeave.startDate} → ${inspectingLeave.endDate}`}
                   </span>
                   {inspectingLeave.timeRange && (
-                    <span className="text-[10px] text-indigo-400 font-sans font-medium">
+                    <span className="text-[10px] text-indigo-400 font-sans font-medium block truncate">
                       {inspectingLeave.timeRange}
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Reason */}
-              <div>
-                <span className="text-slate-400 font-semibold block mb-1">Reason & Context:</span>
-                <p className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-200 leading-relaxed">
-                  {inspectingLeave.reason || 'No detailed reason provided.'}
-                </p>
-              </div>
-
-              {/* Substitute */}
-              <div>
-                <span className="text-slate-400 font-semibold block mb-1">Designated Substitute / Handover:</span>
-                <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4 text-indigo-400" />
-                    <span className="font-bold text-slate-200">
-                      {inspectingLeave.substituteUserName || 'No substitute assigned'}
-                    </span>
+              {/* Reason & Substitute in responsive 2-column or stacked */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <span className="text-slate-400 font-semibold block mb-1 text-[11px]">Reason & Context:</span>
+                  <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-200 leading-relaxed text-xs h-[64px] overflow-y-auto custom-scrollbar">
+                    {inspectingLeave.reason || 'No detailed reason provided.'}
                   </div>
-                  {inspectingLeave.substituteUserName && (
-                    <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                      Delegated Stand-In
-                    </span>
-                  )}
+                </div>
+                <div>
+                  <span className="text-slate-400 font-semibold block mb-1 text-[11px]">Designated Substitute / Handover:</span>
+                  <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 flex items-center justify-between gap-2 h-[64px]">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <UserCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span className="font-bold text-slate-200 truncate text-xs">
+                        {inspectingLeave.substituteUserName || 'No substitute assigned'}
+                      </span>
+                    </div>
+                    {inspectingLeave.substituteUserName && (
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 shrink-0">
+                        Stand-In
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Scheduling Conflicts Safeguard */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+                  <span className="text-slate-400 font-semibold flex items-center gap-1.5 text-[11px]">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                     <span>Active Task Schedule Conflicts ({inspectedLeaveConflicts.length})</span>
                   </span>
                 </div>
                 {inspectedLeaveConflicts.length === 0 ? (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-center gap-2">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-center gap-2 text-xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                     <span>No conflicting project tasks scheduled during this leave window.</span>
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-36 overflow-y-auto custom-scrollbar">
+                  <div className="space-y-1.5 max-h-28 overflow-y-auto custom-scrollbar">
                     {inspectedLeaveConflicts.map((c, i) => (
                       <div
                         key={i}
-                        className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-center justify-between gap-2"
+                        className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-center justify-between gap-2 text-xs"
                       >
                         <div className="min-w-0">
                           <span className="font-bold block truncate">{c.task.title}</span>
@@ -1434,44 +1434,59 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Actions Footer */}
-              {inspectingLeave.status === 'pending' && (
-                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-                  <div className="text-[11px]">
-                    {isAdmin ? (
-                      <span className="text-amber-400 font-medium">Executive Admin Final Decision Tier</span>
-                    ) : isPM && (inspectingLeave.applicantRole === 'pm' || inspectingLeave.userId === currentUser.id) ? (
-                      <span className="text-amber-300/80 italic">Awaiting Executive Admin (Sophia Martinez) Sign-off</span>
-                    ) : isPM ? (
-                      <span className="text-indigo-300 font-medium">PM Sprint Availability Review</span>
-                    ) : null}
-                  </div>
+            {/* Actions Sticky Footer */}
+            <div className="p-3 sm:p-3.5 border-t border-slate-800 bg-slate-950/80 shrink-0 flex items-center justify-between gap-2">
+              <div className="text-[10px] sm:text-[11px] truncate">
+                {inspectingLeave.status === 'pending' ? (
+                  isAdmin ? (
+                    <span className="text-amber-400 font-medium">Executive Admin Final Decision</span>
+                  ) : isPM && (inspectingLeave.applicantRole === 'pm' || inspectingLeave.userId === currentUser.id) ? (
+                    <span className="text-amber-300/80 italic">Awaiting Executive Admin Sign-off</span>
+                  ) : isPM ? (
+                    <span className="text-indigo-300 font-medium">PM Availability Review</span>
+                  ) : (
+                    <span className="text-slate-400">Request Pending Review</span>
+                  )
+                ) : (
+                  <span className="text-slate-400">
+                    Record is <span className="capitalize font-semibold text-slate-200">{inspectingLeave.status}</span>
+                  </span>
+                )}
+              </div>
 
-                  {(isAdmin || (isPM && inspectingLeave.applicantRole !== 'pm' && inspectingLeave.userId !== currentUser.id)) && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          updateLeaveStatus(inspectingLeave.id, 'rejected', currentUser.name);
-                          setInspectingLeave(null);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white font-semibold transition-all text-xs"
-                      >
-                        Reject Request
-                      </button>
-                      <button
-                        onClick={() => {
-                          updateLeaveStatus(inspectingLeave.id, 'approved', currentUser.name);
-                          setInspectingLeave(null);
-                        }}
-                        className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md shadow-emerald-600/20 text-xs"
-                      >
-                        {isAdmin && inspectingLeave.applicantRole === 'pm' ? 'Admin Approve PM Leave' : 'Approve & Block Availability'}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                {inspectingLeave.status === 'pending' && (isAdmin || (isPM && inspectingLeave.applicantRole !== 'pm' && inspectingLeave.userId !== currentUser.id)) ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        updateLeaveStatus(inspectingLeave.id, 'rejected', currentUser.name);
+                        setInspectingLeave(null);
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white font-semibold transition-all text-xs"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => {
+                        updateLeaveStatus(inspectingLeave.id, 'approved', currentUser.name);
+                        setInspectingLeave(null);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all shadow-md shadow-emerald-600/20 text-xs"
+                    >
+                      {isAdmin && inspectingLeave.applicantRole === 'pm' ? 'Approve PM Leave' : 'Approve'}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setInspectingLeave(null)}
+                    className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-semibold transition-all text-xs"
+                  >
+                    Close
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

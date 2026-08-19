@@ -209,23 +209,23 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] sm:max-h-[88vh]">
         {/* Header */}
-        <div className="p-5 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner">
-              <Calendar className="w-5 h-5" />
+        <div className="p-3.5 sm:p-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-inner shrink-0">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <h2 className="text-base font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base font-bold text-white tracking-tight truncate">
                 {isAdmin && targetUser.id !== currentUser.id 
                   ? `Log Time Off for ${targetUser.name}` 
                   : isTargetUserPM 
                   ? 'Request Leave / Time Off (Routes to Admin)'
                   : 'Request Leave & Availability Block'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                 {isTargetUserPM 
                   ? 'PM leaves route to Executive Admin (Sophia Martinez) for sign-off.' 
                   : 'Apply for full day(s) or a couple of hours off to adjust project capacity.'}
@@ -234,14 +234,15 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 sm:p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Form Content */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto custom-scrollbar flex-1 min-h-0 text-xs">
           {errorMsg && (
             <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -549,36 +550,37 @@ export const LeaveRequestModal: React.FC<LeaveRequestModalProps> = ({
               </div>
             </div>
           )}
+        </div>
 
-          {/* Actions */}
-          <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all"
-            >
-              {isAdmin ? (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Log &amp; Auto-Approve Time Off</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  <span>Submit Time Off Request</span>
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
+        {/* Actions Sticky Footer */}
+        <div className="p-3 sm:p-3.5 border-t border-slate-800 bg-slate-950/80 shrink-0 flex items-center justify-end gap-2.5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center gap-1.5 transition-all"
+          >
+            {isAdmin ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Log &amp; Auto-Approve</span>
+              </>
+            ) : (
+              <>
+                <Send className="w-3.5 h-3.5" />
+                <span>Submit Request</span>
+              </>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
-  );
+  </div>
+);
 };

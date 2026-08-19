@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
 import { LeaveRequestModal } from '../admin/LeaveRequestModal';
+import { MemberReportCardSection } from './MemberReportCardSection';
 import {
   ResponsiveContainer,
   BarChart,
@@ -92,10 +93,50 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     return projectData ? [projectData] : [];
   }, [allProjectsMap, projectData]);
 
-  // Filter selectable stakeholders across the portfolio:
+  // User accessible projects based on role
+  const userAccessibleProjects = useMemo(() => {
+    if (isAdmin) return allProjects;
+    if (isPM) {
+      const pmId = currentUser.id;
+      const pmEmail = (currentUser.email || '').toLowerCase();
+      const filtered = allProjects.filter(proj => {
+        const isLeadPM = proj.projectManagerId === pmId ||
+          (proj.projectManagerEmail && proj.projectManagerEmail.toLowerCase() === pmEmail);
+        const isStakeholderInProj = (proj.stakeholders || []).some(
+          s => s.id === pmId || (s.email && s.email.toLowerCase() === pmEmail)
+        );
+        return isLeadPM || isStakeholderInProj;
+      });
+      return filtered.length > 0 ? filtered : allProjects;
+    }
+    // For regular team member, projects where they are a stakeholder or assigned tasks
+    const memberId = currentUser.id;
+    const memberEmail = (currentUser.email || '').toLowerCase();
+    const filtered = allProjects.filter(proj => {
+      const isStakeholderInProj = (proj.stakeholders || []).some(
+        s => s.id === memberId || (s.email && s.email.toLowerCase() === memberEmail)
+      );
+      const hasTasks = (proj.tasks || []).some(t => (t.assigneeIds || []).includes(memberId));
+      return isStakeholderInProj || hasTasks;
+    });
+    return filtered.length > 0 ? filtered : (projectData ? [projectData] : allProjects);
+  }, [isAdmin, isPM, allProjects, currentUser, projectData]);
+
+  // Projects within the currently selected scope
+  const activeScopeProjects = useMemo(() => {
+    if (selectedProjectId === 'all') {
+      return userAccessibleProjects;
+    }
+    const found = userAccessibleProjects.find(p => p.id === selectedProjectId);
+    return found ? [found] : userAccessibleProjects;
+  }, [selectedProjectId, userAccessibleProjects]);
+
+  // Filter selectable stakeholders across the active scope:
   // 1. Admin should NOT have their own name here.
-  // 2. Pull information about PMs and entire internal team.
-  // 3. Do not include external stakeholders here (category === 'external').
+  // 2. When PM is logged in, ONLY internal team members within the selected project(s) are shown.
+  //    The logged-in PM and ANY other PMs are strictly excluded.
+  // 3. When Admin is logged in, PMs and internal team members are shown (Admin excluded).
+  // 4. External stakeholders are never shown here (category === 'external').
   const selectableStakeholders = useMemo(() => {
     const adminEmails = new Set(
       allUsers
@@ -103,13 +144,36 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         .map(u => u.email.toLowerCase())
     );
 
+    const isPMStakeholder = (s: Stakeholder) => {
+      const emailLower = (s.email || '').toLowerCase();
+      // Match against allUsers list
+      const matchedUser = allUsers.find(u => u.email.toLowerCase() === emailLower || u.id === s.id);
+      if (matchedUser?.role === 'pm') return true;
+      // Match against role titles
+      const roleLower = (s.role || '').toLowerCase();
+      if (
+        roleLower.includes('project manager') ||
+        roleLower.includes('lead pm') ||
+        roleLower.includes('program manager') ||
+        roleLower === 'pm'
+      ) {
+        return true;
+      }
+      // Match against project manager assignments in all projects
+      return allProjects.some(
+        p => p.projectManagerId === s.id ||
+             (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === emailLower)
+      );
+    };
+
     const stakeholderMap = new Map<string, Stakeholder>();
 
-    // Gather stakeholders from all projects
-    allProjects.forEach(proj => {
+    // Gather stakeholders from projects in the current active scope
+    activeScopeProjects.forEach(proj => {
       (proj.stakeholders || []).forEach(s => {
         const emailLower = (s.email || '').toLowerCase();
-        // Exclude Admin from list
+
+        // Always exclude Admin
         if (
           adminEmails.has(emailLower) ||
           s.id === 'sh-admin' ||
@@ -118,10 +182,24 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         ) {
           return;
         }
-        // Exclude external stakeholders
+
+        // Always exclude external stakeholders
         if (s.category === 'external') {
           return;
         }
+
+        // If PM role is logged in:
+        // Exclude the PM themselves and ALL other PMs (only show internal team members)
+        if (isPM) {
+          if (
+            s.id === currentUser.id ||
+            emailLower === currentUser.email.toLowerCase() ||
+            isPMStakeholder(s)
+          ) {
+            return;
+          }
+        }
+
         if (!stakeholderMap.has(s.id) && !stakeholderMap.has(emailLower)) {
           stakeholderMap.set(s.id, s);
         }
@@ -129,21 +207,21 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     });
 
     return Array.from(stakeholderMap.values());
-  }, [allProjects, allUsers]);
+  }, [activeScopeProjects, allUsers, allProjects, isPM, currentUser]);
 
   // Selected stakeholder report card to view
   const [selectedMemberId, setSelectedMemberId] = useState<string>(() => {
     const adminEmails = new Set(
       allUsers.filter(u => u.role === 'admin').map(u => u.email.toLowerCase())
     );
-    // If current user is not admin, try to match their email among internal stakeholders
-    if (!adminEmails.has(currentUser.email.toLowerCase())) {
+    // If current user is a regular team member (not admin, not PM), match their email
+    if (!adminEmails.has(currentUser.email.toLowerCase()) && currentUser.role !== 'pm') {
       const matched = selectableStakeholders.find(
         s => s.email.toLowerCase() === currentUser.email.toLowerCase()
       );
       if (matched) return matched.id;
     }
-    // Otherwise fallback to first internal non-admin stakeholder
+    // Otherwise fallback to first available selectable stakeholder
     return selectableStakeholders[0]?.id || 'sh-1';
   });
 
@@ -175,9 +253,10 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
   // Active Stakeholder details
   const selectedStakeholder = useMemo(() => {
+    if (selectableStakeholders.length === 0) return null;
     const found = selectableStakeholders.find(s => s.id === selectedMemberId);
-    return found || selectableStakeholders[0] || projectData.stakeholders[0];
-  }, [selectableStakeholders, selectedMemberId, projectData.stakeholders]);
+    return found || selectableStakeholders[0] || null;
+  }, [selectableStakeholders, selectedMemberId]);
 
   // Matched User Profile if any
   const matchedUserObj = useMemo(() => {
@@ -203,7 +282,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
   // Only the projects where this selected team member or PM is added/participates
   const memberProjects = useMemo(() => {
-    if (!selectedStakeholder) return allProjects;
+    if (!selectedStakeholder) return userAccessibleProjects;
     const targetEmail = (selectedStakeholder.email || '').toLowerCase();
     const targetId = selectedStakeholder.id;
 
@@ -216,39 +295,40 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         );
         return isAssignedPM || isStakeholderInProj;
       });
-      return pmProjects.length > 0 ? pmProjects : allProjects;
+      return pmProjects.length > 0 ? pmProjects : userAccessibleProjects;
     }
 
-    return allProjects.filter(proj => {
+    const memberInProjects = userAccessibleProjects.filter(proj => {
       const isStakeholderInProj = (proj.stakeholders || []).some(
         s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
       );
       const hasAssignedTasks = (proj.tasks || []).some(
         t => (t.assigneeIds || []).includes(targetId)
       );
-
       return isStakeholderInProj || hasAssignedTasks;
     });
-  }, [allProjects, selectedStakeholder, isSelectedMemberPM]);
 
-  // Determine projects in current scope (strictly restricted to member's projects)
+    return memberInProjects.length > 0 ? memberInProjects : userAccessibleProjects;
+  }, [userAccessibleProjects, allProjects, selectedStakeholder, isSelectedMemberPM]);
+
+  // Determine projects in current scope for calculations
   const scopedProjects = useMemo(() => {
     if (selectedProjectId === 'all') {
-      return memberProjects.length > 0 ? memberProjects : (projectData ? [projectData] : []);
+      return memberProjects.length > 0 ? memberProjects : activeScopeProjects;
     }
     const found = memberProjects.find(p => p.id === selectedProjectId);
-    return found ? [found] : (memberProjects.length > 0 ? [memberProjects[0]] : (projectData ? [projectData] : []));
-  }, [selectedProjectId, memberProjects, projectData]);
+    return found ? [found] : (activeScopeProjects.length > 0 ? activeScopeProjects : (projectData ? [projectData] : []));
+  }, [selectedProjectId, memberProjects, activeScopeProjects, projectData]);
 
-  // Reset selectedProjectId to 'all' if the selected project is not in the newly selected member's project list
+  // Reset selectedProjectId to 'all' if the selected project is not in user accessible projects
   React.useEffect(() => {
-    if (selectedProjectId !== 'all' && memberProjects.length > 0) {
-      const isStillInMemberProjects = memberProjects.some(p => p.id === selectedProjectId);
-      if (!isStillInMemberProjects) {
+    if (selectedProjectId !== 'all' && userAccessibleProjects.length > 0) {
+      const isStillAccessible = userAccessibleProjects.some(p => p.id === selectedProjectId);
+      if (!isStillAccessible) {
         setSelectedProjectId('all');
       }
     }
-  }, [memberProjects, selectedProjectId]);
+  }, [userAccessibleProjects, selectedProjectId]);
 
   // Aggregate Scoped Tasks, Subtasks, Milestones for Selected Stakeholder or PM Project Scope
   const { allScopedTasks, allScopedSubtasks, allScopedMilestones, projectBreakdowns } = useMemo(() => {
@@ -434,7 +514,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     });
   };
 
-  const isViewingSelf = currentUser.email.toLowerCase() === selectedStakeholder.email.toLowerCase();
+  const isViewingSelf = selectedStakeholder ? currentUser.email.toLowerCase() === selectedStakeholder.email.toLowerCase() : false;
 
   // Prepare Data for Visual Analytics Graphs
   // 1. Radar Chart Data
@@ -670,16 +750,18 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
         {/* Member & Project Scope Selectors & Role Switcher */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full lg:w-auto flex-wrap">
-          {/* Project Scope Filter (Only projects where selected member/PM is added) */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950 px-3 py-2 sm:py-1.5 rounded-xl border border-slate-800 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none">
+          {/* Project Scope Filter */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950/90 hover:bg-slate-950 px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none transition-all shadow-inner">
             <div className="flex items-center gap-1.5 shrink-0">
-              <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="w-5 h-5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
+                <Building2 className="w-3.5 h-3.5" />
+              </div>
               <span className="text-slate-400 font-medium text-xs">Scope:</span>
             </div>
             <select
               value={selectedProjectId}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[170px] text-right sm:text-left"
+              className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[170px] text-right sm:text-left focus:text-emerald-200 transition-colors"
             >
               <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
                 🌐 All Assigned ({memberProjects.length} Project{memberProjects.length !== 1 ? 's' : ''})
@@ -692,16 +774,18 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             </select>
           </div>
 
-          {/* Member Selector */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950 px-3 py-2 sm:py-1.5 rounded-xl border border-slate-800 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none">
+          {/* Member Selector (Target Selection) */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950/90 hover:bg-slate-950 px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none transition-all shadow-inner">
             <div className="flex items-center gap-2 shrink-0">
-              <User className="w-4 h-4 text-indigo-400 shrink-0" />
+              <div className="w-5 h-5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shrink-0">
+                <User className="w-3.5 h-3.5" />
+              </div>
               <span className="text-slate-400 font-medium text-xs">Member:</span>
             </div>
             <select
               value={selectedMemberId}
               onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="bg-transparent text-slate-100 font-semibold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[180px] text-right sm:text-left"
+              className="bg-transparent text-slate-100 font-semibold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[180px] text-right sm:text-left focus:text-indigo-300 transition-colors"
             >
               {selectableStakeholders.map(s => {
                 const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
@@ -709,7 +793,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                 const roleBadge = isProjectManager ? 'PM' : 'Team';
                 return (
                   <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100">
-                    [{roleBadge}] {s.name} ({s.role})
+                    {isAdmin ? `[${roleBadge}] ` : ''}{s.name} ({s.role})
                   </option>
                 );
               })}
@@ -718,23 +802,32 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
           {/* Member Report Card & Availability Calendar Action */}
           <button
-            onClick={() => setShowReportCardModal(true)}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
-            title="Open comprehensive 360 Report Card and read-only Availability Calendar"
+            onClick={() => {
+              const el = document.getElementById('member-report-card-section');
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth' });
+              } else {
+                setShowReportCardModal(true);
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto cursor-pointer"
+            title="Jump to comprehensive 360 Report Card & Availability Calendar card below"
           >
             <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="whitespace-nowrap">Report Card &amp; Calendar</span>
+            <span className="whitespace-nowrap">Report Card &amp; Calendar ↓</span>
           </button>
 
-          {/* Quick Apply for Leave / Hours Off */}
-          <button
-            onClick={() => setShowLeaveModal(true)}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
-            title="Apply for Day(s) Leave or a couple of Hours Off"
-          >
-            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="whitespace-nowrap">Request Time Off / Leave</span>
-          </button>
+          {/* Quick Apply for Leave / Hours Off - Only for Non-Admin */}
+          {!isAdmin && (
+            <button
+              onClick={() => setShowLeaveModal(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
+              title="Apply for Day(s) Leave or a couple of Hours Off"
+            >
+              <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <span className="whitespace-nowrap">Request Time Off / Leave</span>
+            </button>
+          )}
 
           {/* Role Switcher Action for PM */}
           {isPM && !isViewingSelf && (
@@ -1361,18 +1454,21 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                         fill="#6366f1"
                         radius={[3, 3, 0, 0]}
                         maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                        isAnimationActive={false}
                       />
                       <Bar
                         dataKey="Actual"
                         fill="#a855f7"
                         radius={[3, 3, 0, 0]}
                         maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                        isAnimationActive={false}
                       />
                       <Bar
                         dataKey="Earned"
                         fill="#10b981"
                         radius={[3, 3, 0, 0]}
                         maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                        isAnimationActive={false}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -1406,7 +1502,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                   <PolarGrid stroke="#334155" />
                   <PolarAngleAxis dataKey="subject" stroke="#94a3b8" tick={{ fontSize: 9, fill: '#cbd5e1' }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fontSize: 8 }} />
-                  <Radar name={selectedStakeholder.name} dataKey="value" stroke="#818cf8" fill="#6366f1" fillOpacity={0.45} />
+                  <Radar name={selectedStakeholder.name} dataKey="value" stroke="#818cf8" fill="#6366f1" fillOpacity={0.45} isAnimationActive={false} />
                   <Tooltip
                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px' }}
                     formatter={(value: any) => [`${value}%`, 'Score']}
@@ -1442,7 +1538,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                       contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px' }}
                       formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Amount']}
                     />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
                       {evmChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.fill} />
                       ))}
@@ -1862,6 +1958,13 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
       )}
+
+      {/* Comprehensive 360 Member Dossier & Availability Calendar Scorecard Card */}
+      <MemberReportCardSection
+        stakeholder={selectedStakeholder}
+        initialProjectId={selectedProjectId}
+        onNavigateToProject={(pId) => setSelectedProjectId(pId)}
+      />
 
       {/* Individual Report Card & Read-Only Availability Calendar Modal */}
       {showReportCardModal && (

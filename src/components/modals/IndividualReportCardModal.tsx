@@ -34,7 +34,11 @@ import {
   Building2,
   PieChart as PieChartIcon,
   Activity,
-  CheckCheck
+  CheckCheck,
+  Zap,
+  CheckSquare,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -72,17 +76,18 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
 }) => {
   const { allProjectsMap, allUsers, leaves, currentUser } = useProject();
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'analytics' | 'leaves' | 'reviews'>('overview');
+  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedScopeProjectId, setSelectedScopeProjectId] = useState<string>(initialProjectId || 'all');
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState('Exceeds Expectations');
   const [reviewsList, setReviewsList] = useState([
     {
       id: 'rev-1',
-      author: 'Leadership & PMO Review',
+      author: 'Executive Leadership & PMO',
       role: 'Project Manager',
       date: '2026-08-14',
       rating: 'Exceeds Expectations',
-      comment: 'Consistently completes high-complexity deliverables ahead of schedule with great attention to code quality and documentation.'
+      comment: 'Consistently completes high-complexity deliverables ahead of schedule with high engineering rigor and proactive communication.'
     }
   ]);
 
@@ -94,12 +99,12 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
   const matchedUser = useMemo(() => {
     if (!stakeholder) return null;
     return allUsers.find(
-      u => u.id === stakeholder.id || u.email.toLowerCase() === stakeholder.email.toLowerCase()
+      u => u.id === stakeholder.id || u.email.toLowerCase() === (stakeholder.email || '').toLowerCase()
     );
   }, [allUsers, stakeholder]);
 
   // Find all projects where this stakeholder participates
-  const allProjects = useMemo(() => Object.values(allProjectsMap) as ProjectData[], [allProjectsMap]);
+  const allProjects = useMemo(() => Object.values(allProjectsMap || {}) as ProjectData[], [allProjectsMap]);
 
   // Check if stakeholder is a Project Manager
   const isStakeholderPM = useMemo(() => {
@@ -113,7 +118,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
            (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === targetEmail)
     );
   }, [stakeholder, matchedUser, allProjects]);
-  
+
   const userProjects = useMemo(() => {
     if (!stakeholder) return [];
     const targetEmail = (stakeholder.email || '').toLowerCase();
@@ -131,7 +136,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
       return pmProjects.length > 0 ? pmProjects : allProjects;
     }
 
-    return allProjects.filter(p => {
+    const assignedProjects = allProjects.filter(p => {
       const isStakeholder = (p.stakeholders || []).some(
         s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
       );
@@ -140,6 +145,8 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
       );
       return isStakeholder || hasAssignedTask;
     });
+
+    return assignedProjects.length > 0 ? assignedProjects : allProjects;
   }, [allProjects, stakeholder, isStakeholderPM]);
 
   // Determine active scoped projects based on user selection
@@ -147,7 +154,8 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
     if (selectedScopeProjectId === 'all') {
       return userProjects.length > 0 ? userProjects : allProjects;
     }
-    return allProjects.filter(p => p.id === selectedScopeProjectId);
+    const found = allProjects.find(p => p.id === selectedScopeProjectId);
+    return found ? [found] : (userProjects.length > 0 ? userProjects : allProjects);
   }, [selectedScopeProjectId, userProjects, allProjects]);
 
   // Aggregate tasks and metrics across active scoped projects
@@ -192,7 +200,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
   const memberLeaves: MemberLeave[] = useMemo(() => {
     if (!stakeholder) return [];
     return (leaves || []).filter(
-      l => l.userId === stakeholder.id || l.userEmail.toLowerCase() === stakeholder.email.toLowerCase()
+      l => l.userId === stakeholder.id || l.userEmail.toLowerCase() === (stakeholder.email || '').toLowerCase()
     );
   }, [leaves, stakeholder]);
 
@@ -245,7 +253,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
       const d = new Date(calYear, calMonth, day);
       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
       const dStr = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      
+
       if (!isWeekend) {
         workingDays++;
         const leaveData = getLeaveOnDate(dStr);
@@ -378,58 +386,70 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:p-6 bg-slate-950/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-3 md:p-4 bg-slate-950/85 backdrop-blur-md overflow-hidden animate-in fade-in duration-150">
+      <div className={`relative w-full bg-slate-900 border border-slate-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col transition-all duration-200 ${
+        isExpanded
+          ? 'h-[97vh] max-h-[97vh] max-w-[98vw]'
+          : 'h-[92vh] max-h-[92vh] max-w-5xl md:max-w-6xl'
+      }`}>
         
         {/* ========================================================================= */}
-        {/* MODAL HEADER */}
+        {/* MODAL HEADER - COMPACT, RESPONSIVE, SMART */}
         {/* ========================================================================= */}
-        <div className="p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 shrink-0">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-3 sm:p-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/25 to-slate-900 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             
-            {/* User Details & Scope Selection */}
-            <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-              <img
-                src={stakeholder.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stakeholder.email}`}
-                alt={stakeholder.name}
-                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-lg shrink-0 bg-slate-950"
-              />
+            {/* User Profile & Project Scope Selector */}
+            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+              <div className="relative shrink-0">
+                <img
+                  src={stakeholder.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stakeholder.email || stakeholder.name}`}
+                  alt={stakeholder.name}
+                  className="w-11 h-11 sm:w-13 sm:h-13 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-lg bg-slate-950"
+                />
+                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center">
+                  <Check className="w-2 h-2 text-slate-950 stroke-[3]" />
+                </span>
+              </div>
+
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">{stakeholder.name}</h2>
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight truncate">
+                    {stakeholder.name}
+                  </h2>
                   <span
-                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold uppercase shrink-0 ${
+                    className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-[11px] font-bold uppercase shrink-0 ${
                       matchedUser?.role === 'admin'
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                        : matchedUser?.role === 'pm'
+                        : isStakeholderPM || matchedUser?.role === 'pm'
                         ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                         : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                     }`}
                   >
-                    {matchedUser?.role === 'admin' ? 'Executive Admin' : matchedUser?.role === 'pm' ? 'Project Manager' : 'Team Contributor'}
+                    {matchedUser?.role === 'admin' ? 'Executive Admin' : isStakeholderPM || matchedUser?.role === 'pm' ? 'Project Manager' : 'Team Member'}
                   </span>
-                  <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 text-[11px] font-medium shrink-0">
+                  <span className="px-2 py-0.5 rounded-lg bg-slate-800/90 text-slate-300 text-[10px] sm:text-[11px] font-medium shrink-0">
                     {stakeholder.role}
                   </span>
                 </div>
 
-                <div className="text-xs text-slate-400 mt-1 flex items-center gap-2 sm:gap-3 flex-wrap">
-                  <span className="truncate">{stakeholder.email}</span>
+                <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2 sm:gap-3 flex-wrap">
+                  <span className="truncate max-w-[200px] sm:max-w-xs">{stakeholder.email}</span>
                   <span className="text-slate-600 hidden sm:inline">•</span>
                   <span className="font-mono text-emerald-400 font-semibold">${stakeholder.hourlyRate || 85}/hr</span>
                   <span className="text-slate-600 hidden sm:inline">•</span>
-                  <span>{stakeholder.weeklyCapacityHours || 40}h / wk capacity</span>
+                  <span className="text-slate-300 font-mono">{stakeholder.weeklyCapacityHours || 40}h/wk cap</span>
                 </div>
 
-                {/* Project Scope Filter Bar */}
-                <div className="mt-2.5 flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 bg-slate-950/90 px-3 py-1 rounded-xl border border-slate-800 text-xs shadow-inner">
+                {/* Scorecard Project Scope Selector */}
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="inline-flex items-center gap-1.5 bg-slate-950/90 px-2.5 py-0.5 rounded-xl border border-slate-800 text-[11px] shadow-inner max-w-full">
                     <Building2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-slate-400 font-medium">Scorecard Scope:</span>
+                    <span className="text-slate-400 font-medium whitespace-nowrap">Scope:</span>
                     <select
                       value={selectedScopeProjectId}
                       onChange={(e) => setSelectedScopeProjectId(e.target.value)}
-                      className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs pr-1"
+                      className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-[11px] truncate max-w-[180px] sm:max-w-[260px]"
                     >
                       <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
                         🌐 All Projects ({userProjects.length} Assigned)
@@ -445,20 +465,36 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
               </div>
             </div>
 
-            {/* Right: Grade Badge & Close Button */}
-            <div className="flex items-center justify-between md:justify-end gap-3 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/80">
-              {/* Grade Card */}
-              <div className={`px-4 py-2 rounded-2xl border flex flex-row md:flex-col items-center justify-center gap-2 md:gap-0.5 text-center shadow-md ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
-                <span className="text-[9px] uppercase font-bold tracking-wider opacity-80">Report Grade</span>
-                <span className="text-xl sm:text-2xl font-black">{metrics.reportCardGrade || 'A'}</span>
-                <span className="text-[10px] font-mono font-semibold">{metrics.reportCardScore || 95}/100</span>
+            {/* Right: Grade Badge & Action Buttons */}
+            <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-800/80">
+              {/* Grade Badge */}
+              <div className={`px-3 py-1 sm:py-1.5 rounded-2xl border flex items-center gap-2 shadow-md ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
+                <div className="text-center">
+                  <span className="text-[9px] uppercase font-bold tracking-wider opacity-80 block leading-none">Grade</span>
+                  <span className="text-base sm:text-lg font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
+                </div>
+                <div className="h-5 w-px bg-current opacity-30" />
+                <div className="text-right">
+                  <span className="text-[10px] font-mono font-bold block">{metrics.reportCardScore || 95}/100</span>
+                  <span className="text-[8px] font-semibold opacity-80 block whitespace-nowrap">Overall Index</span>
+                </div>
               </div>
+
+              {/* Maximize / Restore Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-700 shrink-0"
+                title={isExpanded ? 'Restore Normal View' : 'Maximize Fullscreen'}
+              >
+                {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+              </button>
 
               {/* Close Button */}
               <button
                 type="button"
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-700"
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors border border-transparent hover:border-slate-700 shrink-0"
                 title="Close Scorecard"
               >
                 <X className="w-5 h-5" />
@@ -469,146 +505,189 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
         </div>
 
         {/* ========================================================================= */}
-        {/* RESPONSIVE TAB NAVIGATION */}
+        {/* RESPONSIVE SCROLLABLE TAB NAVIGATION */}
         {/* ========================================================================= */}
-        
-        {/* Mobile Dropdown (sm:hidden) */}
-        <div className="sm:hidden px-4 py-2.5 border-b border-slate-800 bg-slate-950/70 shrink-0">
-          <select
-            value={activeTab}
-            onChange={(e) => setActiveTab(e.target.value as any)}
-            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500"
+        {/* ========================================================================= */}
+        {/* HORIZONTAL TAB NAVIGATION (Clickable Segmented Control) */}
+        {/* ========================================================================= */}
+        <div className="px-3.5 sm:px-6 py-2.5 border-b border-slate-800 bg-slate-950/90 shrink-0">
+          <div
+            role="tablist"
+            aria-label="Modal Views"
+            className="flex items-center gap-1.5 overflow-x-auto p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner scrollbar-none"
           >
-            <option value="overview">📊 Executive Summary</option>
-            <option value="projects">📁 Assigned Projects &amp; Tasks ({metrics.totalAssignedTasks})</option>
-            <option value="analytics">📈 EVM &amp; Analytics</option>
-            <option value="leaves">📅 Availability &amp; Leaves ({approvedLeaves.length} Approved)</option>
-            <option value="reviews">⭐ PMO Performance Reviews ({reviewsList.length})</option>
-          </select>
-        </div>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'overview'}
+              onClick={() => setActiveTab('overview')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'overview'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <span className="whitespace-nowrap">Overview</span>
+            </button>
 
-        {/* Desktop / Tablet Pill Tabs (hidden sm:flex) */}
-        <div className="hidden sm:flex items-center gap-1.5 px-6 py-2.5 border-b border-slate-800 bg-slate-950/40 overflow-x-auto shrink-0 text-xs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('overview')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'overview'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Executive Summary</span>
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'projects'}
+              onClick={() => setActiveTab('projects')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'projects'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <Layers className={`w-3.5 h-3.5 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <span className="whitespace-nowrap">Projects &amp; Tasks</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold border ${
+                  activeTab === 'projects'
+                    ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-700'
+                }`}
+              >
+                {metrics.totalAssignedTasks}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('projects')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'projects'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Assigned Projects &amp; Tasks ({metrics.totalAssignedTasks})</span>
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'analytics'}
+              onClick={() => setActiveTab('analytics')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'analytics'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <BarChart3 className={`w-3.5 h-3.5 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
+              <span className="whitespace-nowrap">EVM &amp; Analytics</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('analytics')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'analytics'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>EVM &amp; Analytics</span>
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'leaves'}
+              onClick={() => setActiveTab('leaves')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'leaves'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <CalendarCheck className={`w-3.5 h-3.5 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
+              <span className="whitespace-nowrap">Availability &amp; Calendar</span>
+              {approvedLeaves.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold border ${
+                    activeTab === 'leaves'
+                      ? 'bg-emerald-700/80 text-white border-emerald-400/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  {approvedLeaves.length}
+                </span>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('leaves')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'leaves'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <CalendarCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Availability &amp; Leaves ({approvedLeaves.length} Approved)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('reviews')}
-            className={`px-3.5 py-1.5 rounded-xl font-bold transition-all shrink-0 flex items-center gap-1.5 ${
-              activeTab === 'reviews'
-                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-            }`}
-          >
-            <Star className="w-3.5 h-3.5 text-amber-400" />
-            <span>PMO Reviews ({reviewsList.length})</span>
-          </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'reviews'}
+              onClick={() => setActiveTab('reviews')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'reviews'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <Star className={`w-3.5 h-3.5 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
+              <span className="whitespace-nowrap">PMO Reviews</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono font-bold border ${
+                  activeTab === 'reviews'
+                    ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-700'
+                }`}
+              >
+                {reviewsList.length}
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* ========================================================================= */}
         {/* MODAL SCROLLABLE BODY (min-h-0 is essential for proper flex scrolling) */}
         {/* ========================================================================= */}
-        <div className="p-4 sm:p-6 overflow-y-auto min-h-0 flex-1 space-y-5">
+        <div className="p-3.5 sm:p-5 overflow-y-auto min-h-0 flex-1 space-y-3.5 sm:space-y-4 scrollbar-thin scrollbar-thumb-slate-700 hover:scrollbar-thumb-slate-600 scrollbar-track-slate-900/50">
           
           {/* ================= TAB 1: OVERVIEW ================= */}
           {activeTab === 'overview' && (
-            <div className="space-y-5">
+            <div className="space-y-3.5 sm:space-y-4">
               {/* Top Key Metrics Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Assigned Deliverables</span>
-                  <p className="text-xl font-black text-white font-mono">{metrics.totalAssignedTasks}</p>
-                  <span className="text-[10px] text-emerald-400 font-semibold mt-0.5 block">
-                    {metrics.completedTasksCount} completed ({Math.round(metrics.taskCompletionPercent)}%)
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400">Deliverables</span>
+                    <CheckSquare className="w-3.5 h-3.5 text-indigo-400" />
+                  </div>
+                  <p className="text-base sm:text-lg font-black text-white font-mono">{metrics.totalAssignedTasks}</p>
+                  <span className="text-[10px] text-emerald-400 font-semibold mt-0.5 block truncate">
+                    {metrics.completedTasksCount} done ({Math.round(metrics.taskCompletionPercent)}%)
                   </span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Schedule Index (SPI)</span>
-                  <p className={`text-xl font-black font-mono ${metrics.individualSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400">Schedule (SPI)</span>
+                    <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                  </div>
+                  <p className={`text-base sm:text-lg font-black font-mono ${metrics.individualSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {metrics.individualSPI.toFixed(2)}
                   </p>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  <span className="text-[10px] text-slate-400 mt-0.5 block truncate">
                     {metrics.individualSPI >= 1.0 ? 'Ahead / On Schedule' : 'Schedule Variance'}
                   </span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Cost Efficiency (CPI)</span>
-                  <p className={`text-xl font-black font-mono ${metrics.individualCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400">Cost (CPI)</span>
+                    <DollarSign className="w-3.5 h-3.5 text-indigo-400" />
+                  </div>
+                  <p className={`text-base sm:text-lg font-black font-mono ${metrics.individualCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {metrics.individualCPI.toFixed(2)}
                   </p>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  <span className="text-[10px] text-slate-400 mt-0.5 block truncate">
                     {metrics.individualCPI >= 1.0 ? 'Under Budget' : 'Cost Variance'}
                   </span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Work Utilization</span>
-                  <p className={`text-xl font-black font-mono ${metrics.utilizationPercent > 100 ? 'text-rose-400' : 'text-indigo-300'}`}>
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] uppercase font-semibold text-slate-400">Utilization</span>
+                    <Zap className="w-3.5 h-3.5 text-indigo-400" />
+                  </div>
+                  <p className={`text-base sm:text-lg font-black font-mono ${metrics.utilizationPercent > 100 ? 'text-rose-400' : 'text-indigo-300'}`}>
                     {metrics.utilizationPercent}%
                   </p>
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
+                  <span className="text-[10px] text-slate-400 mt-0.5 block truncate">
                     {metrics.totalActualHours}h logged / {stakeholder.weeklyCapacityHours || 40}h cap
                   </span>
                 </div>
               </div>
 
               {/* Quick Availability & Approved Leave Highlight Banner */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/30 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 sm:mt-0">
-                    <CalendarCheck className="w-5 h-5" />
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/30 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 sm:mt-0">
+                    <CalendarCheck className="w-4 h-4" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -619,32 +698,32 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       {approvedLeaves.length > 0
-                        ? `${approvedLeaves.length} approved leave period(s) registered. Working capacity and schedules are fully synchronized.`
-                        : 'No active approved leaves recorded. Full capacity available across active sprints.'}
+                        ? `${approvedLeaves.length} approved leave record(s). Working capacity and schedules are fully synchronized.`
+                        : 'No active approved leaves recorded. Full sprint capacity available.'}
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setActiveTab('leaves')}
-                  className="px-3.5 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 self-start sm:self-auto"
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
                 >
                   <CalendarDays className="w-3.5 h-3.5" />
-                  <span>Open Availability Calendar</span>
+                  <span>View Calendar</span>
                   <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
 
               {/* Skills & Tech Expertise Badges */}
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
-                <span className="text-xs font-bold text-slate-200 block uppercase tracking-wider">
-                  Technical Expertise &amp; Skill Matrix
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                <span className="text-[11px] font-bold text-slate-200 block uppercase tracking-wider">
+                  Technical Expertise &amp; Core Competencies
                 </span>
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
                   {(stakeholder.skills || ['Full-Stack', 'Engineering', 'Agile Architecture']).map((skill, idx) => (
                     <span
                       key={idx}
-                      className="px-3 py-1 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold"
+                      className="px-2.5 py-0.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold"
                     >
                       {skill}
                     </span>
@@ -653,32 +732,32 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
               </div>
 
               {/* Visual Delivery Charts (Radar & Breakdown) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 {/* 360 Competency Radar */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between min-h-[300px]">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-bold text-slate-200">360° Capability &amp; Delivery Index</h3>
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-xs font-bold text-slate-200">360° Capability Index</h3>
                     <span className="text-[10px] text-slate-500 font-mono">Weighted Competencies</span>
                   </div>
-                  <div className="w-full h-64">
+                  <div className="w-full h-44 sm:h-52">
                     <ResponsiveContainer width="100%" height="100%">
                       <RadarChart data={radarData}>
                         <PolarGrid stroke="#334155" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                        <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
-                        <Radar name={stakeholder.name} dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.4} />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                        <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fill: '#64748b', fontSize: 9 }} />
+                        <Radar name={stakeholder.name} dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
                       </RadarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
                 {/* Task Distribution Donut */}
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between min-h-[300px]">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xs font-bold text-slate-200">Task Delivery Breakdown</h3>
-                    <span className="text-[10px] text-slate-500 font-mono">{metrics.totalAssignedTasks} Total Tasks</span>
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-xs font-bold text-slate-200">Task Status Distribution</h3>
+                    <span className="text-[10px] text-slate-500 font-mono">{metrics.totalAssignedTasks} Deliverables</span>
                   </div>
-                  <div className="w-full h-64 flex items-center justify-center">
+                  <div className="w-full h-44 sm:h-52 flex items-center justify-center">
                     {taskStatusData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -686,9 +765,9 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                             data={taskStatusData}
                             cx="50%"
                             cy="50%"
-                            innerRadius={50}
-                            outerRadius={85}
-                            paddingAngle={4}
+                            innerRadius={40}
+                            outerRadius={68}
+                            paddingAngle={3}
                             dataKey="value"
                           >
                             {taskStatusData.map((entry, index) => (
@@ -698,11 +777,11 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                           <Tooltip
                             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px' }}
                           />
-                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
-                      <span className="text-xs text-slate-500 italic">No active tasks assigned yet.</span>
+                      <span className="text-xs text-slate-500 italic">No active deliverables in this scope.</span>
                     )}
                   </div>
                 </div>
@@ -712,11 +791,11 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
 
           {/* ================= TAB 2: PROJECTS & TASKS ================= */}
           {activeTab === 'projects' && (
-            <div className="space-y-5 text-xs">
+            <div className="space-y-4 sm:space-y-5 text-xs">
               {/* Project Engagements */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-100">Assigned Project Engagements</h3>
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-100">Assigned Project Engagements</h3>
                   <span className="text-slate-400 text-xs font-mono">{userProjects.length} Active Projects</span>
                 </div>
 
@@ -726,7 +805,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                     const completedTasks = projectTasks.filter(t => t.status === 'done').length;
 
                     return (
-                      <div key={p.id} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 hover:border-slate-700 transition-colors">
+                      <div key={p.id} className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 hover:border-slate-700 transition-colors">
                         <div className="flex items-center justify-between">
                           <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 font-mono font-bold text-[10px] border border-indigo-500/20">
                             {p.projectCode}
@@ -734,7 +813,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                           <span className="text-slate-400 font-mono text-[11px]">{completedTasks}/{projectTasks.length} Done</span>
                         </div>
                         
-                        <h4 className="font-bold text-slate-100 text-sm">{p.projectName}</h4>
+                        <h4 className="font-bold text-slate-100 text-xs sm:text-sm truncate">{p.projectName}</h4>
                         
                         {/* Mini progress bar */}
                         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
@@ -766,26 +845,26 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
               {/* Assigned Deliverables List */}
               <div className="space-y-3 pt-3 border-t border-slate-800">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-slate-100">Assigned Deliverables ({metrics.assignedTasks.length})</h3>
-                  <span className="text-slate-500 text-[11px]">Tasks across selected scope</span>
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-100">Assigned Deliverables ({metrics.assignedTasks.length})</h3>
+                  <span className="text-slate-500 text-[11px]">Scoped tasks</span>
                 </div>
 
-                <div className="space-y-2 max-h-80 overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                   {metrics.assignedTasks.length === 0 ? (
-                    <div className="p-8 text-center text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-800">
-                      No deliverables currently assigned.
+                    <div className="p-6 text-center text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-800">
+                      No deliverables currently assigned in this scope.
                     </div>
                   ) : (
                     metrics.assignedTasks.map(task => (
-                      <div key={task.id} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-850/40 transition-colors">
+                      <div key={task.id} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-850/40 transition-colors">
                         <div className="min-w-0 flex-1">
                           <span className="font-bold text-slate-200 block truncate">{task.title}</span>
                           <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
-                            Est: {task.estimatedHours}h • Act: {task.actualHours}h • Due: {task.dueDate || 'No date'}
+                            Est: {task.estimatedHours || 8}h • Act: {task.actualHours || 0}h • Due: {task.dueDate || 'No date'}
                           </span>
                         </div>
                         <span
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase shrink-0 ${
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase shrink-0 ${
                             task.status === 'done'
                               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                               : task.status === 'in_progress'
@@ -809,54 +888,54 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
           {activeTab === 'analytics' && (
             <div className="space-y-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Planned Value (PV)</span>
-                  <p className="text-xl font-black text-sky-400 font-mono">${Math.round(metrics.individualPV).toLocaleString()}</p>
+                  <p className="text-lg sm:text-xl font-black text-sky-400 font-mono">${Math.round(metrics.individualPV).toLocaleString()}</p>
                 </div>
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Earned Value (EV)</span>
-                  <p className="text-xl font-black text-indigo-400 font-mono">${Math.round(metrics.individualEV).toLocaleString()}</p>
+                  <p className="text-lg sm:text-xl font-black text-indigo-400 font-mono">${Math.round(metrics.individualEV).toLocaleString()}</p>
                 </div>
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Actual Cost (AC)</span>
-                  <p className="text-xl font-black text-rose-400 font-mono">${Math.round(metrics.individualAC).toLocaleString()}</p>
+                  <p className="text-lg sm:text-xl font-black text-rose-400 font-mono">${Math.round(metrics.individualAC).toLocaleString()}</p>
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <h3 className="font-bold text-slate-200 text-sm">Hours &amp; Velocity Performance</h3>
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+                <h3 className="font-bold text-slate-200 text-xs sm:text-sm">Hours &amp; Velocity Performance</h3>
+                <div className="grid grid-cols-3 gap-2.5 sm:gap-3 text-center">
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
                     <span className="text-[10px] text-slate-400 block">Total Est. Hours</span>
-                    <span className="text-base font-bold font-mono text-slate-200 mt-1 block">{metrics.totalEstimatedHours}h</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-slate-200 mt-1 block">{metrics.totalEstimatedHours}h</span>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">Actual Logged Hours</span>
-                    <span className="text-base font-bold font-mono text-slate-200 mt-1 block">{metrics.totalActualHours}h</span>
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Actual Logged</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-slate-200 mt-1 block">{metrics.totalActualHours}h</span>
                   </div>
-                  <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block">Earned Hours Value</span>
-                    <span className="text-base font-bold font-mono text-emerald-400 mt-1 block">{Math.round(metrics.earnedHours)}h</span>
+                  <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block">Earned Hours</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-emerald-400 mt-1 block">{Math.round(metrics.earnedHours)}h</span>
                   </div>
                 </div>
               </div>
 
               {/* Variance Analysis */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Schedule Variance (SV = EV - PV)</span>
-                  <p className={`text-lg font-black font-mono ${metrics.individualEV >= metrics.individualPV ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <p className={`text-base sm:text-lg font-black font-mono ${metrics.individualEV >= metrics.individualPV ? 'text-emerald-400' : 'text-amber-400'}`}>
                     {metrics.individualEV >= metrics.individualPV ? '+' : ''}${Math.round(metrics.individualEV - metrics.individualPV).toLocaleString()}
                   </p>
-                  <span className="text-[10px] text-slate-500 mt-1 block">Positive indicates progress ahead of baseline timeline.</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Positive indicates progress ahead of timeline baseline.</span>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
                   <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Cost Variance (CV = EV - AC)</span>
-                  <p className={`text-lg font-black font-mono ${metrics.individualEV >= metrics.individualAC ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  <p className={`text-base sm:text-lg font-black font-mono ${metrics.individualEV >= metrics.individualAC ? 'text-emerald-400' : 'text-rose-400'}`}>
                     {metrics.individualEV >= metrics.individualAC ? '+' : ''}${Math.round(metrics.individualEV - metrics.individualAC).toLocaleString()}
                   </p>
-                  <span className="text-[10px] text-slate-500 mt-1 block">Positive indicates delivery performed under planned budget.</span>
+                  <span className="text-[10px] text-slate-500 mt-1 block">Positive indicates delivery achieved under baseline budget.</span>
                 </div>
               </div>
             </div>
@@ -864,38 +943,38 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
 
           {/* ================= TAB 4: LEAVES & AVAILABILITY CALENDAR ================= */}
           {activeTab === 'leaves' && (
-            <div className="space-y-5 text-xs">
+            <div className="space-y-4 sm:space-y-5 text-xs">
               {/* Header & Quick Summary */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-3.5 sm:p-4 rounded-2xl border border-slate-800">
                 <div>
                   <div className="flex items-center gap-2">
                     <CalendarCheck className="w-4 h-4 text-emerald-400" />
-                    <h3 className="font-bold text-slate-100 text-sm">Personal Availability &amp; Leave Calendar</h3>
+                    <h3 className="font-bold text-slate-100 text-xs sm:text-sm">Personal Availability &amp; Leave Calendar</h3>
                     <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono font-bold">
-                      Read-Only Tracker
+                      Read-Only
                     </span>
                   </div>
                   <p className="text-slate-400 text-[11px] mt-0.5">
-                    Visual day-by-day availability calendar for <strong className="text-slate-200">{stakeholder.name}</strong> showing all approved leaves, PTO schedule, and working capacity.
+                    Visual day-by-day availability calendar for <strong className="text-slate-200">{stakeholder.name}</strong> showing PTO schedule, leave approvals, and active sprint capacity.
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className="px-2.5 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold">
                     {approvedLeaves.length} Approved
                   </span>
                   {pendingLeaves.length > 0 && (
                     <span className="px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold">
-                      {pendingLeaves.length} Pending PM Review
+                      {pendingLeaves.length} Pending
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Month Selector Bar & Capacity KPI Cards */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-2xl border border-slate-800">
-                  <div className="flex items-center gap-2">
+              <div className="space-y-2.5 sm:space-y-3">
+                <div className="flex items-center justify-between bg-slate-950 p-2 sm:p-2.5 rounded-2xl border border-slate-800">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                       type="button"
                       onClick={handlePrevMonth}
@@ -904,7 +983,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
-                    <span className="font-bold text-slate-100 text-sm px-2">
+                    <span className="font-bold text-slate-100 text-xs sm:text-sm px-1.5 sm:px-2">
                       {monthNames[calMonth]} {calYear}
                     </span>
                     <button
@@ -920,44 +999,44 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                   <button
                     type="button"
                     onClick={handleCurrentMonth}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-semibold transition-colors"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-[11px] font-semibold transition-colors"
                   >
-                    August 2026 (Active Sprints)
+                    August 2026 (Active)
                   </button>
                 </div>
 
                 {/* Capacity & Availability Metrics for Selected Month */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Total Working Days</span>
-                    <span className="text-base font-bold font-mono text-slate-200">{monthStats.workingDays} days</span>
-                    <span className="text-[10px] text-slate-500 block">Excluding weekends</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Working Days</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-slate-200">{monthStats.workingDays}d</span>
+                    <span className="text-[10px] text-slate-500 block truncate">Weekdays in month</span>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Approved Leave Days</span>
-                    <span className="text-base font-bold font-mono text-emerald-400">{monthStats.approvedLeaveDaysInMonth} days</span>
-                    <span className="text-[10px] text-emerald-500/80 block">Capacity adjusted to 0h</span>
+                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Approved Leaves</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-emerald-400">{monthStats.approvedLeaveDaysInMonth}d</span>
+                    <span className="text-[10px] text-emerald-500/80 block truncate">Capacity adjusted</span>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Available Working Days</span>
-                    <span className="text-base font-bold font-mono text-indigo-300">{monthStats.availableWorkDays} days</span>
-                    <span className="text-[10px] text-slate-500 block">({monthStats.capacityHours}h capacity)</span>
+                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Available Days</span>
+                    <span className="text-sm sm:text-base font-bold font-mono text-indigo-300">{monthStats.availableWorkDays}d</span>
+                    <span className="text-[10px] text-slate-500 block truncate">({monthStats.capacityHours}h capacity)</span>
                   </div>
 
-                  <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Availability Index</span>
-                    <span className={`text-base font-bold font-mono ${monthStats.availabilityRate >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <div className="p-3 rounded-2xl bg-slate-950/60 border border-slate-800">
+                    <span className="text-[10px] text-slate-400 block uppercase font-semibold">Availability</span>
+                    <span className={`text-sm sm:text-base font-bold font-mono ${monthStats.availabilityRate >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
                       {monthStats.availabilityRate}%
                     </span>
-                    <span className="text-[10px] text-slate-500 block">Sprint Availability</span>
+                    <span className="text-[10px] text-slate-500 block truncate">Sprint Availability</span>
                   </div>
                 </div>
               </div>
 
               {/* READ-ONLY MINI-CALENDAR GRID */}
-              <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2.5 sm:space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-indigo-400" />
@@ -965,17 +1044,17 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                       {monthNames[calMonth]} {calYear} Availability Grid
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-400">
-                    Click any day to inspect hours &amp; leave details
+                  <span className="text-[10px] sm:text-[11px] text-slate-400">
+                    Click day to inspect
                   </span>
                 </div>
 
                 {/* Weekday Column Headers */}
-                <div className="grid grid-cols-7 gap-1.5 text-center">
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5 text-center">
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
                     <div
                       key={d}
-                      className={`py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-lg ${
+                      className={`py-1 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider rounded-lg ${
                         i === 0 || i === 6 ? 'text-slate-500 bg-slate-900/40' : 'text-slate-400 bg-slate-900/80'
                       }`}
                     >
@@ -985,14 +1064,14 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                 </div>
 
                 {/* Calendar Day Matrix */}
-                <div className="grid grid-cols-7 gap-1.5">
+                <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                   {/* Previous month overflow days */}
                   {Array.from({ length: firstDayOfWeek }).map((_, idx) => {
                     const prevDayNum = prevMonthTotalDays - firstDayOfWeek + 1 + idx;
                     return (
                       <div
                         key={`prev-${idx}`}
-                        className="h-16 p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
+                        className="h-12 sm:h-14 md:h-16 p-1 sm:p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
                       >
                         <span className="text-[10px] font-mono text-slate-600">{prevDayNum}</span>
                       </div>
@@ -1024,16 +1103,16 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                         type="button"
                         key={`curr-${dayNum}`}
                         onClick={() => setSelectedCalendarDateStr(dateStr)}
-                        className={`h-16 p-1.5 rounded-xl border text-left flex flex-col justify-between transition-all relative overflow-hidden group ${cellBg} ${
-                          isSelected ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-950 z-10 scale-[1.02]' : 'hover:border-slate-700'
+                        className={`h-12 sm:h-14 md:h-16 p-1 sm:p-1.5 rounded-xl border text-left flex flex-col justify-between transition-all relative overflow-hidden group ${cellBg} ${
+                          isSelected ? 'ring-2 ring-indigo-400 ring-offset-1 sm:ring-offset-2 ring-offset-slate-950 z-10 scale-[1.02]' : 'hover:border-slate-700'
                         }`}
                       >
                         {/* Day Number and Today Indicator */}
                         <div className="flex items-center justify-between w-full">
                           <span
-                            className={`text-xs font-mono font-bold ${
+                            className={`text-[11px] sm:text-xs font-mono font-bold ${
                               isToday
-                                ? 'w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center -ml-0.5 -mt-0.5 shadow-sm'
+                                ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center -ml-0.5 -mt-0.5 shadow-sm text-[10px]'
                                 : leaveOnDate?.type === 'approved'
                                 ? 'text-white'
                                 : isWeekend
@@ -1045,7 +1124,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                           </span>
 
                           {isToday && (
-                            <span className="text-[8px] font-mono uppercase px-1 rounded bg-indigo-500/30 text-indigo-200 font-bold">
+                            <span className="text-[7px] sm:text-[8px] font-mono uppercase px-0.5 sm:px-1 rounded bg-indigo-500/30 text-indigo-200 font-bold hidden sm:inline">
                               Today
                             </span>
                           )}
@@ -1054,9 +1133,9 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                         {/* Leave Type Label or Status */}
                         {leaveOnDate?.type === 'approved' && badgeInfo && (
                           <div className="w-full">
-                            <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-slate-950/60 text-white leading-tight">
+                            <span className="text-[8px] sm:text-[9px] font-bold truncate block px-0.5 sm:px-1 py-0.5 rounded bg-slate-950/60 text-white leading-tight">
                               {leaveOnDate.leave.durationType === 'hours' 
-                                ? `${leaveOnDate.leave.hoursCount}h Off`
+                                ? `${leaveOnDate.leave.hoursCount}h`
                                 : badgeInfo.label.split('/')[0].trim()}
                             </span>
                           </div>
@@ -1064,21 +1143,21 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
 
                         {leaveOnDate?.type === 'pending' && (
                           <div className="w-full">
-                            <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-amber-950/80 text-amber-300 leading-tight">
-                              {leaveOnDate.leave.durationType === 'hours' ? `${leaveOnDate.leave.hoursCount}h (Pend)` : 'Pending'}
+                            <span className="text-[8px] sm:text-[9px] font-bold truncate block px-0.5 sm:px-1 py-0.5 rounded bg-amber-950/80 text-amber-300 leading-tight">
+                              {leaveOnDate.leave.durationType === 'hours' ? `${leaveOnDate.leave.hoursCount}h (P)` : 'Pend'}
                             </span>
                           </div>
                         )}
 
                         {!leaveOnDate && !isWeekend && (
-                          <div className="w-full opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="text-[8px] text-slate-400 font-mono">8.0h cap</span>
+                          <div className="w-full opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
+                            <span className="text-[8px] text-slate-400 font-mono">8h</span>
                           </div>
                         )}
 
                         {isWeekend && !leaveOnDate && (
-                          <div className="w-full text-right">
-                            <span className="text-[8px] text-slate-600 font-mono">Rest</span>
+                          <div className="w-full text-right hidden sm:block">
+                            <span className="text-[8px] text-slate-600 font-mono">Off</span>
                           </div>
                         )}
                       </button>
@@ -1091,7 +1170,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                   }).map((_, idx) => (
                     <div
                       key={`next-${idx}`}
-                      className="h-16 p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
+                      className="h-12 sm:h-14 md:h-16 p-1 sm:p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
                     >
                       <span className="text-[10px] font-mono text-slate-600">{idx + 1}</span>
                     </div>
@@ -1099,29 +1178,25 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                 </div>
 
                 {/* Calendar Legend */}
-                <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800 text-[11px] text-slate-400">
+                <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 pt-2 border-t border-slate-800 text-[10px] sm:text-[11px] text-slate-400">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span>Approved Vacation / PTO</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Vacation / PTO</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span>Approved Sick Leave</span>
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span>Sick Leave</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                    <span>Training / Conference</span>
+                    <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                    <span>Training</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-                    <span>Parental / Special</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-dashed border-amber-300" />
+                    <span className="w-2 h-2 rounded-full bg-amber-500 border border-dashed border-amber-300" />
                     <span>Pending PM Review</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-700" />
+                    <span className="w-2 h-2 rounded-full bg-slate-700" />
                     <span>Regular Work Day (8h)</span>
                   </div>
                 </div>
@@ -1129,41 +1204,41 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
 
               {/* Selected Day Inspector Card */}
               {selectedDateLeaveInfo && (
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30 space-y-3 shadow-md">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30 space-y-2.5 sm:space-y-3 shadow-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
                     <div>
                       <span className="text-[10px] text-slate-400 uppercase font-semibold block">Date Inspector</span>
-                      <h4 className="text-sm font-bold text-white">{selectedDateLeaveInfo.formattedDate}</h4>
+                      <h4 className="text-xs sm:text-sm font-bold text-white">{selectedDateLeaveInfo.formattedDate}</h4>
                     </div>
 
                     <div>
                       {selectedDateLeaveInfo.leaveData?.type === 'approved' ? (
-                        <span className="px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 sm:py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1.5">
                           <Check className="w-3.5 h-3.5" />
                           <span>Approved Time Off</span>
                         </span>
                       ) : selectedDateLeaveInfo.leaveData?.type === 'pending' ? (
-                        <span className="px-3 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 sm:py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-1.5">
                           <AlertCircle className="w-3.5 h-3.5" />
                           <span>Pending PM Approval</span>
                         </span>
                       ) : selectedDateLeaveInfo.isWeekend ? (
-                        <span className="px-3 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-bold text-xs">
+                        <span className="px-2.5 py-0.5 sm:py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-bold text-xs">
                           Weekend Rest Day
                         </span>
                       ) : (
-                        <span className="px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-1.5">
+                        <span className="px-2.5 py-0.5 sm:py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5" />
-                          <span>Fully Available (8.0h Capacity)</span>
+                          <span>Fully Available (8.0h Cap)</span>
                         </span>
                       )}
                     </div>
                   </div>
 
                   {selectedDateLeaveInfo.leaveData ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">Leave Category &amp; Unit</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Leave Category</span>
                         <span className="font-bold text-slate-100 text-xs capitalize block">
                           {selectedDateLeaveInfo.leaveData.leave.leaveType} Leave
                         </span>
@@ -1173,9 +1248,9 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                           <span className="text-[10px] text-indigo-400 font-medium">Full Day Off ({selectedDateLeaveInfo.leaveData.leave.daysCount}d)</span>
                         )}
                       </div>
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">Span &amp; Hours</span>
-                        <span className="font-bold text-slate-100 text-xs font-mono block">
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Schedule Span</span>
+                        <span className="font-bold text-slate-100 text-xs font-mono block truncate">
                           {selectedDateLeaveInfo.leaveData.leave.startDate === selectedDateLeaveInfo.leaveData.leave.endDate
                             ? selectedDateLeaveInfo.leaveData.leave.startDate
                             : `${selectedDateLeaveInfo.leaveData.leave.startDate} to ${selectedDateLeaveInfo.leaveData.leave.endDate}`}
@@ -1183,24 +1258,21 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                         {selectedDateLeaveInfo.leaveData.leave.timeRange ? (
                           <span className="text-[10px] text-indigo-300 font-medium">{selectedDateLeaveInfo.leaveData.leave.timeRange}</span>
                         ) : (
-                          <span className="text-[10px] text-slate-400">{selectedDateLeaveInfo.leaveData.leave.hoursCount}h capacity reduction</span>
+                          <span className="text-[10px] text-slate-400">{selectedDateLeaveInfo.leaveData.leave.hoursCount}h blocked</span>
                         )}
                       </div>
-                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                        <span className="text-[10px] text-slate-400 block">Authorization Status</span>
-                        <span className="font-bold text-slate-100 text-xs block">
+                      <div className="p-2.5 sm:p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 block">Authorization</span>
+                        <span className="font-bold text-slate-100 text-xs block truncate">
                           {selectedDateLeaveInfo.leaveData.leave.approvedBy
                             ? `Approved by ${selectedDateLeaveInfo.leaveData.leave.approvedBy}`
                             : 'Pending PM / Admin Sign-off'}
                         </span>
-                        {selectedDateLeaveInfo.leaveData.leave.applicantRole === 'pm' && (
-                          <span className="text-[9px] text-indigo-400 font-medium">PM Request → Admin</span>
-                        )}
                       </div>
-                      <div className="sm:col-span-3 p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2">
+                      <div className="sm:col-span-3 p-2.5 sm:p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2">
                         <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
                         <div>
-                          <span className="text-[10px] text-slate-400 block">Leave Reason &amp; Deliverable Impact</span>
+                          <span className="text-[10px] text-slate-400 block">Reason &amp; Deliverable Impact</span>
                           <p className="text-slate-200 text-xs mt-0.5">
                             {selectedDateLeaveInfo.leaveData.leave.reason || 'Personal scheduled time off.'}
                           </p>
@@ -1218,10 +1290,10 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
               )}
 
               {/* Complete Leave History Records List */}
-              <div className="space-y-3 pt-2">
+              <div className="space-y-2.5 pt-2">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-slate-200 text-xs">All Leave Applications &amp; History ({memberLeaves.length})</h4>
-                  <span className="text-slate-500 text-[11px]">Chronological Dossier</span>
+                  <span className="text-slate-500 text-[11px]">Dossier Records</span>
                 </div>
 
                 {memberLeaves.length === 0 ? (
@@ -1229,13 +1301,13 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                     No leave requests recorded for this member.
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
                     {memberLeaves.map(l => {
                       const badge = getLeaveTypeBadge(l.leaveType);
                       return (
                         <div
                           key={l.id}
-                          className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                          className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
                         >
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1254,17 +1326,12 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                                 {l.status}
                               </span>
                               {l.durationType === 'hours' ? (
-                                <span className="text-[11px] font-mono text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                                <span className="text-[10px] font-mono text-amber-300 font-bold bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
                                   {l.hoursCount}h Hourly Off
                                 </span>
                               ) : (
-                                <span className="text-[11px] font-mono text-slate-300 font-bold">
-                                  {l.daysCount} days ({l.hoursCount}h)
-                                </span>
-                              )}
-                              {l.applicantRole === 'pm' && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                                  PM Request
+                                <span className="text-[10px] font-mono text-slate-300 font-bold">
+                                  {l.daysCount}d ({l.hoursCount}h)
                                 </span>
                               )}
                             </div>
@@ -1277,14 +1344,9 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                           </div>
 
                           {l.approvedBy && (
-                            <div className="text-left sm:text-right text-[10px] text-slate-400 shrink-0 bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-800">
+                            <div className="text-left sm:text-right text-[10px] text-slate-400 shrink-0 bg-slate-900/60 px-2.5 py-1 rounded-xl border border-slate-800">
                               <span>Approved by</span>
                               <span className="font-semibold text-slate-200 block">{l.approvedBy}</span>
-                              {l.approvedAt && (
-                                <span className="text-slate-500 font-mono text-[9px]">
-                                  {new Date(l.approvedAt).toLocaleDateString()}
-                                </span>
-                              )}
                             </div>
                           )}
                         </div>
@@ -1299,23 +1361,23 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
           {/* ================= TAB 5: REVIEWS ================= */}
           {activeTab === 'reviews' && (
             <div className="space-y-4 text-xs">
-              <form onSubmit={handleAddReview} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-                <span className="font-bold text-slate-200 block text-sm">Add Executive PMO / Supervisor Performance Note</span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <form onSubmit={handleAddReview} className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
+                <span className="font-bold text-slate-200 block text-xs sm:text-sm">Add Executive PMO / Supervisor Performance Note</span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                   <div className="sm:col-span-2">
                     <input
                       type="text"
                       placeholder="Write evaluation feedback or commendation..."
                       value={reviewText}
                       onChange={e => setReviewText(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
                     />
                   </div>
                   <div className="flex gap-2">
                     <select
                       value={reviewRating}
                       onChange={e => setReviewRating(e.target.value)}
-                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 flex-1"
+                      className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 flex-1 text-xs"
                     >
                       <option value="Exceeds Expectations">Exceeds Expectations</option>
                       <option value="Meets High Standard">Meets High Standard</option>
@@ -1331,17 +1393,17 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                 </div>
               </form>
 
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {reviewsList.map(rev => (
-                  <div key={rev.id} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                  <div key={rev.id} className="p-3.5 sm:p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-100">{rev.author} <span className="text-slate-400 font-normal">({rev.role})</span></span>
                       <span className="px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold text-[10px]">
                         {rev.rating}
                       </span>
                     </div>
-                    <p className="text-slate-300 leading-relaxed">{rev.comment}</p>
-                    <span className="text-[10px] text-slate-500 font-mono block pt-1">{rev.date}</span>
+                    <p className="text-slate-300 leading-relaxed text-xs">{rev.comment}</p>
+                    <span className="text-[10px] text-slate-500 font-mono block pt-0.5">{rev.date}</span>
                   </div>
                 ))}
               </div>
@@ -1352,9 +1414,9 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
         {/* ========================================================================= */}
         {/* MODAL FOOTER */}
         {/* ========================================================================= */}
-        <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between shrink-0 text-xs">
+        <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between shrink-0 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-mono text-[11px]">Stakeholder ID: {stakeholder.id}</span>
+            <span className="text-slate-500 font-mono text-[10px] sm:text-[11px]">ID: {stakeholder.id}</span>
             <span className="hidden sm:inline-block text-slate-700">•</span>
             <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-slate-400">
               <Shield className="w-3 h-3 text-indigo-400" />
@@ -1365,7 +1427,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors"
+            className="px-4 py-1.5 sm:py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold transition-colors text-xs"
           >
             Close Report Card
           </button>
