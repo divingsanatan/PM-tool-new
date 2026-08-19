@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { Task, Stakeholder, UserProfile } from '../../types';
+import { Task, Stakeholder, UserProfile, ProjectData } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
 import { getStatusProgress } from '../../utils/taskCalculations';
 import {
@@ -36,8 +36,11 @@ import {
   Activity,
   BarChart3,
   Target,
-  List
+  List,
+  CalendarCheck
 } from 'lucide-react';
+import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
+import { LeaveRequestModal } from '../admin/LeaveRequestModal';
 import {
   ResponsiveContainer,
   BarChart,
@@ -66,6 +69,8 @@ interface TeamMemberDashboardProps {
 export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpenTaskModal }) => {
   const {
     projectData,
+    allProjectsMap,
+    projectsList,
     currentUser,
     allUsers,
     loginAsUser,
@@ -73,37 +78,283 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     saveSubtask
   } = useProject();
 
+  const isAdmin = currentUser.role === 'admin';
+  const isPM = currentUser.role === 'pm';
+  const isPrivileged = isAdmin || isPM;
+
+  // Project Scope State: 'all' (Portfolio-Wide Cross-Project) or specific project ID
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
+
+  // Convert allProjectsMap to array of ProjectData
+  const allProjects = useMemo(() => {
+    const mapValues = Object.values(allProjectsMap || {}) as ProjectData[];
+    if (mapValues.length > 0) return mapValues;
+    return projectData ? [projectData] : [];
+  }, [allProjectsMap, projectData]);
+
+  // Filter selectable stakeholders across the portfolio:
+  // 1. Admin should NOT have their own name here.
+  // 2. Pull information about PMs and entire internal team.
+  // 3. Do not include external stakeholders here (category === 'external').
+  const selectableStakeholders = useMemo(() => {
+    const adminEmails = new Set(
+      allUsers
+        .filter(u => u.role === 'admin')
+        .map(u => u.email.toLowerCase())
+    );
+
+    const stakeholderMap = new Map<string, Stakeholder>();
+
+    // Gather stakeholders from all projects
+    allProjects.forEach(proj => {
+      (proj.stakeholders || []).forEach(s => {
+        const emailLower = (s.email || '').toLowerCase();
+        // Exclude Admin from list
+        if (
+          adminEmails.has(emailLower) ||
+          s.id === 'sh-admin' ||
+          (s.role || '').toLowerCase().includes('portfolio administrator') ||
+          (s.role || '').toLowerCase().includes('executive admin')
+        ) {
+          return;
+        }
+        // Exclude external stakeholders
+        if (s.category === 'external') {
+          return;
+        }
+        if (!stakeholderMap.has(s.id) && !stakeholderMap.has(emailLower)) {
+          stakeholderMap.set(s.id, s);
+        }
+      });
+    });
+
+    return Array.from(stakeholderMap.values());
+  }, [allProjects, allUsers]);
+
   // Selected stakeholder report card to view
   const [selectedMemberId, setSelectedMemberId] = useState<string>(() => {
-    // Default to matching stakeholder ID for currentUser, or first stakeholder
-    const matched = projectData.stakeholders.find(s => s.email.toLowerCase() === currentUser.email.toLowerCase());
-    return matched ? matched.id : projectData.stakeholders[0]?.id || 'sh-3';
+    const adminEmails = new Set(
+      allUsers.filter(u => u.role === 'admin').map(u => u.email.toLowerCase())
+    );
+    // If current user is not admin, try to match their email among internal stakeholders
+    if (!adminEmails.has(currentUser.email.toLowerCase())) {
+      const matched = selectableStakeholders.find(
+        s => s.email.toLowerCase() === currentUser.email.toLowerCase()
+      );
+      if (matched) return matched.id;
+    }
+    // Otherwise fallback to first internal non-admin stakeholder
+    return selectableStakeholders[0]?.id || 'sh-1';
   });
+
+  // Ensure selectedMemberId stays valid if selectableStakeholders changes
+  React.useEffect(() => {
+    if (selectableStakeholders.length > 0) {
+      const exists = selectableStakeholders.some(s => s.id === selectedMemberId);
+      if (!exists) {
+        setSelectedMemberId(selectableStakeholders[0].id);
+      }
+    }
+  }, [selectableStakeholders, selectedMemberId]);
 
   // Task Filter state inside report card
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Task Hours Breakdown chart aggregation view mode
+  const [hoursChartViewMode, setHoursChartViewMode] = useState<'smart' | 'milestones' | 'projects' | 'status' | 'all'>('smart');
+
   // Hours logging inline state
   const [loggingTaskId, setLoggingTaskId] = useState<string | null>(null);
   const [logHoursInput, setLogHoursInput] = useState<number>(0);
 
-  // Active Stakeholder details & calculated metrics
-  const selectedStakeholder = useMemo(() => {
-    return projectData.stakeholders.find(s => s.id === selectedMemberId) || projectData.stakeholders[0];
-  }, [projectData.stakeholders, selectedMemberId]);
+  // Individual Report Card & Availability Calendar Modal
+  const [showReportCardModal, setShowReportCardModal] = useState<boolean>(false);
+  // Quick Leave Request Modal
+  const [showLeaveModal, setShowLeaveModal] = useState<boolean>(false);
 
+  // Active Stakeholder details
+  const selectedStakeholder = useMemo(() => {
+    const found = selectableStakeholders.find(s => s.id === selectedMemberId);
+    return found || selectableStakeholders[0] || projectData.stakeholders[0];
+  }, [selectableStakeholders, selectedMemberId, projectData.stakeholders]);
+
+  // Matched User Profile if any
+  const matchedUserObj = useMemo(() => {
+    if (!selectedStakeholder) return undefined;
+    return allUsers.find(
+      u => u.id === selectedStakeholder.id || u.email.toLowerCase() === (selectedStakeholder.email || '').toLowerCase()
+    );
+  }, [allUsers, selectedStakeholder]);
+
+  // Check if the selected member is a Project Manager
+  const isSelectedMemberPM = useMemo(() => {
+    if (!selectedStakeholder) return false;
+    if (matchedUserObj?.role === 'pm') return true;
+    const roleLower = (selectedStakeholder.role || '').toLowerCase();
+    if (roleLower.includes('project manager') || roleLower.includes('pm')) return true;
+    const targetEmail = (selectedStakeholder.email || '').toLowerCase();
+    const targetId = selectedStakeholder.id;
+    return allProjects.some(
+      p => p.projectManagerId === targetId ||
+           (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === targetEmail)
+    );
+  }, [selectedStakeholder, matchedUserObj, allProjects]);
+
+  // Only the projects where this selected team member or PM is added/participates
+  const memberProjects = useMemo(() => {
+    if (!selectedStakeholder) return allProjects;
+    const targetEmail = (selectedStakeholder.email || '').toLowerCase();
+    const targetId = selectedStakeholder.id;
+
+    if (isSelectedMemberPM) {
+      const pmProjects = allProjects.filter(proj => {
+        const isAssignedPM = proj.projectManagerId === targetId ||
+          (proj.projectManagerEmail && proj.projectManagerEmail.toLowerCase() === targetEmail);
+        const isStakeholderInProj = (proj.stakeholders || []).some(
+          s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
+        );
+        return isAssignedPM || isStakeholderInProj;
+      });
+      return pmProjects.length > 0 ? pmProjects : allProjects;
+    }
+
+    return allProjects.filter(proj => {
+      const isStakeholderInProj = (proj.stakeholders || []).some(
+        s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
+      );
+      const hasAssignedTasks = (proj.tasks || []).some(
+        t => (t.assigneeIds || []).includes(targetId)
+      );
+
+      return isStakeholderInProj || hasAssignedTasks;
+    });
+  }, [allProjects, selectedStakeholder, isSelectedMemberPM]);
+
+  // Determine projects in current scope (strictly restricted to member's projects)
+  const scopedProjects = useMemo(() => {
+    if (selectedProjectId === 'all') {
+      return memberProjects.length > 0 ? memberProjects : (projectData ? [projectData] : []);
+    }
+    const found = memberProjects.find(p => p.id === selectedProjectId);
+    return found ? [found] : (memberProjects.length > 0 ? [memberProjects[0]] : (projectData ? [projectData] : []));
+  }, [selectedProjectId, memberProjects, projectData]);
+
+  // Reset selectedProjectId to 'all' if the selected project is not in the newly selected member's project list
+  React.useEffect(() => {
+    if (selectedProjectId !== 'all' && memberProjects.length > 0) {
+      const isStillInMemberProjects = memberProjects.some(p => p.id === selectedProjectId);
+      if (!isStillInMemberProjects) {
+        setSelectedProjectId('all');
+      }
+    }
+  }, [memberProjects, selectedProjectId]);
+
+  // Aggregate Scoped Tasks, Subtasks, Milestones for Selected Stakeholder or PM Project Scope
+  const { allScopedTasks, allScopedSubtasks, allScopedMilestones, projectBreakdowns } = useMemo(() => {
+    if (!selectedStakeholder) {
+      return { allScopedTasks: [], allScopedSubtasks: [], allScopedMilestones: [], projectBreakdowns: [] };
+    }
+
+    const tasksList: (Task & { projectId?: string; projectName?: string; projectCode?: string })[] = [];
+    const subtasksList: any[] = [];
+    const milestonesList: any[] = [];
+
+    const breakdowns: {
+      projectId: string;
+      projectName: string;
+      projectCode: string;
+      assignedTasksCount: number;
+      completedTasksCount: number;
+      completionPercent: number;
+      estimatedHours: number;
+      actualHours: number;
+      earnedHours: number;
+      spi: number;
+      cpi: number;
+      milestoneCount: number;
+    }[] = [];
+
+    scopedProjects.forEach(proj => {
+      // For PM, evaluate all deliverables of the project. For Team Member, evaluate only their assigned tasks.
+      const projTasks = isSelectedMemberPM
+        ? (proj.tasks || []).map(t => ({
+            ...t,
+            projectId: proj.id,
+            projectName: proj.projectName,
+            projectCode: proj.projectCode
+          }))
+        : (proj.tasks || [])
+            .filter(t => (t.assigneeIds || []).includes(selectedStakeholder.id))
+            .map(t => ({
+              ...t,
+              projectId: proj.id,
+              projectName: proj.projectName,
+              projectCode: proj.projectCode
+            }));
+
+      tasksList.push(...projTasks);
+      subtasksList.push(...(proj.subtasks || []));
+      milestonesList.push(...(proj.milestones || []));
+
+      // Calculate project specific metrics
+      if (projTasks.length > 0 || isSelectedMemberPM || (proj.stakeholders || []).some(s => s.id === selectedStakeholder.id)) {
+        const completedCount = projTasks.filter(t => t.status === 'done').length;
+        const estHours = isSelectedMemberPM
+          ? projTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+          : projTasks.reduce((sum, t) => sum + (t.estimatedHours || 0) / Math.max(1, (t.assigneeIds || []).length), 0);
+        const actHours = isSelectedMemberPM
+          ? projTasks.reduce((sum, t) => sum + (t.actualHours || 0), 0)
+          : projTasks.reduce((sum, t) => sum + (t.actualHours || 0) / Math.max(1, (t.assigneeIds || []).length), 0);
+        const earned = isSelectedMemberPM
+          ? projTasks.reduce((sum, t) => sum + ((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100)), 0)
+          : projTasks.reduce((sum, t) => sum + ((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100)) / Math.max(1, (t.assigneeIds || []).length), 0);
+        
+        const projMilestones = isSelectedMemberPM
+          ? (proj.milestones || [])
+          : (proj.milestones || []).filter(m => projTasks.some(t => t.milestoneId === m.id));
+
+        const spi = estHours > 0 ? Math.round((earned / Math.max(1, estHours * 0.8)) * 100) / 100 : 1.0;
+        const cpi = actHours > 0 ? Math.round((earned / actHours) * 100) / 100 : 1.0;
+
+        breakdowns.push({
+          projectId: proj.id,
+          projectName: proj.projectName,
+          projectCode: proj.projectCode,
+          assignedTasksCount: projTasks.length,
+          completedTasksCount: completedCount,
+          completionPercent: projTasks.length > 0 ? Math.round((completedCount / projTasks.length) * 100) : 0,
+          estimatedHours: Math.round(estHours * 10) / 10,
+          actualHours: Math.round(actHours * 10) / 10,
+          earnedHours: Math.round(earned * 10) / 10,
+          spi: Math.min(2.0, Math.max(0.5, spi)),
+          cpi: Math.min(2.0, Math.max(0.5, cpi)),
+          milestoneCount: projMilestones.length
+        });
+      }
+    });
+
+    return {
+      allScopedTasks: tasksList,
+      allScopedSubtasks: subtasksList,
+      allScopedMilestones: milestonesList,
+      projectBreakdowns: breakdowns
+    };
+  }, [scopedProjects, selectedStakeholder, isSelectedMemberPM]);
+
+  // Overall Calculated Metrics for the selected scope
   const metrics = useMemo(() => {
     if (!selectedStakeholder) return null;
     return calculateMemberMetrics(
       selectedStakeholder.id,
-      projectData.stakeholders,
-      projectData.tasks,
-      projectData.subtasks,
-      projectData.milestones,
-      projectData.statusPercentages
+      selectableStakeholders,
+      allScopedTasks,
+      allScopedSubtasks,
+      allScopedMilestones,
+      projectData.statusPercentages,
+      isSelectedMemberPM
     );
-  }, [selectedStakeholder, projectData.stakeholders, projectData.tasks, projectData.subtasks, projectData.milestones, projectData.statusPercentages]);
+  }, [selectedStakeholder, selectableStakeholders, allScopedTasks, allScopedSubtasks, allScopedMilestones, projectData.statusPercentages, isSelectedMemberPM]);
 
   if (!selectedStakeholder || !metrics) {
     return (
@@ -114,17 +365,31 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
   }
 
   // Filter tasks assigned to selected member
-  const filteredAssignedTasks = metrics.assignedTasks.filter(task => {
+  const filteredAssignedTasks = (allScopedTasks || []).filter(task => {
     if (taskStatusFilter !== 'all' && task.status !== taskStatusFilter) return false;
     if (searchQuery.trim() !== '') {
       const q = searchQuery.toLowerCase();
-      return task.title.toLowerCase().includes(q) || (task.description && task.description.toLowerCase().includes(q));
+      return (
+        task.title.toLowerCase().includes(q) ||
+        (task.description && task.description.toLowerCase().includes(q)) ||
+        (task.projectCode && task.projectCode.toLowerCase().includes(q))
+      );
     }
     return true;
   });
 
-  // RAID Risks owned by this member
-  const memberOwnedRisks = projectData.raidItems.filter(r => r.ownerId === selectedStakeholder.id || r.ownerId === selectedStakeholder.name);
+  // RAID Risks owned by this member across scoped projects
+  const memberOwnedRisks = useMemo(() => {
+    const risks: any[] = [];
+    scopedProjects.forEach(p => {
+      (p.raidItems || []).forEach(r => {
+        if (r.ownerId === selectedStakeholder.id || r.ownerId === selectedStakeholder.name) {
+          risks.push({ ...r, projectName: p.projectName, projectCode: p.projectCode });
+        }
+      });
+    });
+    return risks;
+  }, [scopedProjects, selectedStakeholder]);
 
   // Switch active user session to selected member
   const handleSwitchToMemberRole = (stakeholder: Stakeholder) => {
@@ -169,12 +434,17 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     });
   };
 
-  const isPM = currentUser.role === 'pm';
   const isViewingSelf = currentUser.email.toLowerCase() === selectedStakeholder.email.toLowerCase();
 
   // Prepare Data for Visual Analytics Graphs
   // 1. Radar Chart Data
-  const radarData = [
+  const radarData = isSelectedMemberPM ? [
+    { subject: 'Project SPI', value: Math.min(100, Math.round(metrics.individualSPI * 100)), fullMark: 100 },
+    { subject: 'Project CPI', value: Math.min(100, Math.round(metrics.individualCPI * 100)), fullMark: 100 },
+    { subject: 'Work Efficiency %', value: metrics.workEfficiencyPercent, fullMark: 100 },
+    { subject: 'Milestone Progress %', value: metrics.taskCompletionPercent, fullMark: 100 },
+    { subject: 'Scope Delivered %', value: Math.min(100, Math.round((metrics.completedTasksCount / Math.max(1, metrics.totalAssignedTasks)) * 100)), fullMark: 100 }
+  ] : [
     { subject: 'SPI (Schedule)', value: Math.min(100, Math.round(metrics.individualSPI * 100)), fullMark: 100 },
     { subject: 'CPI (Cost)', value: Math.min(100, Math.round(metrics.individualCPI * 100)), fullMark: 100 },
     { subject: 'Efficiency %', value: metrics.workEfficiencyPercent, fullMark: 100 },
@@ -182,15 +452,156 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     { subject: 'Capacity Load %', value: Math.min(100, metrics.utilizationPercent), fullMark: 100 }
   ];
 
-  // 2. Task Hours Comparison Data
-  const taskHoursChartData = metrics.assignedTasks.map(t => ({
-    name: t.title.length > 16 ? t.title.substring(0, 14) + '...' : t.title,
-    fullName: t.title,
-    Estimated: t.estimatedHours || 0,
-    Actual: t.actualHours || 0,
-    Earned: Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10,
-    Completion: t.completionPercent || 0
-  }));
+  // 2. Task Hours Comparison Data with Multi-Mode Aggregation & Volume Safeguards
+  const taskHoursChartData = useMemo(() => {
+    if (!metrics || !metrics.assignedTasks) return [];
+    const rawTasks = metrics.assignedTasks;
+
+    if (hoursChartViewMode === 'milestones') {
+      // Group tasks by milestone
+      const map = new Map<string, { name: string; fullName: string; Estimated: number; Actual: number; Earned: number; count: number }>();
+      rawTasks.forEach(t => {
+        const m = allScopedMilestones.find(ms => ms.id === t.milestoneId);
+        const key = t.milestoneId || 'unassigned';
+        const mTitle = m ? m.title : 'General Tasks';
+        const current = map.get(key) || {
+          name: mTitle.length > 13 ? mTitle.substring(0, 11) + '...' : mTitle,
+          fullName: mTitle,
+          Estimated: 0,
+          Actual: 0,
+          Earned: 0,
+          count: 0
+        };
+        current.Estimated += (t.estimatedHours || 0);
+        current.Actual += (t.actualHours || 0);
+        current.Earned += Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10;
+        current.count += 1;
+        map.set(key, current);
+      });
+      return Array.from(map.values()).map(v => ({
+        ...v,
+        Estimated: Math.round(v.Estimated * 10) / 10,
+        Actual: Math.round(v.Actual * 10) / 10,
+        Earned: Math.round(v.Earned * 10) / 10
+      }));
+    }
+
+    if (hoursChartViewMode === 'projects') {
+      // Group tasks by project
+      const map = new Map<string, { name: string; fullName: string; Estimated: number; Actual: number; Earned: number; count: number }>();
+      rawTasks.forEach(t => {
+        const key = (t as any).projectCode || (t as any).projectId || 'PRJ';
+        const pName = (t as any).projectName || key;
+        const current = map.get(key) || {
+          name: key,
+          fullName: `[${key}] ${pName}`,
+          Estimated: 0,
+          Actual: 0,
+          Earned: 0,
+          count: 0
+        };
+        current.Estimated += (t.estimatedHours || 0);
+        current.Actual += (t.actualHours || 0);
+        current.Earned += Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10;
+        current.count += 1;
+        map.set(key, current);
+      });
+      return Array.from(map.values()).map(v => ({
+        ...v,
+        Estimated: Math.round(v.Estimated * 10) / 10,
+        Actual: Math.round(v.Actual * 10) / 10,
+        Earned: Math.round(v.Earned * 10) / 10
+      }));
+    }
+
+    if (hoursChartViewMode === 'status') {
+      // Group tasks by status
+      const statusLabels: Record<string, string> = {
+        done: 'Completed',
+        in_progress: 'In Progress',
+        review: 'Under Review',
+        demoable: 'Demo-able',
+        on_hold: 'On Hold',
+        blocked: 'Blocked',
+        todo: 'To Do'
+      };
+      const map = new Map<string, { name: string; fullName: string; Estimated: number; Actual: number; Earned: number; count: number }>();
+      rawTasks.forEach(t => {
+        const st = t.status || 'todo';
+        const label = statusLabels[st] || st;
+        const current = map.get(st) || {
+          name: label,
+          fullName: `Status: ${label}`,
+          Estimated: 0,
+          Actual: 0,
+          Earned: 0,
+          count: 0
+        };
+        current.Estimated += (t.estimatedHours || 0);
+        current.Actual += (t.actualHours || 0);
+        current.Earned += Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10;
+        current.count += 1;
+        map.set(st, current);
+      });
+      return Array.from(map.values()).map(v => ({
+        ...v,
+        Estimated: Math.round(v.Estimated * 10) / 10,
+        Actual: Math.round(v.Actual * 10) / 10,
+        Earned: Math.round(v.Earned * 10) / 10
+      }));
+    }
+
+    if (hoursChartViewMode === 'smart') {
+      if (rawTasks.length <= 6) {
+        return rawTasks.map(t => ({
+          name: t.title.length > 13 ? t.title.substring(0, 11) + '...' : t.title,
+          fullName: t.title,
+          Estimated: t.estimatedHours || 0,
+          Actual: t.actualHours || 0,
+          Earned: Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10,
+          Completion: t.completionPercent || 0
+        }));
+      }
+
+      // Sort by effort (actual + estimated) descending
+      const sorted = [...rawTasks].sort((a, b) => ((b.actualHours || 0) + (b.estimatedHours || 0)) - ((a.actualHours || 0) + (a.estimatedHours || 0)));
+      const topTasks = sorted.slice(0, 5).map(t => ({
+        name: t.title.length > 13 ? t.title.substring(0, 11) + '...' : t.title,
+        fullName: t.title,
+        Estimated: t.estimatedHours || 0,
+        Actual: t.actualHours || 0,
+        Earned: Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10,
+        Completion: t.completionPercent || 0
+      }));
+
+      const otherTasks = sorted.slice(5);
+      const otherEst = otherTasks.reduce((s, t) => s + (t.estimatedHours || 0), 0);
+      const otherAct = otherTasks.reduce((s, t) => s + (t.actualHours || 0), 0);
+      const otherEarned = otherTasks.reduce((s, t) => s + ((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100)), 0);
+
+      return [
+        ...topTasks,
+        {
+          name: `Others (${otherTasks.length})`,
+          fullName: `Aggregated total for ${otherTasks.length} other deliverables`,
+          Estimated: Math.round(otherEst * 10) / 10,
+          Actual: Math.round(otherAct * 10) / 10,
+          Earned: Math.round(otherEarned * 10) / 10,
+          isOther: true
+        }
+      ];
+    }
+
+    // 'all' mode: returns all individual tasks
+    return rawTasks.map(t => ({
+      name: t.title.length > 13 ? t.title.substring(0, 11) + '...' : t.title,
+      fullName: t.title,
+      Estimated: t.estimatedHours || 0,
+      Actual: t.actualHours || 0,
+      Earned: Math.round((t.estimatedHours || 0) * ((t.completionPercent || 0) / 100) * 10) / 10,
+      Completion: t.completionPercent || 0
+    }));
+  }, [metrics, hoursChartViewMode, allScopedMilestones]);
 
   // 3. EVM Value Comparison Data ($)
   const evmChartData = [
@@ -239,20 +650,49 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-base sm:text-lg md:text-xl font-bold text-slate-100 tracking-tight">
-                {isPM ? "Team Member Report Cards & Performance" : "My Work Dashboard & Performance Report Card"}
+                {isAdmin 
+                  ? (isSelectedMemberPM ? "Project Manager Delivery & Governance Scorecard" : "Team Member Performance Scorecard") 
+                  : isPM 
+                    ? "Team Member Report Cards & Performance" 
+                    : "My Work Dashboard & Performance Report Card"}
               </h1>
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[10px] sm:text-[11px] font-bold whitespace-nowrap">
                 Real-Time Work Analytics
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-1 line-clamp-2 sm:line-clamp-none">
-              Personalized task queue, SPI/CPI graphs, hours logged vs earned, capacity utilization, and milestone tracking.
+              {isSelectedMemberPM 
+                ? "Aggregated project deliverables, schedule (SPI), cost efficiency (CPI), milestones, and overall delivery execution."
+                : "Personalized task queue, SPI/CPI graphs, hours logged vs earned, capacity utilization, and milestone tracking."}
             </p>
           </div>
         </div>
 
-        {/* Member Selector & Role Switcher */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full lg:w-auto">
+        {/* Member & Project Scope Selectors & Role Switcher */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full lg:w-auto flex-wrap">
+          {/* Project Scope Filter (Only projects where selected member/PM is added) */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950 px-3 py-2 sm:py-1.5 rounded-xl border border-slate-800 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span className="text-slate-400 font-medium text-xs">Scope:</span>
+            </div>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[170px] text-right sm:text-left"
+            >
+              <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
+                🌐 All Assigned ({memberProjects.length} Project{memberProjects.length !== 1 ? 's' : ''})
+              </option>
+              {memberProjects.map(p => (
+                <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100 font-medium">
+                  📁 [{p.projectCode}] {p.projectName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Member Selector */}
           <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950 px-3 py-2 sm:py-1.5 rounded-xl border border-slate-800 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none">
             <div className="flex items-center gap-2 shrink-0">
               <User className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -263,13 +703,38 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
               onChange={(e) => setSelectedMemberId(e.target.value)}
               className="bg-transparent text-slate-100 font-semibold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[180px] text-right sm:text-left"
             >
-              {projectData.stakeholders.map(s => (
-                <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100">
-                  {s.name} ({s.role})
-                </option>
-              ))}
+              {selectableStakeholders.map(s => {
+                const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+                const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
+                const roleBadge = isProjectManager ? 'PM' : 'Team';
+                return (
+                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100">
+                    [{roleBadge}] {s.name} ({s.role})
+                  </option>
+                );
+              })}
             </select>
           </div>
+
+          {/* Member Report Card & Availability Calendar Action */}
+          <button
+            onClick={() => setShowReportCardModal(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
+            title="Open comprehensive 360 Report Card and read-only Availability Calendar"
+          >
+            <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="whitespace-nowrap">Report Card &amp; Calendar</span>
+          </button>
+
+          {/* Quick Apply for Leave / Hours Off */}
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
+            title="Apply for Day(s) Leave or a couple of Hours Off"
+          >
+            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span className="whitespace-nowrap">Request Time Off / Leave</span>
+          </button>
 
           {/* Role Switcher Action for PM */}
           {isPM && !isViewingSelf && (
@@ -285,8 +750,49 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         </div>
       </div>
 
-      {/* Role Overdrive Notification Banner */}
-      {!isPM && (
+      {/* Role-Aware Executive PMO / Member Notification Banner */}
+      {isAdmin ? (
+        <div className="bg-gradient-to-r from-indigo-950/60 via-slate-900 to-slate-900 border border-indigo-500/30 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-200 shadow-sm">
+          <div className="flex items-start sm:items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0 mt-0.5 sm:mt-0">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-indigo-100 block sm:inline mr-2">Executive PMO Oversight:</span>
+              <span className="text-indigo-300/90">
+                {isSelectedMemberPM ? (
+                  <>
+                    Viewing project delivery metrics, EVM health, and deliverables for projects governed by <strong>{selectedStakeholder.name}</strong> ({scopedProjects.map(p => p.projectCode).join(', ')}).
+                  </>
+                ) : (
+                  <>
+                    Viewing individual contributor scorecard, assigned task queue, and hours for <strong>{selectedStakeholder.name}</strong> ({selectedStakeholder.role}).
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-mono text-[11px] font-bold shrink-0 self-start sm:self-auto">
+            {isSelectedMemberPM ? 'Project Governance Mode' : 'Individual Contributor Mode'}
+          </span>
+        </div>
+      ) : isPM ? (
+        !isViewingSelf && (
+          <div className="bg-gradient-to-r from-blue-950/60 via-slate-900 to-slate-900 border border-blue-500/30 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-200 shadow-sm">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <div className="p-2 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0 mt-0.5 sm:mt-0">
+                <UserCheck className="w-4 h-4" />
+              </div>
+              <div>
+                <span className="font-bold text-blue-100 block sm:inline mr-2">PM Team Review:</span>
+                <span className="text-blue-300/90">
+                  Reviewing individual performance metrics and task queue for <strong>{selectedStakeholder.name}</strong>.
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      ) : (
         <div className="bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border border-amber-500/30 p-3.5 sm:p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-200 shadow-sm">
           <div className="flex items-start sm:items-center gap-3 min-w-0">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 shrink-0 mt-0.5 sm:mt-0">
@@ -295,12 +801,11 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             <div>
               <span className="font-bold text-amber-100 block sm:inline mr-2">Member Workspace Active:</span>
               <span className="text-amber-300/90">
-                You are logged in as <strong>{currentUser.name}</strong> ({currentUser.title}). You are viewing your personalized work card, performance graphs, and assigned project deliverables.
+                You are logged in as <strong>{currentUser.name}</strong> ({currentUser.title}). You are viewing your personalized work card and assigned deliverables.
               </span>
             </div>
           </div>
 
-          {/* Switch back to PM Alex Morgan */}
           {allUsers.some(u => u.role === 'pm') && (
             <button
               onClick={() => {
@@ -331,7 +836,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-lg font-bold text-slate-100 truncate">{selectedStakeholder.name}</h2>
                   <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 uppercase">
-                    {selectedStakeholder.category}
+                    {isSelectedMemberPM ? 'Project Manager' : selectedStakeholder.category}
                   </span>
                 </div>
                 <p className="text-xs text-slate-300 font-medium mt-0.5">{selectedStakeholder.role}</p>
@@ -386,10 +891,13 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             <div className="space-y-1.5 min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overall Performance Score Card</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  {isSelectedMemberPM ? "Project Governance Scorecard" : "Overall Performance Score Card"}
+                </span>
               </div>
               <h3 className="text-base sm:text-lg font-bold text-slate-100 leading-snug">
-                Performance Rating: <span className="text-emerald-400">{metrics.reportCardGrade} Grade</span> ({metrics.reportCardScore}/100)
+                {isSelectedMemberPM ? "Project Delivery Rating: " : "Performance Rating: "}
+                <span className="text-emerald-400">{metrics.reportCardGrade} Grade</span> ({metrics.reportCardScore}/100)
               </h3>
               <p className="text-xs text-slate-300 leading-relaxed max-w-xl">
                 {metrics.performanceSummary}
@@ -403,9 +911,13 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                 <span className="text-[9px] font-mono opacity-80 mt-0.5">{metrics.reportCardScore}%</span>
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-bold text-slate-200">Efficiency Grade</div>
+                <div className="text-xs font-bold text-slate-200">
+                  {isSelectedMemberPM ? "Governance Grade" : "Efficiency Grade"}
+                </div>
                 <div className="text-[11px] text-indigo-300 font-mono whitespace-nowrap">{metrics.workEfficiencyPercent}% Efficiency Index</div>
-                <div className="text-[10px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">{metrics.completedTasksCount} of {metrics.totalAssignedTasks} Tasks Done</div>
+                <div className="text-[10px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">
+                  {metrics.completedTasksCount} of {metrics.totalAssignedTasks} Deliverables Done
+                </div>
               </div>
             </div>
           </div>
@@ -413,7 +925,9 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           {/* Quick Progress Breakdown Bar */}
           <div className="space-y-2 pt-3 border-t border-slate-800/80">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400 font-medium">Assigned Work Progress</span>
+              <span className="text-slate-400 font-medium">
+                {isSelectedMemberPM ? "Project Scope Delivered Progress" : "Assigned Work Progress"}
+              </span>
               <span className="text-slate-200 font-mono font-bold">{metrics.taskCompletionPercent}% Complete</span>
             </div>
             <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800 flex">
@@ -459,12 +973,14 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         </div>
       </div>
 
-      {/* Top 4 KPI Metrics Grid (Individual SPI, CPI, Efficiency, Hours Logged) */}
+      {/* Top 4 KPI Metrics Grid (SPI, CPI, Efficiency, Hours) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Individual SPI */}
+        {/* KPI 1: SPI */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Individual SPI</span>
+            <span className="font-semibold uppercase tracking-wider text-[11px]">
+              {isSelectedMemberPM ? "Project SPI (Schedule)" : "Individual SPI"}
+            </span>
             <span className={`px-2 py-0.5 rounded-full font-bold font-mono text-[10px] ${
               metrics.individualSPI >= 1.0
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -489,10 +1005,12 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
 
-        {/* KPI 2: Individual CPI */}
+        {/* KPI 2: CPI */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Individual CPI</span>
+            <span className="font-semibold uppercase tracking-wider text-[11px]">
+              {isSelectedMemberPM ? "Project CPI (Cost)" : "Individual CPI"}
+            </span>
             <span className={`px-2 py-0.5 rounded-full font-bold font-mono text-[10px] ${
               metrics.individualCPI >= 1.0
                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -520,7 +1038,9 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         {/* KPI 3: Work Efficiency */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Work Efficiency</span>
+            <span className="font-semibold uppercase tracking-wider text-[11px]">
+              {isSelectedMemberPM ? "Project Efficiency" : "Work Efficiency"}
+            </span>
             <span className="px-2 py-0.5 rounded-full font-bold font-mono text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
               {metrics.workEfficiencyPercent}% Index
             </span>
@@ -539,10 +1059,12 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
 
-        {/* KPI 4: Hours Logged */}
+        {/* KPI 4: Hours */}
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm space-y-2">
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span className="font-semibold uppercase tracking-wider text-[11px]">Hours Logged</span>
+            <span className="font-semibold uppercase tracking-wider text-[11px]">
+              {isSelectedMemberPM ? "Project Hours Logged" : "Hours Logged"}
+            </span>
             <span className="px-2 py-0.5 rounded-full font-bold font-mono text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               Active Log
             </span>
@@ -552,7 +1074,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             <span className="text-2xl sm:text-3xl font-black text-slate-100 font-mono tracking-tight">
               {metrics.totalActualHours}
             </span>
-            <span className="text-xs text-slate-400 font-mono">logged hours</span>
+            <span className="text-xs text-slate-400 font-mono">total hours</span>
           </div>
 
           <div className="text-[11px] text-slate-400 font-mono flex items-center justify-between pt-2 border-t border-slate-800/80">
@@ -561,6 +1083,94 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
       </div>
+
+      {/* Portfolio-Wide Cross-Project Performance Breakdown */}
+      {selectedProjectId === 'all' && projectBreakdowns.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-slate-800/80">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-100">
+                  Cross-Project Performance & Deliverables for {selectedStakeholder.name}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Real-time schedule variance (SPI), cost efficiency (CPI), and hours distribution across {projectBreakdowns.length} assigned projects.
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">
+              {projectBreakdowns.length} Projects Active
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {projectBreakdowns.map((pb) => (
+              <div
+                key={pb.projectId}
+                className="bg-slate-950/80 border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-4 space-y-3.5 transition-all group shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {pb.projectCode}
+                    </span>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-100 mt-1 truncate group-hover:text-indigo-300 transition-colors">
+                      {pb.projectName}
+                    </h4>
+                  </div>
+                  <button
+                    onClick={() => setSelectedProjectId(pb.projectId)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-slate-300 hover:text-white transition-all text-xs flex items-center gap-1 shrink-0 font-semibold"
+                    title={`Focus scorecard on ${pb.projectName}`}
+                  >
+                    <span>Focus</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-[11px] text-slate-400">
+                    <span>Task Completion</span>
+                    <span className="font-mono font-bold text-slate-200">{pb.completedTasksCount}/{pb.assignedTasksCount} ({pb.completionPercent}%)</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      style={{ width: `${pb.completionPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* SPI, CPI, Hours Quick Matrix */}
+                <div className="grid grid-cols-3 gap-2 pt-2.5 border-t border-slate-900 text-center font-mono text-[11px]">
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">SPI</div>
+                    <div className={`font-bold text-xs ${pb.spi >= 1 ? 'text-emerald-400' : pb.spi >= 0.85 ? 'text-amber-400' : 'text-rose-400'}`}>
+                      {pb.spi.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">CPI</div>
+                    <div className={`font-bold text-xs ${pb.cpi >= 1 ? 'text-emerald-400' : pb.cpi >= 0.85 ? 'text-amber-400' : 'text-rose-400'}`}>
+                      {pb.cpi.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                    <div className="text-[10px] text-slate-400 uppercase font-semibold">Hours</div>
+                    <div className="font-bold text-xs text-slate-200">
+                      {pb.actualHours}h
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* MULTI-GRAPH ANALYTICS SECTION */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3 sm:space-y-4 min-w-0">
@@ -581,44 +1191,199 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         {/* GRAPHS GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-4 min-w-0">
           {/* GRAPH 1: Hours Comparison (Estimated vs Actual vs Earned) */}
-          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 min-w-0">
+          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 min-w-0 flex flex-col justify-between">
+            <div className="space-y-2">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-bold text-xs sm:text-sm text-slate-100 flex items-center gap-2">
                     <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
-                    <span className="truncate">Task Hours Breakdown (Est vs Logged vs Earned)</span>
+                    <span className="truncate">Task Hours Breakdown</span>
                   </h3>
-                  <p className="text-[10px] sm:text-[11px] text-slate-400">Comparing estimated effort against logged actual hours per task</p>
+                  <p className="text-[10px] sm:text-[11px] text-slate-400">
+                    {hoursChartViewMode === 'smart' && metrics.assignedTasks.length > 6
+                      ? `Top 5 effort tasks + ${metrics.assignedTasks.length - 5} others grouped`
+                      : hoursChartViewMode === 'milestones'
+                      ? 'Aggregated effort by milestone deliverable'
+                      : hoursChartViewMode === 'projects'
+                      ? 'Aggregated effort across project codes'
+                      : hoursChartViewMode === 'status'
+                      ? 'Effort distribution by workflow status'
+                      : `All ${metrics.assignedTasks.length} deliverables (scrollable)`}
+                  </p>
                 </div>
                 <span className="text-[10px] sm:text-[11px] font-mono text-indigo-300 font-bold bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shrink-0">
                   {metrics.totalActualHours}h Logged
                 </span>
               </div>
 
-              <div className="h-56 sm:h-64 w-full">
-                {taskHoursChartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={taskHoursChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 9 }} interval={0} angle={-25} textAnchor="end" />
-                      <YAxis stroke="#64748b" tick={{ fontSize: 9 }} />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px' }}
-                        formatter={(value: any, name: any) => [`${value} hours`, name]}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '6px' }} />
-                      <Bar dataKey="Estimated" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Actual" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="Earned" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
-                    No task hours logged yet for this member.
-                  </div>
+              {/* Smart View Controls */}
+              <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800/80 overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setHoursChartViewMode('smart')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                    hoursChartViewMode === 'smart' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Smart Top Tasks + Grouped Summary"
+                >
+                  Smart {metrics.assignedTasks.length > 6 ? '(Top 5)' : ''}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursChartViewMode('milestones')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                    hoursChartViewMode === 'milestones' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Group by Milestone Deliverables"
+                >
+                  By Milestone
+                </button>
+                {memberProjects.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setHoursChartViewMode('projects')}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                      hoursChartViewMode === 'projects' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                    title="Group by Project"
+                  >
+                    By Project
+                  </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setHoursChartViewMode('status')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                    hoursChartViewMode === 'status' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Group by Workflow Status"
+                >
+                  By Status
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHoursChartViewMode('all')}
+                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap ${
+                    hoursChartViewMode === 'all' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="View All Individual Tasks"
+                >
+                  All ({metrics.assignedTasks.length})
+                </button>
               </div>
             </div>
+
+            <div className="h-56 sm:h-64 w-full overflow-x-auto overflow-y-hidden pt-1">
+              {taskHoursChartData.length > 0 ? (
+                <div
+                  style={{
+                    minWidth: hoursChartViewMode === 'all' && taskHoursChartData.length > 5
+                      ? `${Math.max(300, taskHoursChartData.length * 56)}px`
+                      : '100%',
+                    height: '100%'
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={taskHoursChartData}
+                      margin={{ top: 5, right: 10, left: -20, bottom: 38 }}
+                      barGap={2}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis
+                        dataKey="name"
+                        stroke="#64748b"
+                        tick={{ fontSize: 9, fill: '#94a3b8' }}
+                        interval={0}
+                        angle={-30}
+                        textAnchor="end"
+                        height={40}
+                      />
+                      <YAxis stroke="#64748b" tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#0f172a',
+                          borderColor: '#334155',
+                          borderRadius: '0.75rem',
+                          fontSize: '11px',
+                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+                        }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            const data = payload[0].payload;
+                            const est = data.Estimated || 0;
+                            const act = data.Actual || 0;
+                            const earned = data.Earned || 0;
+                            const variance = est - act;
+                            return (
+                              <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl shadow-xl space-y-1.5 min-w-[180px]">
+                                <p className="font-bold text-xs text-slate-100 border-b border-slate-800 pb-1 leading-snug">
+                                  {data.fullName || data.name}
+                                </p>
+                                <div className="space-y-0.5 text-[11px] font-mono">
+                                  <div className="flex justify-between items-center text-indigo-300">
+                                    <span>Estimated:</span>
+                                    <span className="font-bold">{est}h</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-purple-300">
+                                    <span>Actual Logged:</span>
+                                    <span className="font-bold">{act}h</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-emerald-300">
+                                    <span>Earned Value:</span>
+                                    <span className="font-bold">{earned}h</span>
+                                  </div>
+                                  {est > 0 && act > 0 && (
+                                    <div className="flex justify-between items-center text-slate-400 pt-1 border-t border-slate-800 text-[10px]">
+                                      <span>Variance (Est-Act):</span>
+                                      <span className={`font-bold ${variance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {variance >= 0 ? `+${variance.toFixed(1)}h` : `${variance.toFixed(1)}h`}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <Legend
+                        verticalAlign="top"
+                        align="right"
+                        height={26}
+                        iconType="circle"
+                        iconSize={7}
+                        wrapperStyle={{ fontSize: '10px', paddingBottom: '4px' }}
+                      />
+                      <Bar
+                        dataKey="Estimated"
+                        fill="#6366f1"
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                      />
+                      <Bar
+                        dataKey="Actual"
+                        fill="#a855f7"
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                      />
+                      <Bar
+                        dataKey="Earned"
+                        fill="#10b981"
+                        radius={[3, 3, 0, 0]}
+                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
+                  No deliverables or task hours recorded in the selected scope.
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* GRAPH 2: 360° Performance Competency Radar */}
           <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 min-w-0">
@@ -689,7 +1454,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         </div>
       </div>
 
-      {/* Status of Milestones (Put to this member) */}
+      {/* Status of Milestones */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3 sm:space-y-4 min-w-0">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-2.5 border-b border-slate-800/80">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -697,8 +1462,16 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
               <Layers className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">Milestones Assigned To {selectedStakeholder.name}</h2>
-              <p className="text-[11px] sm:text-xs text-slate-400 line-clamp-1">Status of major project milestones containing deliverables owned by this member</p>
+              <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">
+                {isSelectedMemberPM 
+                  ? `Project Milestones (${scopedProjects.map(p => p.projectCode).join(', ')})`
+                  : `Milestones Assigned To ${selectedStakeholder.name}`}
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-400 line-clamp-1">
+                {isSelectedMemberPM
+                  ? "Overall achievement status and schedule progress of project milestones"
+                  : "Status of major project milestones containing deliverables owned by this member"}
+              </p>
             </div>
           </div>
           <span className="text-[11px] sm:text-xs font-mono text-slate-400 shrink-0 self-start sm:self-auto">
@@ -731,7 +1504,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-400 font-mono">
-                  <span>Member Tasks Done</span>
+                  <span>{isSelectedMemberPM ? "Project Tasks Complete" : "Member Tasks Done"}</span>
                   <span className="font-bold text-slate-200">{completedTaskCount} / {assignedTaskCount} ({progressPercent}%)</span>
                 </div>
                 <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
@@ -753,7 +1526,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
           {metrics.assignedMilestones.length === 0 && (
             <div className="col-span-full p-6 text-center text-xs text-slate-500 italic bg-slate-950/50 rounded-xl border border-slate-800">
-              No milestones currently mapped to tasks assigned to this team member.
+              No milestones currently mapped to tasks in the selected scope.
             </div>
           )}
         </div>
@@ -768,8 +1541,16 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
               <ListTodo className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">Assigned Work List ({filteredAssignedTasks.length})</h2>
-              <p className="text-xs text-slate-400 line-clamp-1">Interactive task status updates, progress adjustment, and hours logging</p>
+              <h2 className="text-sm sm:text-base font-bold text-slate-100 truncate">
+                {isSelectedMemberPM 
+                  ? `Project Deliverables & Tasks (${filteredAssignedTasks.length})` 
+                  : `Assigned Work List (${filteredAssignedTasks.length})`}
+              </h2>
+              <p className="text-xs text-slate-400 line-clamp-1">
+                {isSelectedMemberPM
+                  ? `All deliverable tasks across projects governed by ${selectedStakeholder.name}`
+                  : "Interactive task status updates, progress adjustment, and hours logging"}
+              </p>
             </div>
           </div>
 
@@ -817,7 +1598,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         {/* Task Cards Display - LIST VIEW */}
         <div className="space-y-3">
           {filteredAssignedTasks.map((task) => {
-              const taskSubtasks = projectData.subtasks.filter(st => st.taskId === task.id);
+              const taskSubtasks = allScopedSubtasks.filter(st => st.taskId === task.id);
               const isLoggingHours = loggingTaskId === task.id;
 
               return (
@@ -829,6 +1610,13 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                   <div className="space-y-2 min-w-0">
                     <div className="flex items-start justify-between gap-3 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                        {task.projectCode && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                            <Building2 className="w-3 h-3 text-indigo-400" />
+                            <span>{task.projectCode}</span>
+                          </span>
+                        )}
+
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 border whitespace-nowrap ${
                           task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
                           task.priority === 'high' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
@@ -879,6 +1667,19 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/60 min-w-0">
                     {/* Metadata Badges */}
                     <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 min-w-0">
+                      {/* Assignee Badges if PM viewing project deliverables */}
+                      {task.assigneeIds && task.assigneeIds.length > 0 && (
+                        <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800/80 px-2 py-1 rounded-lg shrink-0 text-slate-300">
+                          <User className="w-3 h-3 text-indigo-400 shrink-0" />
+                          <span className="truncate max-w-[150px]">
+                            {task.assigneeIds.map(aId => {
+                              const s = selectableStakeholders.find(sh => sh.id === aId) || allProjects.flatMap(p => p.stakeholders || []).find(sh => sh.id === aId);
+                              return s ? s.name : aId;
+                            }).join(', ')}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
                         <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
                         <span>{task.startDate} → {task.dueDate}</span>
@@ -1060,6 +1861,25 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             ))}
           </div>
         </div>
+      )}
+
+      {/* Individual Report Card & Read-Only Availability Calendar Modal */}
+      {showReportCardModal && (
+        <IndividualReportCardModal
+          stakeholder={selectedStakeholder}
+          isOpen={showReportCardModal}
+          initialProjectId={selectedProjectId}
+          onClose={() => setShowReportCardModal(false)}
+        />
+      )}
+
+      {/* Leave / Hours Off Request Modal */}
+      {showLeaveModal && (
+        <LeaveRequestModal
+          isOpen={showLeaveModal}
+          onClose={() => setShowLeaveModal(false)}
+          defaultUserId={allUsers.find(u => u.email.toLowerCase() === selectedStakeholder.email.toLowerCase())?.id || currentUser.id}
+        />
       )}
     </div>
   );

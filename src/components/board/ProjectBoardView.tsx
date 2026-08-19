@@ -85,7 +85,7 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
     togglePinProjectChatMessage
   } = useProject();
 
-  const isPM = currentUser.role === 'pm';
+  const isPM = currentUser.role === 'pm' || currentUser.role === 'admin';
 
   // Filtering for Board Items
   const [selectedCategory, setSelectedCategory] = useState<string>('all');

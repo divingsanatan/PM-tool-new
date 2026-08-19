@@ -609,10 +609,9 @@ html:not(.dark) .badge-magenta {
   border: 1px solid #fecdd3;
 }
 
-/* Global Overflow and Word Wrapping Safety Rules for Cards & Tables */
-h1, h2, h3, h4, h5, h6, p, span, td, th, label, div {
+/* Global Overflow Safety Rules for Text Containers */
+h1, h2, h3, h4, h5, h6, p {
   overflow-wrap: break-word;
-  word-break: break-word;
 }
 
 /* =========================================================
@@ -702,9 +701,8 @@ html.dark * {
   word-break: normal;
 }
 
-/* Prevent cards in grid/flex layouts from expanding beyond container bounds */
-.grid > *,
-.flex > * {
+/* Prevent cards in grid layouts from expanding beyond container bounds */
+.grid > * {
   min-width: 0;
 }
 

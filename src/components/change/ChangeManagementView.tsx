@@ -56,7 +56,7 @@ export const ChangeManagementView: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [impactAreaFilter, setImpactAreaFilter] = useState<string>('all');
 
-  const isPM = currentUser?.role === 'pm';
+  const isPM = currentUser?.role === 'pm' || currentUser?.role === 'admin';
 
   const canUserEditCR = (cr: ChangeRequest) => {
     if (isPM) return true;

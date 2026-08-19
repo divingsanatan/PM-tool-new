@@ -23,7 +23,7 @@ interface RaidViewProps {
 export const RaidView: React.FC<RaidViewProps> = ({ onOpenRaidModal }) => {
   const { projectData, saveRaidItem, deleteRaidItem, currentUser, customAiConfig } = useProject();
 
-  const isPM = currentUser?.role === 'pm';
+  const isPM = currentUser?.role === 'pm' || currentUser?.role === 'admin';
 
   const currentStakeholder = useMemo(() => {
     return projectData.stakeholders.find(

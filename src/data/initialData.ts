@@ -10,6 +10,18 @@ export const initialProjectData: ProjectData = {
   budget: 250000,
   stakeholders: [
     {
+      id: "sh-admin",
+      name: "Sophia Martinez",
+      email: "admin@apex.io",
+      role: "Executive Portfolio Administrator",
+      category: "internal",
+      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
+      hourlyRate: 175,
+      weeklyCapacityHours: 40,
+      skills: ["Portfolio Governance", "Executive Strategy", "PMO Operations", "Commercial Risk", "EVM Analytics"],
+      status: "active"
+    },
+    {
       id: "sh-1",
       name: "Alex Morgan",
       email: "alex.m@apex.io",

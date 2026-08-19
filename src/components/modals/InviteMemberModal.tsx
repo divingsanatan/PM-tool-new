@@ -15,6 +15,7 @@ import {
   Clock,
   DollarSign,
   ShieldCheck,
+  Lock,
   Zap
 } from 'lucide-react';
 
@@ -30,11 +31,12 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   defaultEmail = ''
 }) => {
   const { projectData, saveStakeholder, currentUser, addActivityLog } = useProject();
-  const isPM = currentUser?.role === 'pm';
+  const isAdmin = currentUser?.role === 'admin';
+  const isPM = currentUser?.role === 'pm' || isAdmin;
 
   const [recipientEmail, setRecipientEmail] = useState<string>(defaultEmail);
   const [candidateName, setCandidateName] = useState<string>('');
-  const [role, setRole] = useState<string>('Frontend Engineer');
+  const [role, setRole] = useState<string>('Contributor');
   const [category, setCategory] = useState<StakeholderCategory>('internal');
   const [hourlyRate, setHourlyRate] = useState<number>(75);
   const [personalNote, setPersonalNote] = useState<string>('');
@@ -50,19 +52,21 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   const pmName = currentUser?.name || 'Project Manager';
   const pmEmail = currentUser?.email || 'pm@company.com';
 
+  const resolvedRole = (category === 'internal' && !isAdmin) ? 'Contributor' : (role.trim() || 'Contributor');
+
   // Dynamic Invitation Token & Link
   const inviteToken = `inv_${Math.random().toString(36).substring(2, 9)}`;
   const baseUrl = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname) : 'http://localhost:3000/';
-  const joinUrl = `${baseUrl}?project=${encodeURIComponent(projectCode)}&email=${encodeURIComponent(recipientEmail)}&token=${inviteToken}&role=${encodeURIComponent(role)}&name=${encodeURIComponent(candidateName || '')}`;
+  const joinUrl = `${baseUrl}?project=${encodeURIComponent(projectCode)}&email=${encodeURIComponent(recipientEmail)}&token=${inviteToken}&role=${encodeURIComponent(resolvedRole)}&name=${encodeURIComponent(candidateName || '')}`;
 
-  const emailSubject = `Invitation: Join ${projectName} (${projectCode}) as ${role}`;
+  const emailSubject = `Invitation: Join ${projectName} (${projectCode}) as ${resolvedRole}`;
   const emailBody = `Hi ${candidateName || 'Team Member'},
 
-${pmName} (${pmEmail}) has invited you to join the "${projectName}" project team as a ${role} (${category === 'external' ? 'External Consultant/Stakeholder' : 'Internal Team Member'}).
+${pmName} (${pmEmail}) has invited you to join the "${projectName}" project team as a ${resolvedRole} (${category === 'external' ? 'External Consultant/Stakeholder' : 'Internal Team Member'}).
 
 Project Highlights:
 • Project: ${projectName} (${projectCode})
-• Role: ${role}
+• Role: ${resolvedRole}
 
 ${personalNote ? `Note from ${pmName}:\n"${personalNote}"\n\n` : ''}To accept this invitation and access your project workspace, click the link below:
 ${joinUrl}
@@ -105,11 +109,11 @@ Project Manager, ${projectName}`;
         id: stakeholderId,
         name: nameToUse,
         email: recipientEmail.trim(),
-        role: role.trim() || 'Team Member',
+        role: resolvedRole,
         category,
         hourlyRate,
         weeklyCapacityHours: 40,
-        skills: ['Team Member', role],
+        skills: ['Team Member', resolvedRole],
         status: 'invited',
         inviteToken,
         invitedAt: new Date().toISOString(),
@@ -123,7 +127,7 @@ Project Manager, ${projectName}`;
         user: pmName,
         userEmail: pmEmail,
         action: 'Sent Project Team Invitation',
-        details: `Dispatched email invitation to ${recipientEmail} for role "${role}" on project ${projectCode}.`,
+        details: `Dispatched email invitation to ${recipientEmail} for role "${resolvedRole}" on project ${projectCode}.`,
         category: 'stakeholder'
       });
 
@@ -231,17 +235,37 @@ Project Manager, ${projectName}`;
             {/* Role & Category Row */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Assigned Project Role *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Assigned Project Role *
+                  </label>
+                  {category === 'internal' && !isAdmin && (
+                    <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30">
+                      <Lock className="w-2.5 h-2.5" />
+                      Admin Role Lock
+                    </span>
+                  )}
+                  {category === 'internal' && isAdmin && (
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                      <ShieldCheck className="w-2.5 h-2.5" />
+                      Admin
+                    </span>
+                  )}
+                </div>
                 <input
                   type="text"
                   required
-                  value={role}
+                  disabled={category === 'internal' && !isAdmin}
+                  value={category === 'internal' && !isAdmin ? 'Contributor' : role}
                   onChange={(e) => setRole(e.target.value)}
-                  placeholder="e.g. Senior QA Engineer"
-                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none font-medium"
+                  placeholder={category === 'internal' ? "Role: Contributor (Admin Assigned)" : "e.g. Client Lead Architect"}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+                {category === 'internal' && !isAdmin && (
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Internal roles default to Contributor and can only be set or promoted by an Executive Admin.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -250,7 +274,13 @@ Project Manager, ${projectName}`;
                 </label>
                 <select
                   value={category}
-                  onChange={(e) => setCategory(e.target.value as StakeholderCategory)}
+                  onChange={(e) => {
+                    const cat = e.target.value as StakeholderCategory;
+                    setCategory(cat);
+                    if (cat === 'internal' && !isAdmin) {
+                      setRole('Contributor');
+                    }
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none font-semibold cursor-pointer"
                 >
                   <option value="internal">🏢 Internal Member</option>

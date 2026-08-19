@@ -263,7 +263,99 @@ export interface StakeholderWorkload {
   overloaded: boolean;
 }
 
-export type UserRole = 'pm' | 'stakeholder';
+export type UserRole = 'admin' | 'pm' | 'stakeholder';
+
+export type LeaveType = 'vacation' | 'sick' | 'parental' | 'conference' | 'unpaid' | 'training' | 'other';
+export type LeaveStatus = 'approved' | 'pending' | 'rejected';
+
+export type LeaveDurationType = 'days' | 'hours';
+
+export interface MemberLeave {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userAvatar?: string;
+  role?: string;
+  leaveType: LeaveType;
+  durationType?: LeaveDurationType; // 'days' for full day(s) or 'hours' for partial day/hourly off
+  timeRange?: string; // e.g., '02:00 PM - 04:30 PM' or 'Morning (2.5h)'
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD (same as startDate for hourly leaves)
+  daysCount: number; // For hourly leaves, fractional day e.g. 0.25 (2h/8h)
+  hoursCount: number; // Exact hours (e.g. 2, 3.5, 8, 24, 40)
+  status: LeaveStatus;
+  applicantRole?: UserRole; // Role of applicant ('stakeholder' | 'pm' | 'admin')
+  approverRoleRequired?: 'admin' | 'pm'; // PM leave requests route to Executive Admin
+  reason: string;
+  substituteUserId?: string;
+  substituteUserName?: string;
+  impactedProjectIds?: string[];
+  createdAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+}
+
+export type InsightType = 'resource_bottleneck' | 'cost_overrun' | 'schedule_delay' | 'availability_conflict' | 'commercial_opportunity' | 'governance_gap';
+export type InsightSeverity = 'critical' | 'warning' | 'info' | 'success';
+
+export interface PortfolioInsight {
+  id: string;
+  type: InsightType;
+  severity: InsightSeverity;
+  title: string;
+  description: string;
+  recommendation: string;
+  impactMetric: string;
+  affectedProjectId?: string;
+  affectedProjectName?: string;
+  affectedMemberId?: string;
+  affectedMemberName?: string;
+  actionType?: 'rebalance_workload' | 'approve_leave' | 'reassign_task' | 'adjust_rate_card' | 'hedge_budget' | 'schedule_catchup';
+  actionPayload?: any;
+  isDismissed?: boolean;
+  createdAt: string;
+}
+
+export interface ProjectCommercials {
+  projectId: string;
+  projectName: string;
+  projectCode: string;
+  pmName?: string;
+  pmAvatar?: string;
+  contractValue: number;
+  plannedCost: number;
+  actualCost: number;
+  earnedValue: number;
+  projectedCost: number; // EAC
+  grossMarginDollars: number; // Contract - EAC or EV - AC
+  grossMarginPercent: number;
+  billableRealizationRate: number; // %
+  costEfficiencyIndex: number; // CPI
+  scheduleEfficiencyIndex: number; // SPI
+  profitabilityStatus: 'healthy' | 'at_risk' | 'critical';
+}
+
+export interface StandardRateCard {
+  id: string;
+  role: string;
+  seniority: 'junior' | 'mid' | 'senior' | 'lead' | 'principal' | 'executive';
+  standardHourlyRate: number;
+  minHourlyRate: number;
+  maxHourlyRate: number;
+  currency: string;
+}
+
+export interface OrganizationSettings {
+  companyName: string;
+  standardWeeklyHours: number;
+  annualLeaveDaysAllowance: number;
+  autoApproveLeavesUnderDays: number;
+  rateCards: StandardRateCard[];
+  fiscalYearStartMonth: number; // 1 to 12
+  targetMarginPercent: number; // e.g. 35%
+  autoBlockAvailabilityOnLeave: boolean;
+}
 
 export interface UserProfile {
   id: string;
@@ -407,9 +499,26 @@ export interface ProjectData {
   widgets: DashboardWidgetConfig[];
   statusPercentages?: Record<TaskStatus, number>;
   pmChecklist?: PMChecklistConfig;
+  leaves?: MemberLeave[];
+  orgSettings?: OrganizationSettings;
 }
 
-export type ViewMode = 'dashboard' | 'member_dashboard' | 'governance' | 'wbs' | 'gantt' | 'workload' | 'stakeholders' | 'raid' | 'reports' | 'audit' | 'change' | 'project_board' | 'chat';
+export type ViewMode =
+  | 'dashboard'
+  | 'member_dashboard'
+  | 'admin_portfolio'
+  | 'leave_management'
+  | 'governance'
+  | 'wbs'
+  | 'gantt'
+  | 'workload'
+  | 'stakeholders'
+  | 'raid'
+  | 'reports'
+  | 'audit'
+  | 'change'
+  | 'project_board'
+  | 'chat';
 
 export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'groq' | 'deepseek' | 'custom';
 

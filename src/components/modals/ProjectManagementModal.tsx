@@ -12,7 +12,8 @@ interface ProjectManagementModalProps {
 
 export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({ isOpen, onClose, initialEditProjectId }) => {
   const { projectData, projectsList, activeProjectId, switchProject, createProject, deleteProject, updateProjectDetails, currentUser } = useProject();
-  const isPM = currentUser.role === 'pm';
+  const isAdmin = currentUser.role === 'admin';
+  const isPM = currentUser.role === 'pm' || isAdmin;
 
   const [isCreating, setIsCreating] = useState(false);
   const [projectName, setProjectName] = useState('');

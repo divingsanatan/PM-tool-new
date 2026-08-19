@@ -90,6 +90,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
   if (!isOpen) return null;
 
   const isPM = currentUser.role === 'pm';
+  const isAdmin = currentUser.role === 'admin';
 
   // Merge default allUsers with projectData stakeholders
   const switchableMembers: UserProfile[] = [...allUsers];
@@ -153,7 +154,7 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
         email: formData.email.trim(),
         title: formData.title.trim(),
         department: formData.department.trim(),
-        role: formData.role as UserRole,
+        role: (isAdmin ? formData.role : currentUser.role) as UserRole,
         avatar: formData.avatar,
         phone: formData.phone.trim(),
         bio: formData.bio.trim(),
@@ -414,18 +415,39 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>System Role Scope</span>
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>System Role Scope</span>
+                    </label>
+                    {!isAdmin && (
+                      <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30">
+                        <Lock className="w-2.5 h-2.5" />
+                        Admin Only
+                      </span>
+                    )}
+                    {isAdmin && (
+                      <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                        <ShieldCheck className="w-2.5 h-2.5" />
+                        Admin Authorized
+                      </span>
+                    )}
+                  </div>
                   <select
+                    disabled={!isAdmin}
                     value={formData.role}
                     onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as UserRole }))}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <option value="pm">Project Manager (Full Administrative Scope)</option>
+                    <option value="admin">Executive Administrator (Full Organization, PMO & Commercial Scope)</option>
+                    <option value="pm">Project Manager (PMO & Project Scope)</option>
                     <option value="stakeholder">Team Contributor / Stakeholder</option>
                   </select>
+                  {!isAdmin && (
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      System roles can only be altered by an Executive Administrator. Use the "Switch Team Persona" tab to evaluate other roles.
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -566,53 +588,154 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
                 </span>
               </div>
 
-              {/* Switchable Members Grid */}
-              <div className="space-y-3">
+              {/* Switchable Members Categorized */}
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                     <Zap className="w-4 h-4 text-amber-400" />
                     <span>Select Team Member Persona</span>
                   </h4>
-                  <span className="text-[11px] text-slate-500">Click to switch user context</span>
+                  <span className="text-[11px] text-slate-400">PM & Admin roles are strictly separated</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {switchableMembers.map((user) => {
-                    const isActive = currentUser.email.toLowerCase() === user.email.toLowerCase();
-                    return (
-                      <button
-                        key={user.id}
-                        onClick={() => {
-                          loginAsUser(user);
-                          setShowSaveSuccess(true);
-                          setTimeout(() => setShowSaveSuccess(false), 2500);
-                        }}
-                        className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-                          isActive
-                            ? 'bg-indigo-600/20 border-indigo-500/60 text-slate-100 shadow-md ring-1 ring-indigo-500/30'
-                            : 'bg-slate-950/60 hover:bg-slate-800/80 border-slate-800 text-slate-300'
-                        }`}
-                      >
-                        <img
-                          src={user.avatar}
-                          alt={user.name}
-                          className="w-11 h-11 rounded-full border border-slate-700 object-cover shrink-0 shadow-sm"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-xs truncate text-slate-100">{user.name}</span>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded uppercase ${
-                              user.role === 'pm' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
-                            }`}>
-                              {user.role === 'pm' ? 'PM' : 'Contributor'}
-                            </span>
+                {/* Role Separation Notice */}
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400 text-xs flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>
+                    A Project Manager (PM) cannot be the Admin. Each role maintains distinct permissions and requires separate authentication.
+                  </span>
+                </div>
+
+                {/* 1. Executive PMO Admin */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Executive PMO (Administrator)</span>
+                    <span className="text-[10px] text-slate-400">• Portfolio & Multi-Project Governance</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {switchableMembers.filter(u => u.role === 'admin').map((user) => {
+                      const isActive = currentUser.email.toLowerCase() === user.email.toLowerCase();
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            loginAsUser(user);
+                            setShowSaveSuccess(true);
+                            setTimeout(() => setShowSaveSuccess(false), 2500);
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                            isActive
+                              ? 'bg-amber-500/15 border-amber-500/60 text-slate-100 shadow-md ring-1 ring-amber-500/30'
+                              : 'bg-slate-950/60 hover:bg-slate-800/80 border-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-11 h-11 rounded-full border-2 border-amber-500/40 object-cover shrink-0 shadow-sm"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-xs truncate text-slate-100">{user.name}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                Admin
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{user.title}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{user.email}</p>
                           </div>
-                          <p className="text-[11px] text-slate-400 truncate mt-0.5">{user.title}</p>
-                          <p className="text-[10px] text-slate-500 truncate font-mono">{user.email}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Project Managers */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">Project Managers (PM)</span>
+                    <span className="text-[10px] text-slate-400">• Project WBS, EVM & Workload Scope</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {switchableMembers.filter(u => u.role === 'pm').map((user) => {
+                      const isActive = currentUser.email.toLowerCase() === user.email.toLowerCase();
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            loginAsUser(user);
+                            setShowSaveSuccess(true);
+                            setTimeout(() => setShowSaveSuccess(false), 2500);
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                            isActive
+                              ? 'bg-indigo-600/20 border-indigo-500/60 text-slate-100 shadow-md ring-1 ring-indigo-500/30'
+                              : 'bg-slate-950/60 hover:bg-slate-800/80 border-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-11 h-11 rounded-full border-2 border-indigo-500/40 object-cover shrink-0 shadow-sm"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-xs truncate text-slate-100">{user.name}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                PM
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{user.title}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{user.email}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Team Members & Stakeholders */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">Team Members & Contributors</span>
+                    <span className="text-[10px] text-slate-400">• My Report Card, Tasks & Leave Scope</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {switchableMembers.filter(u => u.role === 'stakeholder' || (u.role !== 'admin' && u.role !== 'pm')).map((user) => {
+                      const isActive = currentUser.email.toLowerCase() === user.email.toLowerCase();
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => {
+                            loginAsUser(user);
+                            setShowSaveSuccess(true);
+                            setTimeout(() => setShowSaveSuccess(false), 2500);
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                            isActive
+                              ? 'bg-emerald-500/15 border-emerald-500/60 text-slate-100 shadow-md ring-1 ring-emerald-500/30'
+                              : 'bg-slate-950/60 hover:bg-slate-800/80 border-slate-800 text-slate-300'
+                          }`}
+                        >
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-11 h-11 rounded-full border border-slate-700 object-cover shrink-0 shadow-sm"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-xs truncate text-slate-100">{user.name}</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                Contributor
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 truncate mt-0.5">{user.title}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{user.email}</p>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -635,7 +758,11 @@ export const UserAuthModal: React.FC<UserAuthModalProps> = ({ isOpen, onClose })
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">
                     <span className="text-slate-400">Administrative Level:</span>
                     <span className="font-semibold text-indigo-300">
-                      {isPM ? 'Full Administrative & EVM Approval Rights' : 'Team Contributor / Review Scope'}
+                      {currentUser.role === 'admin'
+                        ? 'Full Executive Admin (Portfolio, PM Assignment, Commercials & Leave Approval)'
+                        : currentUser.role === 'pm'
+                        ? 'Project Manager (PMO & Project Execution Rights)'
+                        : 'Team Contributor / Workload & Review Scope'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-900 border border-slate-800">

@@ -56,8 +56,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSupabaseModal,
   onSelectView
 }) => {
-  const { projectData, projectsList, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
+  const { projectData, projectsList, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
+  const isAdmin = currentUser?.role === 'admin';
   const isPM = currentUser?.role === 'pm';
+  const isPrivileged = isAdmin || isPM;
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [editTargetProjectId, setEditTargetProjectId] = useState<string | null>(null);
@@ -374,16 +376,29 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="grid grid-cols-2 gap-1.5 pt-1">
                       {onSelectView && (
                         <>
-                          <button
-                            onClick={() => {
-                              onSelectView('wbs');
-                              setIsSearchFocused(false);
-                            }}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
-                          >
-                            <CheckSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                            <span className="truncate">WBS & Work Items</span>
-                          </button>
+                          {isAdmin ? (
+                            <button
+                              onClick={() => {
+                                onSelectView('admin_portfolio');
+                                setIsSearchFocused(false);
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                            >
+                              <Layers className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                              <span className="truncate">Admin Operations</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                onSelectView('wbs');
+                                setIsSearchFocused(false);
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                            >
+                              <CheckSquare className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                              <span className="truncate">WBS & Work Items</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               onSelectView('raid');
@@ -394,36 +409,42 @@ export const Header: React.FC<HeaderProps> = ({
                             <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span className="truncate">RAID Log & Risks</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              onSelectView('stakeholders');
-                              setIsSearchFocused(false);
-                            }}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
-                          >
-                            <Users className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                            <span className="truncate">Stakeholders</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              onSelectView('project_board');
-                              setIsSearchFocused(false);
-                            }}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
-                          >
-                            <FolderKanban className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                            <span className="truncate">Project Board</span>
-                          </button>
-                          <button
-                            onClick={() => {
-                              onSelectView('gantt');
-                              setIsSearchFocused(false);
-                            }}
-                            className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
-                          >
-                            <GanttChart className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                            <span className="truncate">Gantt Schedule</span>
-                          </button>
+                          {isPM && (
+                            <button
+                              onClick={() => {
+                                onSelectView('stakeholders');
+                                setIsSearchFocused(false);
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                            >
+                              <Users className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                              <span className="truncate">Team & Workload</span>
+                            </button>
+                          )}
+                          {isPM && (
+                            <button
+                              onClick={() => {
+                                onSelectView('project_board');
+                                setIsSearchFocused(false);
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                            >
+                              <FolderKanban className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                              <span className="truncate">Project Board</span>
+                            </button>
+                          )}
+                          {!isAdmin && (
+                            <button
+                              onClick={() => {
+                                onSelectView('gantt');
+                                setIsSearchFocused(false);
+                              }}
+                              className="flex items-center gap-2 p-2 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 text-xs text-slate-200 text-left transition-colors"
+                            >
+                              <GanttChart className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                              <span className="truncate">Gantt Schedule</span>
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -445,7 +466,7 @@ export const Header: React.FC<HeaderProps> = ({
                           {onSelectView && (
                             <button
                               onClick={() => {
-                                onSelectView('wbs');
+                                onSelectView(isAdmin ? 'project_board' : 'wbs');
                                 setIsSearchFocused(false);
                               }}
                               className="text-[10px] text-indigo-300 hover:underline flex items-center gap-1 font-normal"
@@ -460,7 +481,7 @@ export const Header: React.FC<HeaderProps> = ({
                             key={task.id}
                             onClick={() => {
                               onOpenTaskModal(task);
-                              if (onSelectView) onSelectView('wbs');
+                              if (onSelectView) onSelectView(isAdmin ? 'project_board' : 'wbs');
                               setIsSearchFocused(false);
                             }}
                             className="p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
@@ -583,53 +604,18 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Sync Status, User Auth Badge & Action Bar */}
+        {/* Sync Status, Quick Sign Out & Action Bar */}
         <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0 min-w-0">
-          {/* Active User Account Switcher Trigger & Role Switcher */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-            <button
-              id="btn-quick-role-switcher"
-              onClick={() => setIsUserModalOpen(true)}
-              className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 font-bold text-xs transition-colors shadow-sm shrink-0"
-              title="Switch role to act as any team member"
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-              <span>Switch Role</span>
-            </button>
-
-            <button
-              id="btn-user-auth-selector"
-              onClick={() => setIsUserModalOpen(true)}
-              className="flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-xl bg-slate-800/70 hover:bg-slate-700/80 border border-slate-700/60 transition-all text-left shrink-0"
-              title="View Active Profile & Account Scope"
-            >
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-indigo-400 object-cover shrink-0"
-              />
-              <div className="hidden md:block min-w-0">
-                <div className="flex items-center gap-1 min-w-0">
-                  <span className="text-xs font-semibold text-slate-200 leading-none max-w-[65px] md:max-w-[85px] lg:max-w-[110px] truncate block">{currentUser.name}</span>
-                  <span className={`text-[9px] font-bold px-1 rounded uppercase shrink-0 ${
-                    currentUser.role === 'pm' ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
-                  }`}>
-                    {currentUser.role === 'pm' ? 'PM' : 'Team'}
-                  </span>
-                </div>
-              </div>
-              <ChevronDown className="w-3 h-3 text-slate-400 hidden sm:block shrink-0" />
-            </button>
-
-            <button
-              id="btn-logout"
-              onClick={logout}
-              className="hidden xl:flex p-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 hover:text-rose-300 border border-slate-700/60 text-slate-400 transition-colors shrink-0"
-              title="Sign Out to Login Screen"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Quick Sign Out */}
+          <button
+            id="btn-logout"
+            onClick={logout}
+            className="hidden xl:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-rose-500/20 hover:text-rose-300 border border-slate-700/60 text-slate-400 text-xs font-semibold transition-colors shrink-0"
+            title="Sign Out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden 2xl:inline">Sign Out</span>
+          </button>
 
           {/* Sync Status Badge */}
           <div className="hidden lg:flex items-center gap-1.5 shrink-0">

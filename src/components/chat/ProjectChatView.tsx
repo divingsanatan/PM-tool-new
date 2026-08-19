@@ -42,7 +42,7 @@ export const ProjectChatView: React.FC<ProjectChatViewProps> = ({ onNavigate }) 
     togglePinProjectChatMessage
   } = useProject();
 
-  const isPM = currentUser?.role === 'pm';
+  const isPM = currentUser?.role === 'pm' || currentUser?.role === 'admin';
 
   // Filters & Search
   const [filterType, setFilterType] = useState<'all' | 'announcement' | 'question' | 'item_reference' | 'pinned'>('all');

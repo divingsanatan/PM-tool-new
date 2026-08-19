@@ -50,6 +50,7 @@ import {
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from './HierarchyItemModal';
 import { getAvgHourlyRate, getStatusProgress } from '../../utils/taskCalculations';
+import { checkTaskLeaveConflict } from '../../utils/portfolioAndLeaveUtils';
 import {
   DependencyType,
   DEPENDENCY_TYPE_LABELS,
@@ -71,9 +72,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   taskToEdit,
   defaultStatus
 }) => {
-  const { projectData, saveTask, saveSubtask, currentUser } = useProject();
+  const { projectData, saveTask, saveSubtask, currentUser, leaves } = useProject();
 
-  const isPM = currentUser?.role === 'pm';
+  const isPM = currentUser?.role === 'pm' || currentUser?.role === 'admin';
 
   const currentStakeholder = useMemo(() => {
     if (!currentUser) return null;
@@ -197,6 +198,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setIsTimerRunning(true);
     }
   };
+
+  const leaveConflict = useMemo(() => {
+    return checkTaskLeaveConflict(
+      { startDate, dueDate, assigneeIds },
+      leaves || [],
+      projectData.stakeholders
+    );
+  }, [startDate, dueDate, assigneeIds, leaves, projectData.stakeholders]);
 
   useEffect(() => {
     if (taskToEdit) {
@@ -750,6 +759,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Leave Conflict Warning Banner */}
+              {leaveConflict.hasConflict && (
+                <div className="col-span-1 sm:col-span-2 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="font-bold">Availability Conflict: </span>
+                    {leaveConflict.conflicts.map(c => `${c.memberName} is on approved ${c.leave.leaveType} (${c.leave.startDate} to ${c.leave.endDate})`).join('; ')}
+                  </div>
+                </div>
+              )}
 
               {/* Priority Row */}
               <div className="flex items-center gap-3">

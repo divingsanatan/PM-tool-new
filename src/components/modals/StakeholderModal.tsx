@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, StakeholderCategory } from '../../types';
-import { X, Users, Building2, Globe, AlertTriangle } from 'lucide-react';
+import { X, Users, Building2, Globe, AlertTriangle, Lock, ShieldCheck } from 'lucide-react';
 
 interface StakeholderModalProps {
   isOpen: boolean;
@@ -18,7 +18,8 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
 }) => {
   const { saveStakeholder, currentUser, addActivityLog } = useProject();
 
-  const isPM = currentUser?.role === 'pm';
+  const isAdmin = currentUser?.role === 'admin';
+  const isPM = currentUser?.role === 'pm' || isAdmin;
 
   const isEditable = useMemo(() => {
     if (isPM) return true;
@@ -37,6 +38,17 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
   const [isDummy, setIsDummy] = useState(false);
   const [triggerInvite, setTriggerInvite] = useState(false);
 
+  // Determine if the current user has permission to set/change the role
+  // Rule: ONLY an admin can set roles for internal stakeholders.
+  const canEditRole = useMemo(() => {
+    if (!isEditable) return false;
+    if (category === 'internal') {
+      return isAdmin;
+    }
+    // External stakeholders role can be edited by PM or Admin
+    return isPM;
+  }, [isEditable, category, isAdmin, isPM]);
+
   useEffect(() => {
     if (stakeholderToEdit) {
       setName(stakeholderToEdit.name);
@@ -50,14 +62,14 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     } else {
       setName('');
       setEmail('');
-      setRole('');
+      setRole(category === 'internal' && !isAdmin ? 'Contributor' : '');
       setCategory('internal');
       setHourlyRate(90);
       setSkillsStr('Agile, React, Management');
       setIsDummy(false);
       setTriggerInvite(true);
     }
-  }, [stakeholderToEdit, isOpen]);
+  }, [stakeholderToEdit, isOpen, isAdmin, category]);
 
   if (!isOpen) return null;
 
@@ -74,11 +86,20 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     const isNowInvited = !isDummy && finalEmail.includes('@') && !finalEmail.includes('@placeholder') && triggerInvite;
     const computedStatus = isDummy ? 'placeholder' : (isNowInvited ? 'invited' : (stakeholderToEdit?.status || 'active'));
 
+    // Enforce role preservation if non-admin attempts to save internal stakeholder
+    let finalRole = role.trim();
+    if (category === 'internal' && !isAdmin) {
+      finalRole = stakeholderToEdit?.role || 'Contributor';
+    }
+    if (!finalRole) {
+      finalRole = 'Contributor';
+    }
+
     await saveStakeholder({
       id: stakeholderToEdit?.id,
-      name: name.trim() || (isDummy ? `${role || 'Placeholder'} (Unassigned)` : 'New Team Member'),
+      name: name.trim() || (isDummy ? `${finalRole || 'Placeholder'} (Unassigned)` : 'New Team Member'),
       email: finalEmail,
-      role: role.trim() || 'Contributor',
+      role: finalRole,
       category,
       hourlyRate: hourlyRate === '' ? 0 : Number(hourlyRate),
       weeklyCapacityHours: 40,
@@ -97,8 +118,8 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
         userEmail: currentUser?.email || '',
         action: isDummy ? 'Created Placeholder Stakeholder' : 'Updated Stakeholder',
         details: isDummy
-          ? `Added placeholder stakeholder profile "${role || name}" to project team.`
-          : `Saved stakeholder "${name}" (${finalEmail}).`,
+          ? `Added placeholder stakeholder profile "${finalRole || name}" to project team.`
+          : `Saved stakeholder "${name}" (${finalEmail}) with role "${finalRole}".`,
         category: 'stakeholder'
       });
     }
@@ -224,16 +245,38 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
           )}
 
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">Role / Job Title *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-slate-300 font-semibold">
+                Role / Job Title *
+              </label>
+              {!canEditRole && category === 'internal' && (
+                <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  Admin Governance Only
+                </span>
+              )}
+              {canEditRole && isAdmin && category === 'internal' && (
+                <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  Admin Authorized
+                </span>
+              )}
+            </div>
             <input
               type="text"
               required
-              disabled={!isEditable}
+              disabled={!isEditable || !canEditRole}
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g. Lead QA Engineer"
+              placeholder={category === 'internal' ? 'e.g. Lead QA Engineer (Admin Set)' : 'e.g. Client Project Director'}
               className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
+            {!canEditRole && category === 'internal' && (
+              <p className="text-[11px] text-amber-300/80 mt-1 flex items-center gap-1">
+                <Lock className="w-3 h-3 shrink-0" />
+                <span>Internal stakeholder roles can only be set or modified by an Executive Administrator.</span>
+              </p>
+            )}
           </div>
 
           <div>

@@ -17,7 +17,9 @@ import {
   Eye,
   Layers,
   ChevronRight,
-  FileSpreadsheet
+  FileSpreadsheet,
+  CalendarOff,
+  UserX
 } from 'lucide-react';
 import { CsvImportModal } from '../modals/CsvImportModal';
 import {
@@ -25,19 +27,21 @@ import {
   getTaskPredecessors,
   checkDependencyConflict
 } from '../../utils/dependencies';
+import { checkTaskLeaveConflict } from '../../utils/portfolioAndLeaveUtils';
 
 interface GanttViewProps {
   onOpenTaskModal: (task?: Task) => void;
 }
 
 export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
-  const { projectData } = useProject();
+  const { projectData, leaves } = useProject();
   const [timeScale, setTimeScale] = useState<'days' | 'weeks' | 'months'>('weeks');
   const [filterFeatureId, setFilterFeatureId] = useState<string>('all');
   const [filterMilestoneId, setFilterMilestoneId] = useState<string>('all');
   const [highlightCriticalPath, setHighlightCriticalPath] = useState<boolean>(true);
   const [showDependencies, setShowDependencies] = useState<boolean>(true);
-  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(250);
+  const [showLeaveOverlays, setShowLeaveOverlays] = useState<boolean>(true);
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(270);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
   // Mouse drag handler for column resizing
@@ -236,10 +240,57 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
     return links;
   }, [filteredTasks, startDate, endDate, timelineWidth, showDependencies, projectData.tasks]);
 
-  // Conflicts count
+  // Predecessor dependency conflicts count
   const conflictCount = useMemo(() => {
     return dependencyLinks.filter(l => l.hasConflict).length;
   }, [dependencyLinks]);
+
+  // Compute leave conflict for each task using portfolioAndLeaveUtils
+  const taskLeaveConflictsMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof checkTaskLeaveConflict>>();
+    filteredTasks.forEach(task => {
+      const conflict = checkTaskLeaveConflict(
+        { startDate: task.startDate, dueDate: task.dueDate, assigneeIds: task.assigneeIds },
+        leaves || [],
+        projectData.stakeholders
+      );
+      map.set(task.id, conflict);
+    });
+    return map;
+  }, [filteredTasks, leaves, projectData.stakeholders]);
+
+  const leaveConflictCount = useMemo(() => {
+    let count = 0;
+    taskLeaveConflictsMap.forEach(conflict => {
+      if (conflict.hasConflict) count++;
+    });
+    return count;
+  }, [taskLeaveConflictsMap]);
+
+  // Calculate pixel position for any date range on the timeline
+  const getDateRangePixelPosition = (rangeStartStr: string, rangeEndStr: string) => {
+    const minTime = startDate.getTime();
+    const maxTime = endDate.getTime();
+    const totalDuration = maxTime - minTime;
+
+    const rStart = new Date(rangeStartStr).getTime();
+    const rDue = new Date(rangeEndStr).getTime();
+
+    if (isNaN(rStart) || isNaN(rDue) || totalDuration <= 0) {
+      return { leftPx: 0, widthPx: 0 };
+    }
+
+    const clampedStart = Math.max(minTime, Math.min(maxTime, rStart));
+    const clampedEnd = Math.max(minTime, Math.min(maxTime, rDue + 86400000)); // inclusive of end date
+
+    const startOffsetRatio = Math.max(0, Math.min(1, (clampedStart - minTime) / totalDuration));
+    const durationRatio = Math.max(0, Math.min(1 - startOffsetRatio, (clampedEnd - clampedStart) / totalDuration));
+
+    const leftPx = startOffsetRatio * timelineWidth;
+    const widthPx = Math.max(16, durationRatio * timelineWidth);
+
+    return { leftPx, widthPx };
+  };
 
   return (
     <div id="gantt-view" className="space-y-5 min-w-0">
@@ -258,12 +309,18 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
               {conflictCount > 0 && (
                 <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 shrink-0">
                   <AlertTriangle className="w-3 h-3 text-rose-400" />
-                  {conflictCount} Conflict{conflictCount !== 1 ? 's' : ''}
+                  {conflictCount} Dep Conflict{conflictCount !== 1 ? 's' : ''}
+                </span>
+              )}
+              {leaveConflictCount > 0 && (
+                <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 shrink-0">
+                  <CalendarOff className="w-3 h-3 text-amber-400" />
+                  {leaveConflictCount} Leave Conflict{leaveConflictCount !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Interactive schedule visualization with predecessor links, critical path, and auto-scrolling dates.
+              Interactive schedule visualization with predecessor links, critical path, team leave availability overlays, and auto-scrolling dates.
             </p>
           </div>
 
@@ -387,6 +444,20 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
               <span>Links</span>
             </button>
 
+            {/* Leave Availability Overlay Toggle */}
+            <button
+              onClick={() => setShowLeaveOverlays(!showLeaveOverlays)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
+                showLeaveOverlays
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+              }`}
+              title="Toggle Team Member Leave Availability Overlays & Warnings"
+            >
+              <CalendarOff className="w-3.5 h-3.5 shrink-0" />
+              <span>Leaves ({leaves.filter(l => l.status === 'approved').length})</span>
+            </button>
+
             {/* Critical Path Toggle */}
             <button
               onClick={() => setHighlightCriticalPath(!highlightCriticalPath)}
@@ -420,15 +491,17 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
           <div className="divide-y divide-slate-800/60">
             {filteredTasks.map((task) => {
               const predecessors = getTaskPredecessors(task, projectData.tasks);
-              const hasConflict = predecessors.some(p => p.hasConflict);
+              const hasDepConflict = predecessors.some(p => p.hasConflict);
+              const leaveConflict = taskLeaveConflictsMap.get(task.id);
+              const hasLeaveConflict = leaveConflict?.hasConflict;
 
               return (
                 <div
                   key={task.id}
-                  className="px-3.5 flex items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors group"
+                  className="px-3.5 flex items-center justify-between gap-2 hover:bg-slate-800/40 transition-colors group"
                   style={{ height: `${ROW_HEIGHT}px` }}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     {/* Status Dot */}
                     <div
                       className={`w-2.5 h-2.5 rounded-full shrink-0 ${
@@ -448,8 +521,16 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                         <span className="font-semibold text-xs text-slate-200 group-hover:text-indigo-300 transition-colors truncate" title={task.title}>
                           {task.title}
                         </span>
-                        {hasConflict && (
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" title="Schedule Conflict!" />
+                        {hasDepConflict && (
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" title="Schedule Dependency Conflict!" />
+                        )}
+                        {hasLeaveConflict && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0"
+                            title={`Member on Leave: ${leaveConflict?.conflicts.map(c => `${c.memberName} (${c.leave.startDate} to ${c.leave.endDate})`).join(', ')}`}
+                          >
+                            🏖️ Leave
+                          </span>
                         )}
                       </div>
                       <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
@@ -463,7 +544,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                     {predecessors.length > 0 && (
                       <span
                         className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-0.5 ${
-                          hasConflict
+                          hasDepConflict
                             ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
                             : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
                         }`}
@@ -604,6 +685,16 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                 const { leftPx, widthPx } = getTaskPixelPosition(task);
                 const predecessors = getTaskPredecessors(task, projectData.tasks);
                 const isCritical = highlightCriticalPath && predecessors.length > 0;
+                const leaveConflict = taskLeaveConflictsMap.get(task.id);
+                const hasLeaveConflict = leaveConflict?.hasConflict;
+
+                // Find all approved leaves for assignees on this task
+                const taskAssigneeLeaves = showLeaveOverlays
+                  ? (leaves || []).filter(l =>
+                      l.status === 'approved' &&
+                      (task.assigneeIds || []).includes(l.userId)
+                    )
+                  : [];
 
                 return (
                   <div
@@ -620,10 +711,35 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                       />
                     ))}
 
+                    {/* Member Leave Availability Overlays on row background */}
+                    {taskAssigneeLeaves.map(leave => {
+                      const rangePos = getDateRangePixelPosition(leave.startDate, leave.endDate);
+                      return (
+                        <div
+                          key={leave.id}
+                          className="absolute top-1 bottom-1 rounded-lg bg-amber-500/10 border border-amber-500/25 z-0 flex items-center px-1.5 overflow-hidden pointer-events-auto"
+                          style={{ left: `${rangePos.leftPx}px`, width: `${rangePos.widthPx}px` }}
+                          title={`🏖️ ${leave.userName} on ${leave.leaveType} (${leave.startDate} to ${leave.endDate}) - Availability Blocked`}
+                        >
+                          <div className="flex items-center gap-1 text-[10px] text-amber-300 font-semibold truncate select-none opacity-80">
+                            <span>🏖️</span>
+                            <span className="truncate">{leave.userName.split(' ')[0]} ({leave.leaveType})</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
                     {/* Interactive Task Bar */}
                     <div
-                      className={`absolute h-8 rounded-xl border flex items-center px-3 text-xs font-bold text-white shadow-md transition-all cursor-pointer group/bar ${
-                        isCritical
+                      className={`absolute h-8 rounded-xl border flex items-center px-3 text-xs font-bold text-white shadow-md transition-all cursor-pointer group/bar z-10 ${
+                        hasLeaveConflict
+                          ? 'ring-2 ring-amber-400/80 ring-offset-1 ring-offset-slate-950 ' +
+                            (isCritical
+                              ? 'bg-rose-600/90 border-amber-400'
+                              : task.status === 'done'
+                              ? 'bg-emerald-600/90 border-amber-400'
+                              : 'bg-indigo-600/90 border-amber-400')
+                          : isCritical
                           ? 'bg-rose-600/90 border-rose-400 shadow-rose-950/50 hover:bg-rose-500'
                           : task.status === 'done'
                           ? 'bg-emerald-600/90 border-emerald-400 shadow-emerald-950/50 hover:bg-emerald-500'
@@ -635,7 +751,11 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                       }`}
                       style={{ left: `${leftPx}px`, width: `${widthPx}px` }}
                       onClick={() => onOpenTaskModal(task)}
-                      title={`${task.title}\nStatus: ${task.status.toUpperCase()}\nProgress: ${task.completionPercent}%\nDates: ${task.startDate} to ${task.dueDate}`}
+                      title={`${task.title}\nStatus: ${task.status.toUpperCase()}\nProgress: ${task.completionPercent}%\nDates: ${task.startDate} to ${task.dueDate}${
+                        hasLeaveConflict
+                          ? `\n⚠️ AVAILABILITY CONFLICT: ${leaveConflict?.conflicts.map(c => `${c.memberName} on ${c.leave.leaveType}`).join('; ')}`
+                          : ''
+                      }`}
                     >
                       {/* Completion Progress Bar Overlay */}
                       <div
@@ -643,8 +763,13 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
                         style={{ width: `${Math.min(100, Math.max(0, task.completionPercent))}%` }}
                       />
 
-                      <span className="truncate relative z-10 drop-shadow text-slate-100 font-semibold tracking-wide">
-                        {task.title}
+                      <span className="truncate relative z-10 drop-shadow text-slate-100 font-semibold tracking-wide flex items-center gap-1.5">
+                        {hasLeaveConflict && (
+                          <span className="text-[11px] shrink-0" title="Assignee is on leave during this period">
+                            🏖️
+                          </span>
+                        )}
+                        <span className="truncate">{task.title}</span>
                       </span>
 
                       <span className="ml-2 relative z-10 text-[10px] opacity-80 font-mono font-normal shrink-0">
@@ -670,6 +795,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-md bg-rose-600 border border-rose-400" /> Critical Path
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-md bg-amber-500/30 border border-amber-400 ring-1 ring-amber-400" /> 🏖️ Leave Conflict
           </span>
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-indigo-700 dark:text-indigo-300 font-semibold">
             <span className="w-5 h-0.5 bg-indigo-600 dark:bg-indigo-400 inline-block rounded-full" /> FS (Finish-to-Start)

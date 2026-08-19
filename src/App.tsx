@@ -7,7 +7,6 @@ import { DashboardView } from './components/dashboard/DashboardView';
 import { TeamMemberDashboard } from './components/dashboard/TeamMemberDashboard';
 import { WbsView } from './components/wbs/WbsView';
 import { GanttView } from './components/gantt/GanttView';
-import { WorkloadView } from './components/workload/WorkloadView';
 import { StakeholdersView } from './components/stakeholders/StakeholdersView';
 import { RaidView } from './components/raid/RaidView';
 import { ReportsView } from './components/reports/ReportsView';
@@ -16,6 +15,8 @@ import { ChangeManagementView } from './components/change/ChangeManagementView';
 import { GovernanceView } from './components/governance/GovernanceView';
 import { ProjectBoardView } from './components/board/ProjectBoardView';
 import { ProjectChatView } from './components/chat/ProjectChatView';
+import { AdminPortfolioView } from './components/admin/AdminPortfolioView';
+import { LeaveManagement } from './components/admin/LeaveManagement';
 
 import { TaskModal } from './components/modals/TaskModal';
 import { RaidModal } from './components/modals/RaidModal';
@@ -37,14 +38,25 @@ function MainLayout() {
     });
   }, []);
 
+  const isAdmin = currentUser?.role === 'admin';
   const isPM = currentUser?.role === 'pm';
 
-  // Automatically enforce member dashboard for non-PM team members
+  // Automatically enforce view restrictions for role
   React.useEffect(() => {
-    if (!isPM && currentView === 'dashboard') {
+    if (!isAdmin && !isPM && (
+      currentView === 'dashboard' || 
+      currentView === 'project_board' || 
+      currentView === 'stakeholders' || 
+      currentView === 'workload' || 
+      currentView === 'governance' ||
+      currentView === 'admin_portfolio'
+    )) {
       handleSelectView('member_dashboard');
     }
-  }, [isPM, currentView, handleSelectView]);
+    if (!isAdmin && currentView === 'admin_portfolio') {
+      handleSelectView(isPM ? 'dashboard' : 'member_dashboard');
+    }
+  }, [isPM, isAdmin, currentView, handleSelectView]);
 
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -135,25 +147,57 @@ function MainLayout() {
             )
           )}
 
+          {currentView === 'admin_portfolio' && (
+            <AdminPortfolioView
+              onSwitchToProjectView={(projId) => handleSelectView('dashboard')}
+            />
+          )}
+
           {currentView === 'member_dashboard' && (
-            <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            currentUser.role === 'admin' ? (
+              <DashboardView
+                onNavigate={handleSelectView}
+                onOpenAiReportModal={() => setIsAiReportModalOpen(true)}
+                onOpenTaskModal={() => handleOpenTaskModal()}
+                onOpenRaidModal={() => handleOpenRaidModal()}
+              />
+            ) : (
+              <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'governance' && (
-            <GovernanceView onNavigate={handleSelectView} />
+            isPM ? (
+              <GovernanceView onNavigate={handleSelectView} />
+            ) : (
+              <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'wbs' && (
-            <WbsView onOpenTaskModal={handleOpenTaskModal} />
+            isAdmin ? (
+              <AdminPortfolioView
+                onSwitchToProjectView={(projId) => handleSelectView('dashboard')}
+              />
+            ) : (
+              <WbsView onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'gantt' && (
-            <GanttView onOpenTaskModal={handleOpenTaskModal} />
+            isAdmin ? (
+              <AdminPortfolioView
+                onSwitchToProjectView={(projId) => handleSelectView('dashboard')}
+              />
+            ) : (
+              <GanttView onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'workload' && (
             isPM ? (
-              <WorkloadView
+              <StakeholdersView
+                initialTab="workload"
                 onOpenStakeholderModal={handleOpenStakeholderModal}
                 onOpenInviteModal={handleOpenInviteModal}
               />
@@ -163,9 +207,20 @@ function MainLayout() {
           )}
 
           {currentView === 'stakeholders' && (
-            <StakeholdersView
-              onOpenStakeholderModal={handleOpenStakeholderModal}
-              onOpenInviteModal={handleOpenInviteModal}
+            isPM ? (
+              <StakeholdersView
+                initialTab="directory"
+                onOpenStakeholderModal={handleOpenStakeholderModal}
+                onOpenInviteModal={handleOpenInviteModal}
+              />
+            ) : (
+              <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            )
+          )}
+
+          {currentView === 'leave_management' && (
+            <LeaveManagement
+              onNavigateToProject={(projId) => handleSelectView('dashboard')}
             />
           )}
 
@@ -178,7 +233,11 @@ function MainLayout() {
           )}
 
           {currentView === 'project_board' && (
-            <ProjectBoardView onNavigate={handleSelectView} />
+            isPM ? (
+              <ProjectBoardView onNavigate={handleSelectView} />
+            ) : (
+              <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
+            )
           )}
 
           {currentView === 'chat' && (

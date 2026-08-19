@@ -25,7 +25,9 @@ import {
   Briefcase,
   Key,
   Sparkles,
-  MessagesSquare
+  MessagesSquare,
+  Building2,
+  CalendarDays
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -44,11 +46,12 @@ interface MenuItem {
   id: ViewMode;
   label: string;
   shortLabel?: string;
-  category: 'core' | 'team' | 'governance' | 'analytics';
+  category: 'core' | 'team' | 'governance' | 'analytics' | 'admin';
   icon: React.ReactNode;
   badge?: number;
   badgeColor?: string;
   pmOnly?: boolean;
+  adminOnly?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -62,8 +65,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAiSettingsModal,
   onOpenUserModal
 }) => {
-  const { currentUser, projectData, customAiConfig } = useProject();
+  const { currentUser, projectData, customAiConfig, leaves } = useProject();
+  const isAdmin = currentUser.role === 'admin';
   const isPM = currentUser.role === 'pm';
+  
+  // Calculate role-scoped pending leaves count for sidebar badge:
+  const pendingLeavesCount = (leaves || []).filter(l => {
+    if (l.status !== 'pending') return false;
+    if (isAdmin) return true; // Admin sees all pending
+    if (isPM) {
+      // PM only counts team members' pending leaves (PM leaves route to Admin)
+      const isSelf = l.userId === currentUser.id || (l.userEmail || '').toLowerCase() === (currentUser.email || '').toLowerCase();
+      const isApplicantPM = l.applicantRole === 'pm' || (l.role || '').toLowerCase().includes('pm') || (l.role || '').toLowerCase().includes('project manager');
+      return !isSelf && !isApplicantPM;
+    }
+    return l.userId === currentUser.id;
+  }).length;
 
   const [internalCollapsed, setInternalCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -73,7 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setOptimisticView(null);
   }, [currentView]);
 
-  const activeView = optimisticView || currentView;
+  const rawActiveView = optimisticView || currentView;
+  const activeView = rawActiveView === 'workload' ? 'stakeholders' : rawActiveView;
 
   const isCollapsed = externalIsCollapsed !== undefined ? externalIsCollapsed : internalCollapsed;
   const toggleCollapse = externalOnToggleCollapse || (() => setInternalCollapsed(!internalCollapsed));
@@ -103,6 +121,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [toggleCollapse]);
 
   const rawMenuItems: MenuItem[] = [
+    ...(isAdmin ? [{
+      id: 'admin_portfolio' as ViewMode,
+      label: 'Portfolio & Operations',
+      shortLabel: 'Admin Hub',
+      category: 'admin' as const,
+      adminOnly: true,
+      icon: <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+    }] : []),
     {
       id: 'dashboard',
       label: 'Executive Dashboard',
@@ -111,50 +137,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
       pmOnly: true,
       icon: <LayoutDashboard className="w-4 h-4 shrink-0" />
     },
-    {
-      id: 'member_dashboard',
+    ...(!isAdmin ? [{
+      id: 'member_dashboard' as ViewMode,
       label: isPM ? 'Member Report Cards' : 'My Work & Performance',
       shortLabel: isPM ? 'Cards' : 'My Work',
-      category: 'core',
+      category: 'core' as const,
       icon: <Award className="w-4 h-4 shrink-0" />
-    },
-    {
-      id: 'wbs',
-      label: 'WBS & Tasks',
-      shortLabel: 'WBS',
-      category: 'core',
-      icon: <Network className="w-4 h-4 shrink-0" />,
-      badge: openTasksCount,
-      badgeColor: 'bg-indigo-500 text-white font-bold border-indigo-400 shadow-sm'
-    },
-    {
-      id: 'gantt',
-      label: 'Gantt Timeline',
-      shortLabel: 'Gantt',
-      category: 'core',
-      icon: <GanttChart className="w-4 h-4 shrink-0" />
-    },
+    }] : []),
+    ...(!isAdmin ? [
+      {
+        id: 'wbs' as ViewMode,
+        label: 'WBS & Tasks',
+        shortLabel: 'WBS',
+        category: 'core' as const,
+        icon: <Network className="w-4 h-4 shrink-0" />,
+        badge: openTasksCount,
+        badgeColor: 'bg-indigo-500 text-white font-bold border-indigo-400 shadow-sm'
+      },
+      {
+        id: 'gantt' as ViewMode,
+        label: 'Gantt Timeline',
+        shortLabel: 'Gantt',
+        category: 'core' as const,
+        icon: <GanttChart className="w-4 h-4 shrink-0" />
+      }
+    ] : []),
     {
       id: 'project_board',
       label: 'Project Board',
       shortLabel: 'Board',
       category: 'core',
+      pmOnly: true,
       icon: <FolderKanban className="w-4 h-4 shrink-0" />
     },
     {
-      id: 'workload',
-      label: 'Workload & Tasks',
-      shortLabel: 'Workload',
+      id: 'stakeholders',
+      label: 'Team & Workload',
+      shortLabel: 'Team & Workload',
       category: 'team',
       pmOnly: true,
-      icon: <BarChart3 className="w-4 h-4 shrink-0" />
+      icon: <Users className="w-4 h-4 shrink-0" />
     },
     {
-      id: 'stakeholders',
-      label: 'Stakeholders & Team',
-      shortLabel: 'Team',
+      id: 'leave_management',
+      label: 'Leave & Availability',
+      shortLabel: 'Leaves',
       category: 'team',
-      icon: <Users className="w-4 h-4 shrink-0" />
+      pmOnly: true,
+      icon: <CalendarDays className="w-4 h-4 shrink-0" />,
+      badge: pendingLeavesCount > 0 ? pendingLeavesCount : undefined,
+      badgeColor: 'bg-amber-400 text-slate-950 font-bold border-amber-300 shadow-sm'
     },
     {
       id: 'chat',
@@ -170,6 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Governance & Readiness',
       shortLabel: 'Governance',
       category: 'governance',
+      pmOnly: true,
       icon: <ShieldCheck className="w-4 h-4 shrink-0" />
     },
     {
@@ -206,11 +239,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   ];
 
-  const menuItems = rawMenuItems.filter(item => !item.pmOnly || isPM);
+  const menuItems = rawMenuItems.filter(item => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.pmOnly && !isPM) return false;
+    return true;
+  });
 
   const totalBadges = (openTasksCount || 0) + (openRisksCount || 0) + (pendingCRCount || 0);
 
   const categories = [
+    ...(isAdmin ? [{ key: 'admin', name: 'Executive Operations' }] : []),
     { key: 'core', name: 'Core Workspace' },
     { key: 'team', name: 'Team & Directory' },
     { key: 'governance', name: 'PMI Governance' },
@@ -506,12 +544,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-slate-200 truncate text-xs">{currentUser.name}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{currentUser.role === 'pm' ? 'Project Manager' : 'Team Member'}</p>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {currentUser.role === 'admin' ? 'Executive Admin' : currentUser.role === 'pm' ? 'Project Manager' : 'Team Member'}
+                  </p>
                 </div>
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                  isPM ? 'bg-indigo-500/20 text-indigo-300' : 'bg-emerald-500/20 text-emerald-300'
+                  currentUser.role === 'admin'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                    : isPM
+                    ? 'bg-indigo-500/20 text-indigo-300'
+                    : 'bg-emerald-500/20 text-emerald-300'
                 }`}>
-                  {isPM ? 'PM' : 'Team'}
+                  {currentUser.role === 'admin' ? 'Admin' : isPM ? 'PM' : 'Team'}
                 </span>
               </div>
               <div className="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-800/80 pt-1.5 mt-1.5">

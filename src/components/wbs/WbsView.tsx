@@ -154,7 +154,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     }
   }, [showStatusConfigModal, projectData.statusPercentages]);
 
-  const isPM = currentUser.role === 'pm';
+  const isPM = currentUser.role === 'pm' || currentUser.role === 'admin';
 
   const currentStakeholder = useMemo(() => {
     return projectData.stakeholders.find(

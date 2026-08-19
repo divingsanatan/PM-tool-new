@@ -358,6 +358,16 @@ app.get('/api/projects', (_req, res) => {
   res.json({ success: true, activeProjectId, projects: projectsList });
 });
 
+// All Projects Full Data (for Admin / Executive Portfolio)
+app.get('/api/projects/all', (_req, res) => {
+  res.json({
+    success: true,
+    activeProjectId,
+    projects: Object.values(allProjectsMap),
+    projectsMap: allProjectsMap
+  });
+});
+
 app.post('/api/projects/switch', (req, res) => {
   const { projectId } = req.body;
   if (!projectId) {

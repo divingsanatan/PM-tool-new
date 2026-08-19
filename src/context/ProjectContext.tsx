@@ -1,9 +1,63 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import localforage from 'localforage';
-import { ProjectData, Task, RaidItem, Stakeholder, Feature, Epic, Milestone, Subtask, Sprint, EVMMetrics, UserProfile, ProjectMeta, ActivityLog, ChangeRequest, ChangeRequestStatus, CustomAiConfig, TaskStatus, ProjectBoardCategory, ProjectBoardItem, BoardItemComment, ProjectChatMessage, PendingInvite, PMChecklistConfig } from '../types';
+import {
+  ProjectData,
+  Task,
+  RaidItem,
+  Stakeholder,
+  Feature,
+  Epic,
+  Milestone,
+  Subtask,
+  Sprint,
+  EVMMetrics,
+  UserProfile,
+  ProjectMeta,
+  ActivityLog,
+  ChangeRequest,
+  ChangeRequestStatus,
+  CustomAiConfig,
+  TaskStatus,
+  ProjectBoardCategory,
+  ProjectBoardItem,
+  BoardItemComment,
+  ProjectChatMessage,
+  PendingInvite,
+  PMChecklistConfig,
+  MemberLeave,
+  LeaveStatus,
+  OrganizationSettings,
+  UserRole
+} from '../types';
 import { initialProjectData, defaultProjectsMap } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
-import { getTaskEffectiveValues, getStatusProgress, DEFAULT_STATUS_PERCENTAGES, calculateTimestampActualHours, calculateWbsTotalBudget, calculateWbsProjectEndDate, calculateSprintDates } from '../utils/taskCalculations';
+import {
+  getTaskEffectiveValues,
+  getStatusProgress,
+  DEFAULT_STATUS_PERCENTAGES,
+  calculateTimestampActualHours,
+  calculateWbsTotalBudget,
+  calculateWbsProjectEndDate,
+  calculateSprintDates
+} from '../utils/taskCalculations';
+import {
+  DEFAULT_ORG_SETTINGS,
+  INITIAL_LEAVES,
+  DEFAULT_RATE_CARDS
+} from '../utils/portfolioAndLeaveUtils';
+
+export const ADMIN_STAKEHOLDER: Stakeholder = {
+  id: "sh-admin",
+  name: "Sophia Martinez",
+  email: "admin@apex.io",
+  role: "Executive Portfolio Administrator",
+  category: "internal",
+  avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150",
+  hourlyRate: 175,
+  weeklyCapacityHours: 40,
+  skills: ["Portfolio Governance", "Executive Strategy", "PMO Operations", "Commercial Risk", "EVM Analytics"],
+  status: "active"
+};
 
 function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
   if (!data) return data;
@@ -13,7 +67,15 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
   const stakeholders = data.stakeholders || [];
   const sprints = data.sprints || [];
 
-  const computedBudget = calculateWbsTotalBudget(tasks, subtasks, stakeholders);
+  // Ensure Admin dummy stakeholder exists for every project
+  let updatedStakeholders = stakeholders;
+  let stakeholdersChanged = false;
+  if (!stakeholders.some(s => s.id === 'sh-admin' || s.email?.toLowerCase() === 'admin@apex.io' || s.email?.toLowerCase() === 'sophia.m@apex.io')) {
+    updatedStakeholders = [ADMIN_STAKEHOLDER, ...stakeholders];
+    stakeholdersChanged = true;
+  }
+
+  const computedBudget = calculateWbsTotalBudget(tasks, subtasks, updatedStakeholders);
   const computedEndDate = calculateWbsProjectEndDate(data.startDate, tasks);
   const finalBudget = (data.budget && data.budget > 0) ? data.budget : (computedBudget > 0 ? computedBudget : 250000);
 
@@ -41,7 +103,7 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
     });
   }
 
-  if (data.budget === finalBudget && data.targetEndDate === computedEndDate && !sprintsChanged) {
+  if (data.budget === finalBudget && data.targetEndDate === computedEndDate && !sprintsChanged && !stakeholdersChanged) {
     return data;
   }
 
@@ -49,7 +111,8 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
     ...data,
     budget: finalBudget,
     targetEndDate: computedEndDate,
-    sprints: updatedSprints
+    sprints: updatedSprints,
+    stakeholders: updatedStakeholders
   };
 }
 
@@ -62,13 +125,40 @@ localforage.config({
 
 export const DEFAULT_USERS: UserProfile[] = [
   {
+    id: 'user-admin-1',
+    name: 'Sophia Martinez',
+    email: 'admin@apex.io',
+    role: 'admin',
+    title: 'Executive Portfolio Administrator & Head of PMO',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
+    department: 'Executive PMO & Governance',
+    hourlyRate: 175,
+    weeklyCapacityHours: 40,
+    skills: ['Portfolio Governance', 'EVM Analytics', 'Executive Strategy', 'Commercial Risk', 'PMI-PMP']
+  },
+  {
     id: 'user-pm-1',
     name: 'Alex Morgan',
     email: 'alex.m@apex.io',
     role: 'pm',
     title: 'Project Manager & Scrum Master',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-    department: 'PMO'
+    department: 'PMO',
+    hourlyRate: 95,
+    weeklyCapacityHours: 40,
+    skills: ['Agile', 'Scrum', 'EVM', 'Risk Management']
+  },
+  {
+    id: 'user-pm-2',
+    name: 'Carlos Santana',
+    email: 'carlos.s@apex.io',
+    role: 'pm',
+    title: 'Senior Technical Project Manager',
+    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=150',
+    department: 'PMO',
+    hourlyRate: 110,
+    weeklyCapacityHours: 40,
+    skills: ['Technical PM', 'Cloud Migrations', 'Capacity Planning']
   },
   {
     id: 'user-sh-3',
@@ -77,7 +167,10 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'stakeholder',
     title: 'Senior Full Stack Engineer',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-    department: 'Engineering'
+    department: 'Engineering',
+    hourlyRate: 110,
+    weeklyCapacityHours: 40,
+    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets']
   },
   {
     id: 'user-sh-2',
@@ -86,7 +179,10 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'stakeholder',
     title: 'Principal Architect',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
-    department: 'Architecture'
+    department: 'Architecture',
+    hourlyRate: 130,
+    weeklyCapacityHours: 35,
+    skills: ['Cloud Architecture', 'Distributed Systems', 'Security']
   },
   {
     id: 'user-sh-4',
@@ -95,7 +191,10 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'stakeholder',
     title: 'Lead UI/UX Designer',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-    department: 'Design'
+    department: 'Design',
+    hourlyRate: 85,
+    weeklyCapacityHours: 30,
+    skills: ['Figma', 'Design Systems', 'User Research']
   },
   {
     id: 'user-sh-5',
@@ -104,13 +203,19 @@ export const DEFAULT_USERS: UserProfile[] = [
     role: 'stakeholder',
     title: 'DevOps & QA Specialist',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
-    department: 'DevOps'
+    department: 'DevOps',
+    hourlyRate: 90,
+    weeklyCapacityHours: 40,
+    skills: ['CI/CD', 'Kubernetes', 'Automated QA']
   }
 ];
 
 interface ProjectContextType {
   projectData: ProjectData;
   projectsList: ProjectMeta[];
+  allProjectsMap: Record<string, ProjectData>;
+  leaves: MemberLeave[];
+  orgSettings: OrganizationSettings;
   activeProjectId: string;
   metrics: EVMMetrics;
   isOffline: boolean;
@@ -124,6 +229,8 @@ interface ProjectContextType {
   loginAsUser: (user: UserProfile) => void;
   createUserAccount: (user: UserProfile) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  promoteUserRole: (userId: string, newRole: UserRole, newTitle?: string) => Promise<void>;
+  assignProjectManager: (projectId: string, pmUserId: string) => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;
   createProject: (newProject: Partial<ProjectData>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
@@ -163,6 +270,10 @@ interface ProjectContextType {
   deleteProjectChatMessage: (messageId: string) => Promise<void>;
   toggleProjectChatMessageReaction: (messageId: string, emoji: string) => Promise<void>;
   togglePinProjectChatMessage: (messageId: string) => Promise<void>;
+  saveLeave: (leave: Partial<MemberLeave>) => Promise<void>;
+  deleteLeave: (leaveId: string) => Promise<void>;
+  updateLeaveStatus: (leaveId: string, status: LeaveStatus, approverName?: string) => Promise<void>;
+  updateOrgSettings: (settings: Partial<OrganizationSettings>) => Promise<void>;
   importWbsData: (
     parsed: {
       milestones: Milestone[];
@@ -195,6 +306,9 @@ const USER_STORAGE_KEY = 'apex_pm_current_user';
 const USERS_LIST_KEY = 'apex_pm_all_users';
 const PROJECTS_LIST_KEY = 'apex_pm_projects_list';
 const ACTIVE_PROJECT_ID_KEY = 'apex_pm_active_project_id';
+const LEAVES_STORAGE_KEY = 'apex_pm_leaves';
+const ORG_SETTINGS_KEY = 'apex_pm_org_settings';
+const ALL_PROJECTS_MAP_KEY = 'apex_pm_all_projects_map';
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [projectData, setProjectDataRaw] = useState<ProjectData>(() => {
@@ -217,7 +331,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const setProjectData = useCallback((action: ProjectData | ((prev: ProjectData) => ProjectData)) => {
     setProjectDataRaw(prev => {
       const next = typeof action === 'function' ? action(prev) : action;
-      return syncProjectCalculatedAttributes(next);
+      const synced = syncProjectCalculatedAttributes(next);
+      setAllProjectsMap(prevMap => ({
+        ...prevMap,
+        [synced.id || 'proj-1']: synced
+      }));
+      return synced;
     });
   }, []);
 
@@ -255,10 +374,55 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     ];
   });
 
+  const [allProjectsMap, setAllProjectsMap] = useState<Record<string, ProjectData>>(() => {
+    try {
+      const cached = localStorage.getItem(ALL_PROJECTS_MAP_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {}
+    return defaultProjectsMap;
+  });
+
+  const [leaves, setLeaves] = useState<MemberLeave[]>(() => {
+    try {
+      const cached = localStorage.getItem(LEAVES_STORAGE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_LEAVES;
+  });
+
+  const [orgSettings, setOrgSettings] = useState<OrganizationSettings>(() => {
+    try {
+      const cached = localStorage.getItem(ORG_SETTINGS_KEY);
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return DEFAULT_ORG_SETTINGS;
+  });
+
   const [allUsers, setAllUsers] = useState<UserProfile[]>(() => {
     try {
       const cached = localStorage.getItem(USERS_LIST_KEY);
-      if (cached) return JSON.parse(cached);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Guarantee that at least one admin user exists and that admin@apex.io has role: 'admin'
+          let updated = parsed.map((u: UserProfile) => {
+            if (u.email?.toLowerCase() === 'admin@apex.io' || u.id === 'user-admin-1') {
+              return { ...u, role: 'admin' as UserRole };
+            }
+            return u;
+          });
+          if (!updated.some((u: UserProfile) => u.role === 'admin')) {
+            updated = [DEFAULT_USERS[0], ...updated];
+          }
+          return updated;
+        }
+      }
     } catch (e) {
       // Ignore
     }
@@ -272,7 +436,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {
       // Ignore
     }
-    return DEFAULT_USERS[0]; // Default Alex Morgan PM
+    return DEFAULT_USERS[0]; // Default Sophia Martinez (Admin)
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -811,6 +975,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdByEmail: currentUser.email
     };
 
+    const rawStakeholders = newProjData.stakeholders && newProjData.stakeholders.length > 0
+      ? [...newProjData.stakeholders]
+      : [defaultCreatorStakeholder];
+    
+    if (!rawStakeholders.some(s => s.id === 'sh-admin' || s.email?.toLowerCase() === 'admin@apex.io')) {
+      rawStakeholders.unshift(ADMIN_STAKEHOLDER);
+    }
+
     const newProject: ProjectData = {
       id: 'proj-' + Date.now(),
       projectName: newProjData.projectName || 'New Agile Project',
@@ -819,9 +991,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       startDate: newProjData.startDate || new Date().toISOString().split('T')[0],
       targetEndDate: newProjData.targetEndDate || new Date(Date.now() + 86400000 * 90).toISOString().split('T')[0],
       budget: typeof newProjData.budget === 'number' ? newProjData.budget : 150000,
-      stakeholders: newProjData.stakeholders && newProjData.stakeholders.length > 0
-        ? newProjData.stakeholders
-        : [defaultCreatorStakeholder],
+      stakeholders: rawStakeholders,
       epics: newProjData.epics || [],
       features: newProjData.features || [],
       milestones: newProjData.milestones || [],
@@ -2255,11 +2425,252 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     broadcastLocalTabSync(updated);
   };
 
+  // Leave & Availability Management Handlers
+  const saveLeave = async (leaveData: Partial<MemberLeave>) => {
+    const isHourly = leaveData.durationType === 'hours';
+    const applicantUser = allUsers.find(u => u.id === leaveData.userId || u.email?.toLowerCase() === leaveData.userEmail?.toLowerCase()) || currentUser;
+    const applicantRole = leaveData.applicantRole || applicantUser.role || 'stakeholder';
+    const isPMApplicant = applicantRole === 'pm';
+    
+    // Auto-approve if created directly by Executive Admin for someone else or self;
+    // If created by PM, it must route to Executive Admin for sign-off (pending).
+    // If created by Team Member, it routes to PM / Admin (pending).
+    let initialStatus: LeaveStatus = leaveData.status || 'pending';
+    if (!leaveData.status) {
+      if (currentUser.role === 'admin' && (leaveData.userId === currentUser.id || leaveData.approvedBy)) {
+        initialStatus = 'approved';
+      } else {
+        initialStatus = 'pending';
+      }
+    }
+
+    const calculatedHours = isHourly
+      ? (leaveData.hoursCount || 2)
+      : (leaveData.hoursCount || (leaveData.daysCount ? leaveData.daysCount * 8 : 8));
+
+    const calculatedDays = isHourly
+      ? Math.round((calculatedHours / 8) * 100) / 100
+      : (leaveData.daysCount || 1);
+
+    const newLeave: MemberLeave = {
+      id: leaveData.id || 'leave-' + Date.now(),
+      userId: leaveData.userId || currentUser.id,
+      userName: leaveData.userName || currentUser.name,
+      userEmail: leaveData.userEmail || currentUser.email,
+      userAvatar: leaveData.userAvatar || currentUser.avatar,
+      role: leaveData.role || currentUser.title || currentUser.role,
+      leaveType: leaveData.leaveType || 'vacation',
+      durationType: leaveData.durationType || 'days',
+      timeRange: leaveData.timeRange,
+      startDate: leaveData.startDate || new Date().toISOString().split('T')[0],
+      endDate: isHourly ? (leaveData.startDate || new Date().toISOString().split('T')[0]) : (leaveData.endDate || new Date().toISOString().split('T')[0]),
+      daysCount: calculatedDays,
+      hoursCount: calculatedHours,
+      status: initialStatus,
+      applicantRole: applicantRole,
+      approverRoleRequired: isPMApplicant ? 'admin' : 'pm',
+      reason: leaveData.reason || '',
+      substituteUserId: leaveData.substituteUserId,
+      substituteUserName: leaveData.substituteUserName,
+      impactedProjectIds: leaveData.impactedProjectIds || [activeProjectId],
+      createdAt: leaveData.createdAt || new Date().toISOString(),
+      approvedBy: initialStatus === 'approved' ? (leaveData.approvedBy || currentUser.name) : undefined,
+      approvedAt: initialStatus === 'approved' ? (leaveData.approvedAt || new Date().toISOString()) : undefined
+    };
+
+    const existingIdx = leaves.findIndex(l => l.id === newLeave.id);
+    let updatedLeaves: MemberLeave[];
+    if (existingIdx >= 0) {
+      updatedLeaves = [...leaves];
+      updatedLeaves[existingIdx] = newLeave;
+    } else {
+      updatedLeaves = [newLeave, ...leaves];
+    }
+
+    setLeaves(updatedLeaves);
+    try {
+      localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(updatedLeaves));
+      await localforage.setItem(LEAVES_STORAGE_KEY, updatedLeaves);
+    } catch (e) {
+      console.warn('Failed to persist leaves:', e);
+    }
+
+    const durationLabel = newLeave.durationType === 'hours'
+      ? `${newLeave.hoursCount}h partial day off on ${newLeave.startDate}${newLeave.timeRange ? ` (${newLeave.timeRange})` : ''}`
+      : `${newLeave.daysCount} day(s) from ${newLeave.startDate} to ${newLeave.endDate}`;
+
+    addAuditNote(
+      existingIdx >= 0 ? 'Updated Leave Request' : 'Submitted Leave Request',
+      `Leave for ${newLeave.userName} (${newLeave.leaveType.toUpperCase()}, ${durationLabel}) - Routing: ${newLeave.applicantRole === 'pm' ? 'PM → Executive Admin Approval' : 'Team Member → PM Approval'} - Status: ${newLeave.status.toUpperCase()}.`,
+      'audit'
+    );
+  };
+
+  const deleteLeave = async (leaveId: string) => {
+    const target = leaves.find(l => l.id === leaveId);
+    const updatedLeaves = leaves.filter(l => l.id !== leaveId);
+    setLeaves(updatedLeaves);
+    try {
+      localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(updatedLeaves));
+      await localforage.setItem(LEAVES_STORAGE_KEY, updatedLeaves);
+    } catch (e) {
+      console.warn('Failed to persist leaves after delete:', e);
+    }
+
+    if (target) {
+      addAuditNote(
+        'Cancelled Leave Request',
+        `Cancelled leave for ${target.userName} (${target.startDate} to ${target.endDate}).`,
+        'audit'
+      );
+    }
+  };
+
+  const updateLeaveStatus = async (leaveId: string, status: LeaveStatus, approverName?: string) => {
+    const updatedLeaves = leaves.map(l => {
+      if (l.id === leaveId) {
+        return {
+          ...l,
+          status,
+          approvedBy: status === 'approved' ? (approverName || currentUser.name) : undefined,
+          approvedAt: status === 'approved' ? new Date().toISOString() : undefined
+        };
+      }
+      return l;
+    });
+
+    setLeaves(updatedLeaves);
+    try {
+      localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(updatedLeaves));
+      await localforage.setItem(LEAVES_STORAGE_KEY, updatedLeaves);
+    } catch (e) {
+      console.warn('Failed to persist updated leave status:', e);
+    }
+
+    const target = updatedLeaves.find(l => l.id === leaveId);
+    if (target) {
+      const durLabel = target.durationType === 'hours'
+        ? `${target.hoursCount}h time-off on ${target.startDate}`
+        : `${target.daysCount} days (${target.startDate} to ${target.endDate})`;
+
+      addAuditNote(
+        `Leave Request ${status === 'approved' ? 'Approved' : 'Rejected'}`,
+        `Leave for ${target.userName} (${durLabel}) marked ${status.toUpperCase()} by ${approverName || currentUser.name}. Capacity ${status === 'approved' ? `deducted (${target.hoursCount}h)` : 'restored'}.`,
+        'audit'
+      );
+    }
+  };
+
+  const updateOrgSettings = async (settings: Partial<OrganizationSettings>) => {
+    const updated = { ...orgSettings, ...settings };
+    setOrgSettings(updated);
+    try {
+      localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(updated));
+      await localforage.setItem(ORG_SETTINGS_KEY, updated);
+    } catch (e) {
+      console.warn('Failed to persist org settings:', e);
+    }
+
+    addAuditNote(
+      'Updated Organization Settings',
+      `Modified organization operational policy and rate cards.`,
+      'audit'
+    );
+  };
+
+  const promoteUserRole = async (userId: string, newRole: UserRole, newTitle?: string) => {
+    // Strict role boundary: Only Executive Administrators can promote or modify user roles
+    if (currentUser.role !== 'admin') {
+      console.warn('Unauthorized role change attempt. Only Executive Admins can assign or promote user roles.');
+      return;
+    }
+
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          role: newRole,
+          title: newTitle || (newRole === 'admin' ? 'Executive Administrator' : newRole === 'pm' ? 'Project Manager' : u.title)
+        };
+      }
+      return u;
+    });
+
+    setAllUsers(updatedUsers);
+    try {
+      localStorage.setItem(USERS_LIST_KEY, JSON.stringify(updatedUsers));
+      await localforage.setItem(USERS_LIST_KEY, updatedUsers);
+    } catch (e) {
+      console.warn('Failed to persist all users:', e);
+    }
+
+    if (currentUser.id === userId) {
+      const updatedCurrent = updatedUsers.find(u => u.id === userId)!;
+      setCurrentUser(updatedCurrent);
+      try {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrent));
+        await localforage.setItem(USER_STORAGE_KEY, updatedCurrent);
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    const targetUser = updatedUsers.find(u => u.id === userId);
+    addAuditNote(
+      'Updated User Role / Permissions',
+      `Changed role for ${targetUser?.name || userId} to ${newRole.toUpperCase()}${newTitle ? ` (${newTitle})` : ''}.`,
+      'audit'
+    );
+  };
+
+  const assignProjectManager = async (projectId: string, pmUserId: string) => {
+    const pmUser = allUsers.find(u => u.id === pmUserId);
+    if (!pmUser) return;
+
+    // Check if target project is active project
+    if (projectId === activeProjectId) {
+      // Ensure PM is in stakeholders list with lead role
+      const existingIdx = projectData.stakeholders.findIndex(s => s.id === pmUser.id || s.email === pmUser.email);
+      let updatedStakeholders = [...projectData.stakeholders];
+      const pmStakeholder: Stakeholder = {
+        id: pmUser.id,
+        name: pmUser.name,
+        email: pmUser.email,
+        role: pmUser.title || 'Project Manager & Scrum Master',
+        category: 'internal',
+        avatar: pmUser.avatar,
+        hourlyRate: pmUser.hourlyRate || 100,
+        weeklyCapacityHours: pmUser.weeklyCapacityHours || 40,
+        skills: pmUser.skills || ['Agile', 'Scrum', 'Leadership'],
+        status: 'active'
+      };
+
+      if (existingIdx >= 0) {
+        updatedStakeholders[existingIdx] = pmStakeholder;
+      } else {
+        updatedStakeholders.unshift(pmStakeholder);
+      }
+
+      const updated = { ...projectData, stakeholders: updatedStakeholders };
+      setProjectData(updated);
+      broadcastLocalTabSync(updated);
+    }
+
+    addAuditNote(
+      'Assigned Project Manager',
+      `Assigned ${pmUser.name} as Lead Project Manager for Project ID: ${projectId}.`,
+      'audit'
+    );
+  };
+
   return (
     <ProjectContext.Provider
       value={{
         projectData,
         projectsList,
+        allProjectsMap,
+        leaves,
+        orgSettings,
         activeProjectId,
         metrics,
         isOffline,
@@ -2273,6 +2684,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         loginAsUser,
         createUserAccount,
         updateUserProfile,
+        promoteUserRole,
+        assignProjectManager,
         switchProject,
         createProject,
         deleteProject,
@@ -2312,6 +2725,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteProjectChatMessage,
         toggleProjectChatMessageReaction,
         togglePinProjectChatMessage,
+        saveLeave,
+        deleteLeave,
+        updateLeaveStatus,
+        updateOrgSettings,
         importWbsData,
         resetToDefault,
         updateWidgets,

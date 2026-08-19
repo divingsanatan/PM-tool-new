@@ -1,6 +1,6 @@
 {
   "name": "Remix Remix: ApexPM - Enterprise Project Management \u0026 RAID Suite",
-  "description": "ClickUp-style project management with EVM metrics (SPI/CPI), Gantt charts, stakeholder load distribution, RAID tracking system, real-time sync, and offline capabilities.",
+  "description": "Enterprise PMO suite featuring Executive Portfolio Governance, Cross-Project Workload & Leave Availability Blocking, Rate Cards & Commercial Margin Tracking, EVM Metrics (SPI/CPI), and AI Decision Intelligence.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
