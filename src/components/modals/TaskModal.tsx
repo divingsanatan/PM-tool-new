@@ -72,7 +72,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   taskToEdit,
   defaultStatus
 }) => {
-  const { projectData, saveTask, saveSubtask, currentUser, leaves } = useProject();
+  const { projectData, saveTask, deleteTask, saveSubtask, currentUser, leaves } = useProject();
 
   const isPM = currentUser?.role === 'pm' || currentUser?.role === 'admin';
 
@@ -102,6 +102,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [type, setType] = useState<WorkItemType>('task');
   const [linkedBugIds, setLinkedBugIds] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  const [titleError, setTitleError] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'details' | 'activity'>('details');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>(defaultStatus || 'todo');
   const [priority, setPriority] = useState<Priority>('normal');
@@ -291,12 +294,30 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         { id: 'a0', authorName: currentUser.name, action: 'created this task', timestamp: 'Just now' }
       ]);
     }
+    setTitleError(false);
+    setShowDeleteConfirm(false);
+    setMobileTab('details');
     setSelectedDepTaskId('');
     setSelectedDepType('FS');
     setNewAcText('');
     setIsTimerRunning(false);
     setTimerSeconds(0);
   }, [taskToEdit, defaultStatus, isOpen]);
+
+  // Keyboard shortcut listener (Cmd/Ctrl + Enter to save, Esc to close)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, title, description, status, priority, epicId, featureId, milestoneId, sprintId, assigneeIds, startDate, dueDate, estimatedHours, actualHours, subtasksList, acceptanceCriteria, dependencies]);
 
   // Handle automatic hierarchy filling when feature is selected
   const handleFeatureSelect = (selectedFeatId: string) => {
@@ -344,12 +365,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setTitleError(true);
+      setMobileTab('details');
+      return;
+    }
+    setTitleError(false);
 
     await saveTask({
       id: taskToEdit?.id,
       type,
-      title,
+      title: title.trim(),
       description,
       status,
       priority,
@@ -504,70 +530,112 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-md flex items-center justify-end sm:p-2 md:p-4 overflow-hidden animate-in fade-in duration-200">
-      <div className={`bg-[#121319] border border-slate-800/80 w-full ${
-        isFullscreen ? 'max-w-full h-full rounded-none' : 'max-w-6xl h-full max-h-[calc(100vh-1.5rem)] rounded-2xl'
+    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-md flex items-center justify-center lg:justify-end p-0 sm:p-2 md:p-4 overflow-hidden animate-in fade-in duration-200">
+      <div className={`bg-[#121319] border-0 sm:border border-slate-800/80 w-full ${
+        isFullscreen ? 'max-w-full h-full rounded-none' : 'max-w-6xl h-full sm:max-h-[calc(100vh-1rem)] rounded-none sm:rounded-2xl'
       } shadow-2xl flex flex-col overflow-hidden text-slate-100 transition-all duration-200`}>
         
         {/* ================= CLICKUP TOP BREADCRUMB & HEADER BAR ================= */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800/80 bg-[#171821] shrink-0 text-xs">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 border-b border-slate-800/80 bg-[#171821] shrink-0 text-xs gap-2">
           {/* Breadcrumb Path */}
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar font-sans text-slate-400">
-            <span className="hover:text-slate-200 cursor-pointer">Shared with me</span>
-            <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-            <span className="hover:text-slate-200 cursor-pointer font-medium text-slate-300">{projectData.name}</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar font-sans text-slate-400 min-w-0">
+            <span className="hover:text-slate-200 cursor-pointer shrink-0 hidden sm:inline">Workspace</span>
+            <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0 hidden sm:inline" />
+            <span className="hover:text-slate-200 cursor-pointer font-medium text-slate-300 truncate max-w-[120px] sm:max-w-[160px]">{projectData.name}</span>
             <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0" />
             {parentSprint && (
               <>
-                <span className="hover:text-slate-200 cursor-pointer text-indigo-300 font-semibold">{parentSprint.name}</span>
+                <span className="hover:text-slate-200 cursor-pointer text-indigo-300 font-semibold truncate max-w-[100px]">{parentSprint.name}</span>
                 <ChevronRight className="w-3.5 h-3.5 text-slate-600 shrink-0" />
               </>
             )}
             {parentFeature && (
-              <span className="hover:text-slate-200 cursor-pointer text-blue-300 truncate max-w-[150px]">{parentFeature.title}</span>
+              <span className="hover:text-slate-200 cursor-pointer text-blue-300 truncate max-w-[100px] sm:max-w-[150px]">{parentFeature.title}</span>
             )}
           </div>
 
           {/* Top Actions & Window Toggle */}
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="text-[11px] text-slate-400 hidden sm:inline">Created Jul 6</span>
-
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => {
-                const aiDesc = `Generated specifications for ${title || 'task'}:\n- Validated API contracts\n- Added end-to-end integration tests\n- Configured automated deployment pipeline`;
+                const aiDesc = `Generated specifications for ${title || 'task'}:\n- Validated API contracts and error handling\n- Added end-to-end integration tests with coverage\n- Configured automated deployment pipeline and monitoring`;
                 setDescription(aiDesc);
               }}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border border-purple-500/30 text-purple-300 hover:text-purple-100 text-xs font-semibold transition-all cursor-pointer shadow-2xs"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border border-purple-500/30 text-purple-300 hover:text-purple-100 text-[11px] sm:text-xs font-semibold transition-all cursor-pointer shadow-2xs"
               title="ClickUp Brain AI Assistant"
             >
               <Sparkles className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
               <span>Brain²</span>
             </button>
 
+            {/* Quick Header Save button for rapid desktop actions */}
+            <button
+              type="button"
+              onClick={() => handleSubmit()}
+              className="hidden sm:flex items-center gap-1 px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer"
+              title="Save work item (⌘+Enter)"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>{taskToEdit ? 'Save' : 'Create'}</span>
+            </button>
+
             <button
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-              title={isFullscreen ? "Restore side drawer view" : "Fullscreen mode"}
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors hidden sm:inline-flex cursor-pointer"
+              title={isFullscreen ? "Restore standard view" : "Fullscreen mode"}
             >
               {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
 
             <button
-              onClick={() => handleSubmit()}
-              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
-              title="Close and save"
+              onClick={onClose}
+              className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              title="Close modal (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* ================= MOBILE TAB SWITCHER (FOR SCREENS < LG) ================= */}
+        <div className="flex lg:hidden border-b border-slate-800 bg-[#161720] px-3 py-1.5 gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setMobileTab('details')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+              mobileTab === 'details'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Task Details</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('activity')}
+            className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+              mobileTab === 'activity'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Activity & Chat</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${mobileTab === 'activity' ? 'bg-indigo-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+              {comments.length + activities.length}
+            </span>
+          </button>
+        </div>
+
         {/* ================= MAIN SPLIT CONTENT AREA (LEFT WORK ITEM / RIGHT ACTIVITY) ================= */}
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-800/80">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-slate-800/80 min-h-0">
           
           {/* ================= LEFT / CENTER WORK ITEM DETAILS (65% WIDTH) ================= */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar bg-[#121319]">
+          <div className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar bg-[#121319] min-h-0 ${
+            mobileTab === 'activity' ? 'hidden lg:block' : 'block'
+          }`}>
             
             {/* Work Item Type Badge & Subtask Parent line */}
             <div className="space-y-1.5">
@@ -587,15 +655,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </span>
                 </div>
 
-                {/* Save Changes button */}
-                <button
-                  type="button"
-                  onClick={() => handleSubmit()}
-                  className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Save Changes</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase ${
+                    status === 'done' ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30' :
+                    status === 'in_progress' ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30' :
+                    status === 'blocked' ? 'bg-rose-950/80 text-rose-300 border border-rose-500/30' :
+                    'bg-slate-800 text-slate-300 border border-slate-700'
+                  }`}>
+                    {status.replace('_', ' ')}
+                  </span>
+                </div>
               </div>
 
               {parentFeature && (
@@ -609,16 +678,27 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               )}
             </div>
 
-            {/* Editable Title Heading */}
-            <div>
+            {/* Editable Title Heading with Validation Error Ring */}
+            <div className="space-y-1">
               <input
                 type="text"
                 required
                 value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Work item title (e.g. Verify project setup.)"
-                className="w-full bg-transparent border-none outline-none text-xl sm:text-2xl font-bold text-slate-100 placeholder-slate-600 focus:ring-0 p-0"
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (e.target.value.trim()) setTitleError(false);
+                }}
+                placeholder="Work item title (e.g. Verify project setup, API Integration...)"
+                className={`w-full bg-slate-900/40 border ${
+                  titleError ? 'border-rose-500 ring-2 ring-rose-500/30' : 'border-slate-800/80 focus:border-indigo-500'
+                } rounded-xl px-3.5 py-2 sm:py-2.5 text-lg sm:text-xl font-bold text-slate-100 placeholder-slate-600 outline-none transition`}
               />
+              {titleError && (
+                <p className="text-xs text-rose-400 font-medium flex items-center gap-1.5 pt-0.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Please enter a title for this work item before saving
+                </p>
+              )}
             </div>
 
             {/* AI Assistant ClickUp Brain Banner */}
@@ -1251,10 +1331,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
 
           {/* ================= RIGHT PANEL: ACTIVITY LOG & COMMENTS FEED (Matching Screenshots 2, 3, 4) ================= */}
-          <div className="w-full lg:w-96 flex flex-col bg-[#161720] border-t lg:border-t-0 shrink-0 h-full">
+          <div className={`w-full lg:w-96 flex flex-col bg-[#161720] border-t lg:border-t-0 shrink-0 lg:h-full flex-1 lg:flex-initial overflow-hidden ${
+            mobileTab === 'details' ? 'hidden lg:flex' : 'flex'
+          }`}>
             
             {/* Activity Header Bar */}
-            <div className="flex items-center justify-between p-3.5 border-b border-slate-800/80 bg-[#171821]">
+            <div className="flex items-center justify-between p-3.5 border-b border-slate-800/80 bg-[#171821] shrink-0">
               <div className="flex items-center gap-2">
                 <h4 className="font-bold text-sm text-slate-100">Activity</h4>
                 <span className="px-1.5 py-0.5 rounded-full bg-slate-800 text-[10px] text-slate-400 font-mono">
@@ -1308,7 +1390,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
 
             {/* ClickUp Comment Input Box (Matching Screenshots 2, 3, 4) */}
-            <div className="p-3 border-t border-slate-800/80 bg-[#121319] space-y-2">
+            <div className="p-3 border-t border-slate-800/80 bg-[#121319] space-y-2 shrink-0">
               <div className="bg-[#1b1c27] border border-slate-800 rounded-xl p-2 space-y-2 focus-within:border-indigo-500/80 transition-colors">
                 <textarea
                   rows={2}
@@ -1339,7 +1421,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <button
                     type="button"
                     onClick={handleSendComment}
-                    className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center"
+                    className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shrink-0 flex items-center justify-center cursor-pointer"
                     title="Send comment"
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -1348,6 +1430,80 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             </div>
 
+          </div>
+        </div>
+
+        {/* ================= PRIMARY STICKY FOOTER ACTIONS BAR ================= */}
+        <div className="px-3.5 sm:px-6 py-3 border-t border-slate-800/90 bg-[#151620] shrink-0 flex items-center justify-between gap-3 shadow-2xl z-20">
+          {/* Left actions: Delete / Keyboard shortcuts info */}
+          <div className="flex items-center gap-2">
+            {taskToEdit && (
+              <>
+                {showDeleteConfirm ? (
+                  <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
+                    <span className="text-xs text-rose-400 font-semibold hidden sm:inline">Delete this task?</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (taskToEdit?.id) {
+                          await deleteTask(taskToEdit.id);
+                          onClose();
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Delete</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="p-2 sm:px-3 sm:py-2 rounded-xl border border-rose-500/30 text-rose-400 hover:bg-rose-950/40 hover:border-rose-500/60 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
+                    title="Delete work item"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete Task</span>
+                  </button>
+                )}
+              </>
+            )}
+
+            <div className="text-[11px] text-slate-400 hidden md:flex items-center gap-1.5 ml-1">
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono text-[10px] text-slate-300">Esc</span>
+              <span>to cancel</span>
+              <span className="mx-1 text-slate-600">•</span>
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 font-mono text-[10px] text-slate-300">⌘+Enter</span>
+              <span>to save</span>
+            </div>
+          </div>
+
+          {/* Right actions: Cancel & Primary Save/Create Button */}
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition cursor-pointer hover:bg-slate-800/60 text-center"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleSubmit()}
+              className="flex-1 sm:flex-initial px-5 py-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-center"
+            >
+              <Check className="w-4 h-4" />
+              <span>{taskToEdit ? 'Save Changes' : 'Create Work Item'}</span>
+            </button>
           </div>
         </div>
       </div>

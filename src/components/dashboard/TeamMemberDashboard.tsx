@@ -4,6 +4,7 @@ import { Task, Stakeholder, UserProfile, ProjectData } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
 import { getStatusProgress } from '../../utils/taskCalculations';
 import { ResponsiveSelect } from '../common/ResponsiveSelect';
+import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
 import {
   User,
   CheckCircle2,
@@ -1700,226 +1701,237 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
 
+        {/* Mobile Swipe Gesture Discovery Banner */}
+        <SwipeGestureGuideBanner />
+
         {/* Task Cards Display - LIST VIEW */}
         <div className="space-y-3">
-          {filteredAssignedTasks.map((task) => {
+          {filteredAssignedTasks.map((task, idx) => {
               const taskSubtasks = allScopedSubtasks.filter(st => st.taskId === task.id);
               const isLoggingHours = loggingTaskId === task.id;
 
               return (
-                <div
+                <SwipeableCard
                   key={task.id}
-                  className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 transition-all space-y-4 min-w-0 shadow-sm"
+                  onSwipeRight={() => handleQuickStatusChange(task, task.status === 'done' ? 'todo' : 'done')}
+                  onSwipeLeft={() => onOpenTaskModal(task)}
+                  swipeRightLabel={task.status === 'done' ? 'Reopen Task' : 'Mark Complete'}
+                  swipeLeftLabel="Edit Task"
+                  isCompleted={task.status === 'done'}
+                  showFirstTimeHint={idx === 0}
+                  hintStorageKey="pmo_member_task_swipe_hint"
                 >
-                  {/* Top Header: Title, Priority & Edit Action */}
-                  <div className="space-y-2 min-w-0">
-                    <div className="flex items-start justify-between gap-3 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                        {task.projectCode && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
-                            <Building2 className="w-3 h-3 text-indigo-400" />
-                            <span>{task.projectCode}</span>
+                  <div className="p-4 sm:p-5 rounded-2xl bg-slate-950 border border-slate-800/80 hover:border-slate-700/80 transition-all space-y-4 min-w-0 shadow-sm">
+                    {/* Top Header: Title, Priority & Edit Action */}
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex items-start justify-between gap-3 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                          {task.projectCode && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold shrink-0 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-indigo-400" />
+                              <span>{task.projectCode}</span>
+                            </span>
+                          )}
+
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 border whitespace-nowrap ${
+                            task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                            task.priority === 'high' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                            'bg-slate-800/80 text-slate-300 border-slate-700'
+                          }`}>
+                            {task.priority}
                           </span>
-                        )}
 
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0 border whitespace-nowrap ${
-                          task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                          task.priority === 'high' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                          'bg-slate-800/80 text-slate-300 border-slate-700'
-                        }`}>
-                          {task.priority}
-                        </span>
+                          {task.type === 'bug' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                              <Bug className="w-3 h-3 text-rose-400" />
+                              <span>BUG</span>
+                            </span>
+                          )}
 
-                        {task.type === 'bug' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
-                            <Bug className="w-3 h-3 text-rose-400" />
-                            <span>BUG</span>
-                          </span>
-                        )}
+                          {task.linkedBugIds && task.linkedBugIds.length > 0 && (
+                            <span
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 cursor-pointer hover:bg-purple-500/30"
+                              onClick={() => onOpenTaskModal(task)}
+                              title={`${task.linkedBugIds.length} linked bug(s)`}
+                            >
+                              <Bug className="w-3 h-3 text-purple-400" />
+                              <span>{task.linkedBugIds.length} Linked Bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
+                            </span>
+                          )}
 
-                        {task.linkedBugIds && task.linkedBugIds.length > 0 && (
-                          <span
-                            className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 cursor-pointer hover:bg-purple-500/30"
-                            onClick={() => onOpenTaskModal(task)}
-                            title={`${task.linkedBugIds.length} linked bug(s)`}
-                          >
-                            <Bug className="w-3 h-3 text-purple-400" />
-                            <span>{task.linkedBugIds.length} Linked Bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
-                          </span>
-                        )}
-
-                        <h3 className="font-bold text-sm sm:text-base text-slate-100 hover:text-indigo-300 transition-colors leading-snug">
-                          {task.title}
-                        </h3>
-                      </div>
-
-                      {/* Full Edit Modal Trigger */}
-                      <button
-                        onClick={() => onOpenTaskModal(task)}
-                        className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-white transition-colors shrink-0"
-                        title="Edit task details"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-
-                    {task.description && (
-                      <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
-                    )}
-                  </div>
-
-                  {/* Toolbar & Metadata Strip */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/60 min-w-0">
-                    {/* Metadata Badges */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 min-w-0">
-                      {/* Assignee Badges if PM viewing project deliverables */}
-                      {task.assigneeIds && task.assigneeIds.length > 0 && (
-                        <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800/80 px-2 py-1 rounded-lg shrink-0 text-slate-300">
-                          <User className="w-3 h-3 text-indigo-400 shrink-0" />
-                          <span className="truncate max-w-[150px]">
-                            {task.assigneeIds.map(aId => {
-                              const s = selectableStakeholders.find(sh => sh.id === aId) || allProjects.flatMap(p => p.stakeholders || []).find(sh => sh.id === aId);
-                              return s ? s.name : aId;
-                            }).join(', ')}
-                          </span>
+                          <h3 className="font-bold text-sm sm:text-base text-slate-100 hover:text-indigo-300 transition-colors leading-snug">
+                            {task.title}
+                          </h3>
                         </div>
-                      )}
 
-                      <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
-                        <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{task.startDate} → {task.dueDate}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
-                        <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
-                        <span>Est: <strong className="text-indigo-300">{task.estimatedHours}h</strong></span>
-                      </div>
-                      <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
-                        <CheckSquare className="w-3 h-3 text-emerald-400 shrink-0" />
-                        <span>Actual: <strong className="text-emerald-300">{task.actualHours}h</strong></span>
-                      </div>
-                    </div>
-
-                    {/* Right Action Controls: Status Switcher & Log Hours */}
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-                      {/* Status Switcher */}
-                      <select
-                        value={task.status}
-                        onChange={(e) => handleQuickStatusChange(task, e.target.value as Task['status'])}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border outline-none cursor-pointer transition-colors ${
-                          task.status === 'done' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
-                          task.status === 'in_progress' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
-                          task.status === 'demoable' ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' :
-                          task.status === 'review' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
-                          task.status === 'on_hold' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                          task.status === 'blocked' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                          'bg-slate-900 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        <option value="todo" className="bg-slate-900 text-slate-200">To Do</option>
-                        <option value="in_progress" className="bg-slate-900 text-slate-200">In Progress</option>
-                        <option value="demoable" className="bg-slate-900 text-slate-200">Demo-able</option>
-                        <option value="review" className="bg-slate-900 text-slate-200">Under Review</option>
-                        <option value="on_hold" className="bg-slate-900 text-slate-200">On Hold</option>
-                        <option value="blocked" className="bg-slate-900 text-slate-200">Blocked</option>
-                        <option value="done" className="bg-slate-900 text-slate-200">Completed</option>
-                      </select>
-
-                      {/* Time Capture Status Badge / Audit Toggle */}
-                      <button
-                        onClick={() => {
-                          setLoggingTaskId(isLoggingHours ? null : task.id);
-                          setLogHoursInput(task.actualHours);
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                        title="View auto-captured actual hours & status timestamps"
-                      >
-                        <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span>{task.actualHours || 0}h Auto-Captured</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Inline Time Capture Audit Controls */}
-                  {isLoggingHours && (
-                    <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 space-y-2 text-xs animate-fade-in">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-indigo-400" />
-                          <span className="font-semibold text-slate-200">Status Transition Time Capture Audit</span>
-                        </div>
-                        <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                          Actual Hours: {task.actualHours || 0} hrs
-                        </span>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-300 pt-1">
-                        <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-500 block text-[10px] uppercase font-sans">In Progress Timestamp:</span>
-                          <span className="text-indigo-300 font-semibold">{task.inProgressAt ? new Date(task.inProgressAt).toLocaleString() : 'Not recorded (Pending transition to In Progress)'}</span>
-                        </div>
-                        <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
-                          <span className="text-slate-500 block text-[10px] uppercase font-sans">Demo-able Timestamp:</span>
-                          <span className="text-teal-300 font-semibold">{task.demoableAt ? new Date(task.demoableAt).toLocaleString() : 'Not recorded (Pending transition to Demo-able)'}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[10px] text-slate-400">
-                          ⚡ Actual time is auto-calculated between "In Progress" and "Demo-able" status transitions.
-                        </span>
+                        {/* Full Edit Modal Trigger */}
                         <button
-                          onClick={() => setLoggingTaskId(null)}
-                          className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs"
+                          onClick={() => onOpenTaskModal(task)}
+                          className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-white transition-colors shrink-0"
+                          title="Edit task details (or swipe left)"
                         >
-                          Close Audit
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      {task.description && (
+                        <p className="text-xs text-slate-400 leading-relaxed">{task.description}</p>
+                      )}
+                    </div>
+
+                    {/* Toolbar & Metadata Strip */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/60 min-w-0">
+                      {/* Metadata Badges */}
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-400 min-w-0">
+                        {/* Assignee Badges if PM viewing project deliverables */}
+                        {task.assigneeIds && task.assigneeIds.length > 0 && (
+                          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800/80 px-2 py-1 rounded-lg shrink-0 text-slate-300">
+                            <User className="w-3 h-3 text-indigo-400 shrink-0" />
+                            <span className="truncate max-w-[150px]">
+                              {task.assigneeIds.map(aId => {
+                                const s = selectableStakeholders.find(sh => sh.id === aId) || allProjects.flatMap(p => p.stakeholders || []).find(sh => sh.id === aId);
+                                return s ? s.name : aId;
+                              }).join(', ')}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
+                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{task.startDate} → {task.dueDate}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
+                          <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
+                          <span>Est: <strong className="text-indigo-300">{task.estimatedHours}h</strong></span>
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800/80 px-2.5 py-1 rounded-lg shrink-0">
+                          <CheckSquare className="w-3 h-3 text-emerald-400 shrink-0" />
+                          <span>Actual: <strong className="text-emerald-300">{task.actualHours}h</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Right Action Controls: Status Switcher & Log Hours */}
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
+                        {/* Status Switcher */}
+                        <select
+                          value={task.status}
+                          onChange={(e) => handleQuickStatusChange(task, e.target.value as Task['status'])}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border outline-none cursor-pointer transition-colors ${
+                            task.status === 'done' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' :
+                            task.status === 'in_progress' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
+                            task.status === 'demoable' ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' :
+                            task.status === 'review' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
+                            task.status === 'on_hold' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                            task.status === 'blocked' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                            'bg-slate-900 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          <option value="todo" className="bg-slate-900 text-slate-200">To Do</option>
+                          <option value="in_progress" className="bg-slate-900 text-slate-200">In Progress</option>
+                          <option value="demoable" className="bg-slate-900 text-slate-200">Demo-able</option>
+                          <option value="review" className="bg-slate-900 text-slate-200">Under Review</option>
+                          <option value="on_hold" className="bg-slate-900 text-slate-200">On Hold</option>
+                          <option value="blocked" className="bg-slate-900 text-slate-200">Blocked</option>
+                          <option value="done" className="bg-slate-900 text-slate-200">Completed</option>
+                        </select>
+
+                        {/* Time Capture Status Badge / Audit Toggle */}
+                        <button
+                          onClick={() => {
+                            setLoggingTaskId(isLoggingHours ? null : task.id);
+                            setLogHoursInput(task.actualHours);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                          title="View auto-captured actual hours & status timestamps"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>{task.actualHours || 0}h Auto-Captured</span>
                         </button>
                       </div>
                     </div>
-                  )}
 
-                  {/* Task Completion Progress Slider */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <span>Task Completion Progress</span>
-                      <span className="font-bold text-slate-200">{task.completionPercent}%</span>
-                    </div>
-                    <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          task.status === 'done' ? 'bg-emerald-500' : 'bg-indigo-500'
-                        }`}
-                        style={{ width: `${task.completionPercent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Subtasks Checklist */}
-                  {taskSubtasks.length > 0 && (
-                    <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
-                        Subtasks Checklist ({taskSubtasks.filter(st => st.completed).length}/{taskSubtasks.length})
-                      </span>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {taskSubtasks.map(subtask => (
-                          <div
-                            key={subtask.id}
-                            onClick={() => handleToggleSubtask(subtask.id, subtask.completed)}
-                            className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 cursor-pointer hover:bg-slate-900 transition-colors text-xs"
-                          >
-                            {subtask.completed ? (
-                              <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
-                            ) : (
-                              <Square className="w-4 h-4 text-slate-500 shrink-0" />
-                            )}
-                            <span className={`truncate ${subtask.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
-                              {subtask.title}
-                            </span>
+                    {/* Inline Time Capture Audit Controls */}
+                    {isLoggingHours && (
+                      <div className="p-3 rounded-xl bg-slate-900 border border-indigo-500/30 space-y-2 text-xs animate-fade-in">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-indigo-400" />
+                            <span className="font-semibold text-slate-200">Status Transition Time Capture Audit</span>
                           </div>
-                        ))}
+                          <span className="text-[11px] font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                            Actual Hours: {task.actualHours || 0} hrs
+                          </span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono text-slate-300 pt-1">
+                          <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-500 block text-[10px] uppercase font-sans">In Progress Timestamp:</span>
+                            <span className="text-indigo-300 font-semibold">{task.inProgressAt ? new Date(task.inProgressAt).toLocaleString() : 'Not recorded (Pending transition to In Progress)'}</span>
+                          </div>
+                          <div className="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-500 block text-[10px] uppercase font-sans">Demo-able Timestamp:</span>
+                            <span className="text-teal-300 font-semibold">{task.demoableAt ? new Date(task.demoableAt).toLocaleString() : 'Not recorded (Pending transition to Demo-able)'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[10px] text-slate-400">
+                            ⚡ Actual time is auto-calculated between "In Progress" and "Demo-able" status transitions.
+                          </span>
+                          <button
+                            onClick={() => setLoggingTaskId(null)}
+                            className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-xs"
+                          >
+                            Close Audit
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Task Completion Progress Slider */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                        <span>Task Completion Progress</span>
+                        <span className="font-bold text-slate-200">{task.completionPercent}%</span>
+                      </div>
+                      <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            task.status === 'done' ? 'bg-emerald-500' : 'bg-indigo-500'
+                          }`}
+                          style={{ width: `${task.completionPercent}%` }}
+                        />
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    {/* Subtasks Checklist */}
+                    {taskSubtasks.length > 0 && (
+                      <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">
+                          Subtasks Checklist ({taskSubtasks.filter(st => st.completed).length}/{taskSubtasks.length})
+                        </span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {taskSubtasks.map(subtask => (
+                            <div
+                              key={subtask.id}
+                              onClick={() => handleToggleSubtask(subtask.id, subtask.completed)}
+                              className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 cursor-pointer hover:bg-slate-900 transition-colors text-xs"
+                            >
+                              {subtask.completed ? (
+                                <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                              ) : (
+                                <Square className="w-4 h-4 text-slate-500 shrink-0" />
+                              )}
+                              <span className={`truncate ${subtask.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
+                                {subtask.title}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </SwipeableCard>
               );
             })}
 

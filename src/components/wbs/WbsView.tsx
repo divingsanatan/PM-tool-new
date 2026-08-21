@@ -57,6 +57,7 @@ import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal'
 import { CsvImportModal } from '../modals/CsvImportModal';
 import { SprintFilter } from '../common/SprintFilter';
 import { SprintModal } from '../modals/SprintModal';
+import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
 import { Sprint } from '../../types';
 import { calculateEVMMetrics } from '../../utils/evm';
 
@@ -2833,7 +2834,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
                 {/* Column Task Cards */}
                 <div className="flex-1 space-y-2 overflow-y-auto">
-                  {colTasks.map(task => {
+                  {colTasks.map((task, idx) => {
                     const taskAssignees = getTaskAllAssigneeIds(task, projectData.subtasks);
                     const assignees = getAssigneeNames(taskAssignees);
                     const subtasks = getSubtasksForTask(task.id);
@@ -2841,92 +2842,108 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     const isCardTarget = dragOverTargetId === task.id;
 
                     return (
-                      <div
+                      <SwipeableCard
                         key={task.id}
-                        draggable={true}
-                        onDragStart={(e) => handleDragStart(e, 'task', task.id)}
-                        onDragOver={(e) => handleDragOver(e, task.id)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDropOnTask(task.id, e)}
-                        className={`p-3 rounded-xl bg-slate-950 border space-y-2 transition-all shadow-sm ${
-                          isCardTarget ? 'border-indigo-400 ring-2 ring-indigo-500/50 bg-indigo-900/60' : 'border-slate-800/80 hover:border-indigo-500/50'
-                        }`}
+                        onSwipeRight={() => {
+                          const newSt: TaskStatus = task.status === 'done' ? 'todo' : 'done';
+                          saveTask({ ...task, status: newSt, completionPercent: getStatusProgress(newSt, projectData.statusPercentages) });
+                          showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')}`);
+                        }}
+                        onSwipeLeft={() => onOpenTaskModal(task)}
+                        swipeRightLabel={task.status === 'done' ? 'Reopen' : 'Complete'}
+                        swipeLeftLabel="Edit Task"
+                        isCompleted={task.status === 'done'}
+                        showFirstTimeHint={idx === 0}
+                        hintStorageKey="pmo_kanban_task_swipe_hint"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
-                            <div
-                              className="text-slate-600 hover:text-indigo-400 cursor-grab active:cursor-grabbing"
-                              title="Drag to change column status or drop subtasks"
-                            >
-                              <GripVertical className="w-3.5 h-3.5" />
+                        <div
+                          draggable={true}
+                          onDragStart={(e) => handleDragStart(e, 'task', task.id)}
+                          onDragOver={(e) => handleDragOver(e, task.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDropOnTask(task.id, e)}
+                          className={`p-3 rounded-xl bg-slate-950 border space-y-2 transition-all shadow-sm ${
+                            isCardTarget ? 'border-indigo-400 ring-2 ring-indigo-500/50 bg-indigo-900/60' : 'border-slate-800/80 hover:border-indigo-500/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <div
+                                className="text-slate-600 hover:text-indigo-400 cursor-grab active:cursor-grabbing"
+                                title="Drag to change column status or drop subtasks"
+                              >
+                                <GripVertical className="w-3.5 h-3.5" />
+                              </div>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300' :
+                                task.priority === 'high' ? 'bg-amber-500/20 text-amber-300' :
+                                'bg-indigo-500/20 text-indigo-300'
+                              }`}>
+                                {task.priority}
+                              </span>
                             </div>
-                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
-                              task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300' :
-                              task.priority === 'high' ? 'bg-amber-500/20 text-amber-300' :
-                              'bg-indigo-500/20 text-indigo-300'
-                            }`}>
-                              {task.priority}
-                            </span>
+
+                            <select
+                              value={task.status}
+                              onChange={(e) => {
+                                const newSt = e.target.value as TaskStatus;
+                                if (statusFilter !== 'all' && newSt !== statusFilter) {
+                                  setStatusFilter('all');
+                                }
+                                saveTask({ ...task, status: newSt, completionPercent: getStatusProgress(newSt, projectData.statusPercentages) });
+                                showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')}`);
+                              }}
+                              className="bg-slate-900 border border-slate-800 text-[10px] text-indigo-300 font-mono rounded px-1 py-0.5 outline-none cursor-pointer"
+                            >
+                              <option value="todo">To Do</option>
+                              <option value="in_progress">In Progress</option>
+                              <option value="demoable">Demo-able</option>
+                              <option value="review">Testing</option>
+                              <option value="on_hold">On Hold</option>
+                              <option value="blocked">Blocked</option>
+                              <option value="done">Done</option>
+                            </select>
                           </div>
 
-                          <select
-                            value={task.status}
-                            onChange={(e) => {
-                              const newSt = e.target.value as TaskStatus;
-                              if (statusFilter !== 'all' && newSt !== statusFilter) {
-                                setStatusFilter('all');
-                              }
-                              saveTask({ ...task, status: newSt, completionPercent: getStatusProgress(newSt, projectData.statusPercentages) });
-                              showNotice(`Updated Task "${task.title}" status to ${newSt.toUpperCase().replace('_', ' ')}`);
-                            }}
-                            className="bg-slate-900 border border-slate-800 text-[10px] text-indigo-300 font-mono rounded px-1 py-0.5 outline-none cursor-pointer"
-                          >
-                            <option value="todo">To Do</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="demoable">Demo-able</option>
-                            <option value="review">Testing</option>
-                            <option value="on_hold">On Hold</option>
-                            <option value="blocked">Blocked</option>
-                            <option value="done">Done</option>
-                          </select>
-                        </div>
+                          <p className="font-bold text-xs text-slate-100">{task.title}</p>
 
-                        <p className="font-bold text-xs text-slate-100">{task.title}</p>
-
-                        {task.description && (
-                          <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
-                        )}
-
-                        <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400 border-t border-slate-800/60 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            {renderAssigneeAvatars(taskAssignees)}
-                            <span className="truncate max-w-[80px]">{assignees}</span>
-                          </div>
-                          <span className="text-amber-400 font-semibold">${task.plannedCost?.toLocaleString()}</span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                          <span>Due: {task.dueDate}</span>
-                          {subtasks.length > 0 && (
-                            <span className="text-indigo-400">{completedSub}/{subtasks.length} subtasks</span>
+                          {task.description && (
+                            <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
                           )}
-                        </div>
 
-                        <div className="flex items-center justify-end gap-1 pt-1">
-                          <button
-                            onClick={() => onOpenTaskModal(task)}
-                            className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => deleteTask(task.id)}
-                            className="p-1 rounded bg-slate-900 hover:bg-rose-900/40 text-slate-400 hover:text-rose-300 text-[10px]"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400 border-t border-slate-800/60 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              {renderAssigneeAvatars(taskAssignees)}
+                              <span className="truncate max-w-[80px]">{assignees}</span>
+                            </div>
+                            <span className="text-amber-400 font-semibold">${task.plannedCost?.toLocaleString()}</span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                            <span>Due: {task.dueDate}</span>
+                            {subtasks.length > 0 && (
+                              <span className="text-indigo-400">{completedSub}/{subtasks.length} subtasks</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-end gap-1 pt-1">
+                            <button
+                              onClick={() => onOpenTaskModal(task)}
+                              className="p-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px]"
+                              title="Edit Task"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => deleteTask(task.id)}
+                              className="p-1 rounded bg-slate-900 hover:bg-rose-900/40 text-slate-400 hover:text-rose-300 text-[10px]"
+                              title="Delete Task"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
+                      </SwipeableCard>
                     );
                   })}
 

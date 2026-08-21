@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { ProjectBoardItem, ProjectBoardCategory, BoardItemType, BoardItemComment, ProjectChatMessage, ViewMode } from '../../types';
+import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
 import {
   FolderKanban,
   Plus,
@@ -511,6 +512,12 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
 
       {/* MAIN BOARD CONTENT DISPLAY AREA */}
       <div className="space-y-4">
+        <SwipeGestureGuideBanner
+          storageKey="pmo_board_items_swipe_hint"
+          rightActionText="Toggle Pin / Favorite"
+          leftActionText="Edit / View Details"
+        />
+
         {filteredItems.length === 0 ? (
               <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-12 text-center space-y-3">
                 <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400">
@@ -545,15 +552,32 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredItems.map(item => {
+                {filteredItems.map((item, idx) => {
                   const canEdit = canEditItem(item);
                   const category = projectCategories.find(c => c.id === item.categoryId);
                   const commentsCount = item.comments?.length || 0;
 
                   return (
-                    <div
+                    <SwipeableCard
                       key={item.id}
-                      className={`group bg-slate-900/90 border border-slate-800/80 hover:border-slate-700/90 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col justify-between transition-all duration-200 relative min-w-0 overflow-hidden ${
+                      onSwipeRight={() => {
+                        togglePinBoardItem(item.id);
+                      }}
+                      onSwipeLeft={() => {
+                        if (canEdit) {
+                          openEditModal(item);
+                        } else {
+                          setViewingItem(item);
+                        }
+                      }}
+                      swipeRightLabel={item.isPinned ? 'Unpin' : 'Pin Item'}
+                      swipeLeftLabel={canEdit ? 'Edit Item' : 'View Item'}
+                      isCompleted={item.isPinned}
+                      showFirstTimeHint={idx === 0}
+                      hintStorageKey="pmo_board_items_swipe_hint"
+                    >
+                    <div
+                      className={`group bg-slate-900/90 border border-slate-800/80 hover:border-slate-700/90 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col justify-between transition-all duration-200 relative min-w-0 overflow-hidden h-full ${
                         item.isPinned ? 'ring-1 ring-amber-500/40 bg-gradient-to-b from-slate-900 to-slate-950' : ''
                       }`}
                     >
@@ -792,6 +816,7 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
                         </div>
                       </div>
                     </div>
+                    </SwipeableCard>
                   );
                 })}
               </div>

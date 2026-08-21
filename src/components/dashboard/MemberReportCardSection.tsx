@@ -3,6 +3,7 @@ import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, ProjectData, Task, MemberLeave, LeaveType } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
 import { ResponsiveSelect } from '../common/ResponsiveSelect';
+import { SwipeableCard } from '../common/SwipeableCard';
 import {
   getEVMCardClass,
   getEVMBadgeClass,
@@ -60,7 +61,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
   initialProjectId,
   onNavigateToProject
 }) => {
-  const { allProjectsMap, allUsers, leaves, currentUser } = useProject();
+  const { allProjectsMap, allUsers, leaves, currentUser, saveTask } = useProject();
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'analytics' | 'leaves' | 'reviews'>('overview');
   const [selectedScopeProjectId, setSelectedScopeProjectId] = useState<string>(initialProjectId || 'all');
   const [reviewText, setReviewText] = useState('');
@@ -842,28 +843,40 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                     No deliverables currently assigned in this scope.
                   </div>
                 ) : (
-                  metrics.assignedTasks.map(task => (
-                    <div key={task.id} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-850/40 transition-colors">
-                      <div className="min-w-0 flex-1">
-                        <span className="font-bold text-slate-200 block truncate">{task.title}</span>
-                        <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
-                          Est: {task.estimatedHours || 8}h • Act: {task.actualHours || 0}h • Due: {task.dueDate || 'No date'}
+                  metrics.assignedTasks.map((task, idx) => (
+                    <SwipeableCard
+                      key={task.id}
+                      onSwipeRight={() => {
+                        const newStatus = task.status === 'done' ? 'todo' : 'done';
+                        saveTask({ ...task, status: newStatus, completionPercent: newStatus === 'done' ? 100 : 0 });
+                      }}
+                      swipeRightLabel={task.status === 'done' ? 'Reopen' : 'Complete'}
+                      isCompleted={task.status === 'done'}
+                      showFirstTimeHint={idx === 0}
+                      hintStorageKey="pmo_member_deliverable_swipe_hint"
+                    >
+                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-850/40 transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-bold text-slate-200 block truncate">{task.title}</span>
+                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+                            Est: {task.estimatedHours || 8}h • Act: {task.actualHours || 0}h • Due: {task.dueDate || 'No date'}
+                          </span>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase shrink-0 ${
+                            task.status === 'done'
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : task.status === 'in_progress'
+                              ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                              : task.status === 'blocked'
+                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {task.status}
                         </span>
                       </div>
-                      <span
-                        className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase shrink-0 ${
-                          task.status === 'done'
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : task.status === 'in_progress'
-                            ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
-                            : task.status === 'blocked'
-                            ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                            : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {task.status}
-                      </span>
-                    </div>
+                    </SwipeableCard>
                   ))
                 )}
               </div>

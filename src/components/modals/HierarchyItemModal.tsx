@@ -248,7 +248,7 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
+        <form id="hierarchy-item-form" onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto custom-scrollbar">
           
           {/* Title */}
           <div>
@@ -561,26 +561,32 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
               )}
             </div>
           </div>
+        </form>
 
-          {/* Footer Actions */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800 mt-6">
+        {/* Sticky Footer Actions Bar - Always visible across all screen sizes */}
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-t border-slate-800 bg-slate-900 shrink-0 gap-3">
+          <div className="text-xs text-slate-400 hidden sm:flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            <span>{itemToEdit ? `Editing ${itemType}` : `Ready to create ${itemType}`}</span>
+          </div>
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800 text-sm font-medium transition"
+              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white text-sm font-medium transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium shadow-lg shadow-blue-500/20 transition flex items-center gap-2"
+              form="hierarchy-item-form"
+              className="flex-1 sm:flex-initial px-5 py-2.5 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
             >
               <CheckCircle2 className="w-4 h-4" />
-              {itemToEdit ? `Save Changes` : `Create ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}`}
+              <span>{itemToEdit ? `Save Changes` : `Create ${itemType.charAt(0).toUpperCase() + itemType.slice(1)}`}</span>
             </button>
           </div>
-
-        </form>
+        </div>
       </div>
     </div>
   );
