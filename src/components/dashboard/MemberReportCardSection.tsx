@@ -2,6 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, ProjectData, Task, MemberLeave, LeaveType } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
+import { ResponsiveSelect } from '../common/ResponsiveSelect';
+import {
+  getEVMCardClass,
+  getEVMBadgeClass,
+  getEVMTextColorClass,
+  getEVMStatusLabel
+} from '../../utils/scorecardFormatting';
 import {
   Award,
   Calendar,
@@ -364,81 +371,103 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
       {/* ========================================================================= */}
       {/* SECTION HEADER - PROFILE & GOVERNANCE SCOPE */}
       {/* ========================================================================= */}
-      <div className="p-4 sm:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-3.5 sm:p-5 md:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           
           {/* Member Profile Info */}
-          <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+          <div className="flex items-start sm:items-center gap-3 sm:gap-3.5 min-w-0 flex-1">
             <div className="relative shrink-0">
               <img
                 src={stakeholder.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stakeholder.email || stakeholder.name}`}
                 alt={stakeholder.name}
-                className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-lg bg-slate-950"
+                className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-lg bg-slate-950"
               />
-              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center">
-                <Check className="w-2.5 h-2.5 text-slate-950 stroke-[3]" />
+              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center">
+                <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-slate-950 stroke-[3]" />
               </span>
             </div>
 
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base sm:text-xl font-black text-white tracking-tight truncate">
-                  {stakeholder.name}
-                </h3>
-                <span
-                  className={`px-2.5 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase shrink-0 ${
-                    matchedUser?.role === 'admin'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                      : isStakeholderPM || matchedUser?.role === 'pm'
-                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  }`}
-                >
-                  {matchedUser?.role === 'admin' ? 'Executive Admin' : isStakeholderPM || matchedUser?.role === 'pm' ? 'Project Manager' : 'Team Member'}
-                </span>
-                <span className="px-2.5 py-0.5 rounded-lg bg-slate-800/90 text-slate-300 text-[10px] sm:text-xs font-medium shrink-0">
-                  {stakeholder.role}
-                </span>
+            <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-1">
+              {/* Header Title Row with Responsive Mobile Grade Badge */}
+              <div className="flex items-start sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                  <h3 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
+                    {stakeholder.name}
+                  </h3>
+                  <span
+                    className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase shrink-0 ${
+                      matchedUser?.role === 'admin'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : isStakeholderPM || matchedUser?.role === 'pm'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                    }`}
+                  >
+                    {matchedUser?.role === 'admin' ? 'Executive Admin' : isStakeholderPM || matchedUser?.role === 'pm' ? 'PM' : 'Member'}
+                  </span>
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-lg bg-slate-800/90 text-slate-300 text-[10px] sm:text-xs font-medium shrink-0">
+                    {stakeholder.role}
+                  </span>
+                </div>
+
+                {/* Mobile-Only Grade Card (compact top-right aligned) */}
+                <div className="md:hidden shrink-0">
+                  <div className={`px-2.5 py-1 rounded-xl border flex items-center gap-2 shadow-md ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
+                    <div className="text-center">
+                      <span className="text-[8px] uppercase font-bold tracking-wider opacity-80 block leading-none">Grade</span>
+                      <span className="text-base font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
+                    </div>
+                    <div className="h-5 w-px bg-current opacity-30" />
+                    <div className="text-right">
+                      <span className="text-[10px] font-mono font-bold block leading-none">{metrics.reportCardScore || 95}/100</span>
+                      <span className="text-[8px] font-semibold opacity-80 block whitespace-nowrap mt-0.5">Delivery</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <div className="text-xs text-slate-400 flex items-center gap-2 sm:gap-3 flex-wrap">
-                <span className="truncate max-w-[220px] sm:max-w-sm">{stakeholder.email}</span>
+              {/* Sub-strip info: email, rate, capacity */}
+              <div className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+                <span className="truncate max-w-[160px] sm:max-w-xs">{stakeholder.email}</span>
                 <span className="text-slate-600 hidden sm:inline">•</span>
                 <span className="font-mono text-emerald-400 font-bold">${stakeholder.hourlyRate || 85}/hr</span>
-                <span className="text-slate-600 hidden sm:inline">•</span>
-                <span className="text-slate-300 font-mono">{stakeholder.weeklyCapacityHours || 40}h/wk capacity</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-300 font-mono">{stakeholder.weeklyCapacityHours || 40}h/wk</span>
               </div>
 
               {/* Scorecard Project Scope Selector */}
-              <div className="pt-1 flex items-center gap-2">
-                <div className="inline-flex items-center gap-2 bg-slate-950/90 px-3 py-1 rounded-xl border border-slate-800 text-xs shadow-inner max-w-full">
-                  <Building2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-slate-400 font-medium whitespace-nowrap">Report Scope:</span>
-                  <select
-                    value={selectedScopeProjectId}
-                    onChange={(e) => setSelectedScopeProjectId(e.target.value)}
-                    className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[300px]"
-                  >
-                    <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
-                      🌐 All Projects ({userProjects.length} Assigned)
-                    </option>
-                    {userProjects.map(p => (
-                      <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100 font-medium">
-                        📁 [{p.projectCode}] {p.projectName}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="pt-0.5 flex items-center gap-2 max-w-full">
+                <ResponsiveSelect
+                  value={selectedScopeProjectId}
+                  onChange={setSelectedScopeProjectId}
+                  icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+                  label="Report Scope:"
+                  options={[
+                    {
+                      value: 'all',
+                      label: `All Projects (${userProjects.length} Assigned)`,
+                      icon: <span className="text-sm">🌐</span>
+                    },
+                    ...userProjects.map(p => ({
+                      value: p.id,
+                      label: `[${p.projectCode}] ${p.projectName}`,
+                      sublabel: p.description,
+                      icon: <span className="text-sm">📁</span>
+                    }))
+                  ]}
+                  align="auto"
+                  className="border-slate-800 hover:border-slate-700 text-emerald-300"
+                />
               </div>
             </div>
           </div>
 
-          {/* Right: Composite Grade Scorecard Badge */}
-          <div className="flex items-center gap-3 shrink-0 self-start md:self-auto">
-            <div className={`px-4 py-2 sm:py-2.5 rounded-2xl border flex items-center gap-3 shadow-lg ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
+          {/* Desktop/Tablet Composite Grade Scorecard Badge */}
+          <div className="hidden md:flex items-center gap-3 shrink-0">
+            <div className={`px-4 py-2.5 rounded-2xl border flex items-center gap-3 shadow-lg ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
               <div className="text-center">
                 <span className="text-[10px] uppercase font-bold tracking-wider opacity-80 block leading-none">Grade</span>
-                <span className="text-xl sm:text-2xl font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
+                <span className="text-2xl font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
               </div>
               <div className="h-8 w-px bg-current opacity-30" />
               <div className="text-right">
@@ -454,11 +483,11 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
       {/* ========================================================================= */}
       {/* HORIZONTAL TAB NAVIGATION (Prominent Clickable Segmented Control) */}
       {/* ========================================================================= */}
-      <div className="px-4 sm:px-6 py-3 border-b border-slate-800 bg-slate-950/90">
+      <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800 bg-slate-950/90">
         <div
           role="tablist"
           aria-label="Member Scorecard Views"
-          className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner scrollbar-none"
+          className="flex items-center gap-1 sm:gap-2 overflow-x-auto p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner no-scrollbar overscroll-x-contain"
         >
           {/* Tab 1: Executive Overview */}
           <button
@@ -466,13 +495,13 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             role="tab"
             aria-selected={activeTab === 'overview'}
             onClick={() => setActiveTab('overview')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer select-none ${
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
               activeTab === 'overview'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
                 : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
             }`}
           >
-            <Sparkles className={`w-4 h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+            <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
             <span className="whitespace-nowrap">Executive Overview</span>
           </button>
 
@@ -482,16 +511,16 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             role="tab"
             aria-selected={activeTab === 'projects'}
             onClick={() => setActiveTab('projects')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer select-none ${
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
               activeTab === 'projects'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
                 : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
             }`}
           >
-            <Layers className={`w-4 h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+            <Layers className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
             <span className="whitespace-nowrap">Projects &amp; Tasks</span>
             <span
-              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+              className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                 activeTab === 'projects'
                   ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
                   : 'bg-slate-900 text-slate-300 border-slate-700'
@@ -507,14 +536,14 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             role="tab"
             aria-selected={activeTab === 'analytics'}
             onClick={() => setActiveTab('analytics')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer select-none ${
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
               activeTab === 'analytics'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
                 : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
             }`}
           >
-            <BarChart3 className={`w-4 h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
-            <span className="whitespace-nowrap">EVM &amp; Velocity Analytics</span>
+            <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
+            <span className="whitespace-nowrap">EVM Analytics</span>
           </button>
 
           {/* Tab 4: Availability & Calendar */}
@@ -523,17 +552,17 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             role="tab"
             aria-selected={activeTab === 'leaves'}
             onClick={() => setActiveTab('leaves')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer select-none ${
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
               activeTab === 'leaves'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
                 : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
             }`}
           >
-            <CalendarCheck className={`w-4 h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
+            <CalendarCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
             <span className="whitespace-nowrap">Availability &amp; Calendar</span>
             {approvedLeaves.length > 0 && (
               <span
-                className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                   activeTab === 'leaves'
                     ? 'bg-emerald-700/80 text-white border-emerald-400/40'
                     : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
@@ -550,16 +579,16 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             role="tab"
             aria-selected={activeTab === 'reviews'}
             onClick={() => setActiveTab('reviews')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer select-none ${
+            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
               activeTab === 'reviews'
                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
                 : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
             }`}
           >
-            <Star className={`w-4 h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
-            <span className="whitespace-nowrap">PMO Governance Notes</span>
+            <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
+            <span className="whitespace-nowrap">PMO Notes</span>
             <span
-              className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+              className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                 activeTab === 'reviews'
                   ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
                   : 'bg-slate-900 text-slate-300 border-slate-700'
@@ -592,29 +621,37 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className={`p-4 rounded-2xl transition-all ${getEVMCardClass(metrics.individualSPI, 0.9)}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Schedule (SPI)</span>
-                  <Clock className="w-4 h-4 text-indigo-400" />
+                  {metrics.individualSPI < 0.9 ? (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+                  ) : (
+                    <Clock className="w-4 h-4 text-indigo-400" />
+                  )}
                 </div>
-                <p className={`text-xl sm:text-2xl font-black font-mono ${metrics.individualSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <p className={`text-xl sm:text-2xl font-black font-mono ${getEVMTextColorClass(metrics.individualSPI, 0.9)}`}>
                   {metrics.individualSPI.toFixed(2)}
                 </p>
                 <span className="text-xs text-slate-400 mt-0.5 block truncate">
-                  {metrics.individualSPI >= 1.0 ? 'Ahead / On Schedule' : 'Schedule Variance'}
+                  {metrics.individualSPI < 0.9 ? '🚨 Critical Schedule Lag' : metrics.individualSPI >= 1.0 ? 'Ahead / On Schedule' : 'Schedule Variance'}
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className={`p-4 rounded-2xl transition-all ${getEVMCardClass(metrics.individualCPI, 0.9)}`}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] uppercase font-semibold text-slate-400">Cost (CPI)</span>
-                  <DollarSign className="w-4 h-4 text-indigo-400" />
+                  {metrics.individualCPI < 0.9 ? (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+                  ) : (
+                    <DollarSign className="w-4 h-4 text-indigo-400" />
+                  )}
                 </div>
-                <p className={`text-xl sm:text-2xl font-black font-mono ${metrics.individualCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                <p className={`text-xl sm:text-2xl font-black font-mono ${getEVMTextColorClass(metrics.individualCPI, 0.9)}`}>
                   {metrics.individualCPI.toFixed(2)}
                 </p>
                 <span className="text-xs text-slate-400 mt-0.5 block truncate">
-                  {metrics.individualCPI >= 1.0 ? 'Under Budget' : 'Cost Variance'}
+                  {metrics.individualCPI < 0.9 ? '🚨 Critical Cost Variance' : metrics.individualCPI >= 1.0 ? 'Under Budget' : 'Cost Variance'}
                 </span>
               </div>
 
@@ -688,13 +725,17 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   <h4 className="text-xs font-bold text-slate-200">360° Capability Index</h4>
                   <span className="text-[10px] text-slate-500 font-mono">Weighted Competencies</span>
                 </div>
-                <div className="w-full h-52 sm:h-60">
+                <div className="w-full h-56 sm:h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart data={radarData}>
+                    <RadarChart cx="50%" cy="50%" outerRadius="58%" data={radarData}>
                       <PolarGrid stroke="#334155" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fill: '#64748b', fontSize: 9 }} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fill: '#64748b', fontSize: 8 }} />
                       <Radar name={stakeholder.name} dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
+                      <Tooltip
+                        wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px' }}
+                      />
                     </RadarChart>
                   </ResponsiveContainer>
                 </div>
@@ -706,7 +747,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   <h4 className="text-xs font-bold text-slate-200">Task Status Distribution</h4>
                   <span className="text-[10px] text-slate-500 font-mono">{metrics.totalAssignedTasks} Deliverables</span>
                 </div>
-                <div className="w-full h-52 sm:h-60 flex items-center justify-center">
+                <div className="w-full h-56 sm:h-64 flex items-center justify-center">
                   {taskStatusData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
@@ -714,8 +755,8 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                           data={taskStatusData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={45}
-                          outerRadius={75}
+                          innerRadius={40}
+                          outerRadius={68}
                           paddingAngle={3}
                           dataKey="value"
                         >
@@ -724,9 +765,10 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                           ))}
                         </Pie>
                         <Tooltip
+                          wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
                           contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px' }}
                         />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
+                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} iconSize={8} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (

@@ -3,6 +3,17 @@ import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, Task, ProjectData, UserProfile } from '../../types';
 import { calculateMemberMetrics, MemberMetrics } from '../../utils/memberMetrics';
 import { PMAiBriefingModal } from './PMAiBriefingModal';
+import { ProjectForecastModal } from './ProjectForecastModal';
+import { ProjectForecastSection } from './ProjectForecastSection';
+import { calculateProjectForecast, formatFriendlyDate } from '../../utils/forecastUtils';
+import {
+  getEVMCardClass,
+  getEVMBadgeClass,
+  getEVMTextColorClass,
+  getEVMStatusLabel
+} from '../../utils/scorecardFormatting';
+import { EVMScorecardBadge } from '../common/EVMScorecardBadge';
+import { ResponsiveSelect } from '../common/ResponsiveSelect';
 import {
   Users,
   Building2,
@@ -148,13 +159,15 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
 
   // UI state for tabs and filters
   const [activeTab, setActiveTab] = useState<'analytics' | 'roster' | 'projects' | 'raid' | 'leaves'>('analytics');
-  const [activeAnalyticsView, setActiveAnalyticsView] = useState<'workload' | 'radar' | 'hours' | 'status' | 'financials'>('workload');
+  const [activeAnalyticsView, setActiveAnalyticsView] = useState<'workload' | 'radar' | 'hours' | 'status' | 'financials' | 'forecast'>('workload');
   const [searchQuery, setSearchQuery] = useState('');
   const [memberStatusFilter, setMemberStatusFilter] = useState<'all' | 'active' | 'overallocated' | 'on_leave' | 'blocked'>('all');
   const [memberSortBy, setMemberSortBy] = useState<'score' | 'workload' | 'tasks' | 'hours'>('score');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedMemberForDossier, setSelectedMemberForDossier] = useState<MemberMetrics | null>(null);
   const [isAiBriefingModalOpen, setIsAiBriefingModalOpen] = useState(false);
+  const [isForecastModalOpen, setIsForecastModalOpen] = useState(false);
+  const [forecastModalProjectId, setForecastModalProjectId] = useState<string>('');
   const [selectedRadarMemberId, setSelectedRadarMemberId] = useState<string>('');
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -488,21 +501,41 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
           <div className="flex items-center gap-2.5 flex-wrap">
             {/* Project Scope Filter (Visible exclusively to Admin role) */}
             {currentUser?.role === 'admin' && (
-              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-300">
-                <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-slate-400">Scope:</span>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => setSelectedProjectId(e.target.value)}
-                  className="bg-transparent text-white font-medium focus:outline-none cursor-pointer"
-                >
-                  <option value="all" className="bg-slate-900 text-white">All Managed Projects ({managedProjects.length})</option>
-                  {managedProjects.map(p => (
-                    <option key={p.id} value={p.id} className="bg-slate-900 text-white">{p.projectName || (p as any).name || p.projectCode || p.id}</option>
-                  ))}
-                </select>
-              </div>
+              <ResponsiveSelect
+                value={selectedProjectId}
+                onChange={setSelectedProjectId}
+                icon={<Building2 className="w-3.5 h-3.5 text-indigo-400" />}
+                label="Scope:"
+                options={[
+                  {
+                    value: 'all',
+                    label: `All Managed Projects (${managedProjects.length})`,
+                    icon: <span className="text-sm">🌐</span>
+                  },
+                  ...managedProjects.map(p => ({
+                    value: p.id,
+                    label: `[${p.projectCode || 'PRJ'}] ${p.projectName || (p as any).name || p.id}`,
+                    sublabel: p.description,
+                    icon: <span className="text-sm">📁</span>
+                  }))
+                ]}
+                align="auto"
+                className="border-slate-800 text-white"
+              />
             )}
+
+            {/* Forecast Completion Dates Button */}
+            <button
+              onClick={() => {
+                setForecastModalProjectId(scopedProjects[0]?.id || '');
+                setIsForecastModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-medium transition-all shadow-sm"
+              title="Predictive completion date forecast & EVM trend extrapolation"
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+              Forecast Dates
+            </button>
 
             {/* AI Briefing Button */}
             <button
@@ -558,36 +591,52 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
         </div>
 
         {/* Metric 3: Schedule Efficiency (SPI) */}
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className={`p-4 rounded-xl space-y-1 ${getEVMCardClass(teamAggregateMetrics.teamSPI, 0.9)}`}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Schedule SPI</span>
-            <TrendingUp className={`w-4 h-4 ${teamAggregateMetrics.teamSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`} />
+            {teamAggregateMetrics.teamSPI < 0.9 ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+            ) : (
+              <TrendingUp className={`w-4 h-4 ${teamAggregateMetrics.teamSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`} />
+            )}
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-2xl font-black ${teamAggregateMetrics.teamSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <span className={`text-2xl font-black ${getEVMTextColorClass(teamAggregateMetrics.teamSPI, 0.9)}`}>
               {teamAggregateMetrics.teamSPI.toFixed(2)}
             </span>
             <span className="text-xs text-slate-400">target 1.0</span>
           </div>
           <div className="text-[10px] text-slate-400">
-            {teamAggregateMetrics.teamSPI >= 1.0 ? 'Ahead / On Schedule' : 'Schedule Attention Needed'}
+            {teamAggregateMetrics.teamSPI < 0.9
+              ? '🚨 Critical Schedule Lag (<0.9)'
+              : teamAggregateMetrics.teamSPI >= 1.0
+              ? 'Ahead / On Schedule'
+              : 'Schedule Attention Needed'}
           </div>
         </div>
 
         {/* Metric 4: Cost Efficiency (CPI) */}
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+        <div className={`p-4 rounded-xl space-y-1 ${getEVMCardClass(teamAggregateMetrics.teamCPI, 0.9)}`}>
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Cost CPI</span>
-            <DollarSign className={`w-4 h-4 ${teamAggregateMetrics.teamCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`} />
+            {teamAggregateMetrics.teamCPI < 0.9 ? (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+            ) : (
+              <DollarSign className={`w-4 h-4 ${teamAggregateMetrics.teamCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`} />
+            )}
           </div>
           <div className="flex items-baseline gap-1.5">
-            <span className={`text-2xl font-black ${teamAggregateMetrics.teamCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            <span className={`text-2xl font-black ${getEVMTextColorClass(teamAggregateMetrics.teamCPI, 0.9)}`}>
               {teamAggregateMetrics.teamCPI.toFixed(2)}
             </span>
             <span className="text-xs text-slate-400">target 1.0</span>
           </div>
           <div className="text-[10px] text-slate-400">
-            {teamAggregateMetrics.teamCPI >= 1.0 ? 'Within Budget Limits' : 'Cost Variance Detected'}
+            {teamAggregateMetrics.teamCPI < 0.9
+              ? '🚨 Critical Cost Overrun (<0.9)'
+              : teamAggregateMetrics.teamCPI >= 1.0
+              ? 'Within Budget Limits'
+              : 'Cost Variance Detected'}
           </div>
         </div>
 
@@ -742,6 +791,17 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
                 }`}
               >
                 EVM Capital ($k)
+              </button>
+              <button
+                onClick={() => setActiveAnalyticsView('forecast')}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                  activeAnalyticsView === 'forecast'
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                Forecast Dates
               </button>
             </div>
           </div>
@@ -976,6 +1036,20 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
                   </BarChart>
                 </ResponsiveContainer>
               </div>
+            </div>
+          )}
+
+          {/* VIEW 6: Project Completion Forecasts & SPI/CPI Trends */}
+          {activeAnalyticsView === 'forecast' && (
+            <div className="animate-in fade-in duration-200">
+              <ProjectForecastSection
+                projects={scopedProjects}
+                userRole="pm"
+                onOpenForecastModal={(pid) => {
+                  setForecastModalProjectId(pid);
+                  setIsForecastModalOpen(true);
+                }}
+              />
             </div>
           )}
         </div>
@@ -1242,52 +1316,101 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
             const cpi = proj.evm?.cpi || 1.0;
             const pCode = proj.projectCode || (proj as any).code || 'PROJ';
             const pName = proj.projectName || (proj as any).name || pCode;
+            const forecast = calculateProjectForecast(proj);
 
             return (
               <div
                 key={proj.id}
-                className="bg-slate-900 border border-slate-800 hover:border-slate-700 p-5 rounded-2xl transition-all space-y-4 shadow-sm"
+                className="bg-slate-900 border border-slate-800 hover:border-slate-700 p-5 rounded-2xl transition-all space-y-4 shadow-sm flex flex-col justify-between"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-wider font-semibold">{pCode}</span>
-                    <h4 className="text-base font-bold text-white mt-0.5">{pName}</h4>
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{proj.description}</p>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-mono text-indigo-400 uppercase tracking-wider font-semibold">{pCode}</span>
+                      <h4 className="text-base font-bold text-white mt-0.5">{pName}</h4>
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{proj.description}</p>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 shrink-0">
+                      {progress}% Done
+                    </span>
                   </div>
-                  <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                    {progress}% Done
-                  </span>
-                </div>
 
-                <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                  <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }} />
-                </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${progress}%` }} />
+                  </div>
 
-                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center text-xs">
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">Budget</span>
-                    <span className="font-bold text-white">${Math.round((proj.budget || 0) / 1000)}k</span>
+                  {/* Forecast Completion Date Highlight */}
+                  <div className="p-3 rounded-xl bg-slate-950/80 border border-indigo-500/20 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase font-bold text-indigo-300 flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-indigo-400" />
+                        Forecast Finish
+                      </span>
+                      <p className="text-xs font-bold text-white font-mono truncate mt-0.5">
+                        {formatFriendlyDate(forecast.forecastCompletionDate)}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono border shrink-0 ${
+                        forecast.scheduleVarianceDays <= 0
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : forecast.scheduleVarianceDays <= 14
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                      }`}
+                    >
+                      {forecast.scheduleVarianceDays > 0
+                        ? `+${forecast.scheduleVarianceDays}d Delay`
+                        : forecast.scheduleVarianceDays < 0
+                        ? `${Math.abs(forecast.scheduleVarianceDays)}d Ahead`
+                        : 'On Baseline'}
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">SPI</span>
-                    <span className={`font-bold ${spi >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>{spi.toFixed(2)}</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-slate-500 uppercase block font-semibold">CPI</span>
-                    <span className={`font-bold ${cpi >= 1.0 ? 'text-emerald-400' : 'text-rose-400'}`}>{cpi.toFixed(2)}</span>
+
+                  <div className="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800/80 text-center text-xs">
+                    <div>
+                      <span className="text-[10px] text-slate-500 uppercase block font-semibold">Budget</span>
+                      <span className="font-bold text-white">${Math.round((proj.budget || 0) / 1000)}k</span>
+                    </div>
+                    <div className={`rounded-lg p-1 transition-all ${spi < 0.9 ? 'bg-rose-500/15 border border-rose-500/60 shadow-[0_0_8px_rgba(244,63,94,0.25)]' : ''}`}>
+                      <span className="text-[10px] text-slate-500 uppercase block font-semibold">
+                        SPI {spi < 0.9 && <span className="text-rose-400 font-bold text-[9px]">(&lt;0.9)</span>}
+                      </span>
+                      <span className={`font-bold font-mono ${getEVMTextColorClass(spi, 0.9)}`}>
+                        {spi.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className={`rounded-lg p-1 transition-all ${cpi < 0.9 ? 'bg-rose-500/15 border border-rose-500/60 shadow-[0_0_8px_rgba(244,63,94,0.25)]' : ''}`}>
+                      <span className="text-[10px] text-slate-500 uppercase block font-semibold">
+                        CPI {cpi < 0.9 && <span className="text-rose-400 font-bold text-[9px]">(&lt;0.9)</span>}
+                      </span>
+                      <span className={`font-bold font-mono ${getEVMTextColorClass(cpi, 0.9)}`}>
+                        {cpi.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-800">
-                  <span>{(proj.stakeholders || []).length} Team Members</span>
+                  <button
+                    onClick={() => {
+                      setForecastModalProjectId(proj.id);
+                      setIsForecastModalOpen(true);
+                    }}
+                    className="text-indigo-400 hover:text-indigo-300 font-semibold transition-colors flex items-center gap-1"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    Forecast Dossier
+                  </button>
+
                   <button
                     onClick={async () => {
                       await switchProject(proj.id);
                       onNavigate('project_board');
                     }}
-                    className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                    className="flex items-center gap-1 text-slate-300 hover:text-white font-semibold transition-colors"
                   >
-                    Open Project Board <ChevronRight className="w-3.5 h-3.5" />
+                    Project Board <ChevronRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -1590,6 +1713,16 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
               teamSize: (p.stakeholders || []).length
             }))
           }]}
+        />
+      )}
+
+      {/* 🔮 Predictive Completion Date & SPI/CPI Trend Forecast Modal */}
+      {isForecastModalOpen && (
+        <ProjectForecastModal
+          isOpen={isForecastModalOpen}
+          onClose={() => setIsForecastModalOpen(false)}
+          projects={scopedProjects}
+          initialProjectId={forecastModalProjectId || scopedProjects[0]?.id}
         />
       )}
     </div>

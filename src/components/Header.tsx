@@ -644,7 +644,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* AI Executive Summary Launcher & AI Key Settings */}
+          {/* AI Executive Summary Launcher */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
             <button
               id="btn-ai-report"
@@ -655,27 +655,6 @@ export const Header: React.FC<HeaderProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0" />
               <span>AI Brief</span>
             </button>
-
-            {onOpenAiSettingsModal && (
-              <button
-                id="btn-ai-key-settings"
-                onClick={onOpenAiSettingsModal}
-                className={`hidden sm:flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-semibold border transition-all shrink-0 ${
-                  customAiConfig?.enabled && customAiConfig?.apiKey
-                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                    : 'bg-slate-800/80 text-slate-300 border-slate-700/80 hover:bg-slate-700'
-                }`}
-                title="Configure Linked AI API Key (Gemini, OpenAI, Claude, DeepSeek, Groq)"
-              >
-                <Key className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <span className="hidden md:inline">
-                  {customAiConfig?.enabled && customAiConfig?.apiKey ? 'Linked AI' : 'AI Key'}
-                </span>
-                {customAiConfig?.enabled && customAiConfig?.apiKey && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                )}
-              </button>
-            )}
           </div>
 
           {/* Quick Add Buttons */}

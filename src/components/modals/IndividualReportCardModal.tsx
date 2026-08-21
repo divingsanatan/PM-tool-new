@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, ProjectData, Task, MemberLeave, LeaveType } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
+import { ResponsiveSelect } from '../common/ResponsiveSelect';
 import {
   X,
   Award,
@@ -442,25 +443,28 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
                 </div>
 
                 {/* Scorecard Project Scope Selector */}
-                <div className="mt-1.5 flex items-center gap-2">
-                  <div className="inline-flex items-center gap-1.5 bg-slate-950/90 px-2.5 py-0.5 rounded-xl border border-slate-800 text-[11px] shadow-inner max-w-full">
-                    <Building2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="text-slate-400 font-medium whitespace-nowrap">Scope:</span>
-                    <select
-                      value={selectedScopeProjectId}
-                      onChange={(e) => setSelectedScopeProjectId(e.target.value)}
-                      className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-[11px] truncate max-w-[180px] sm:max-w-[260px]"
-                    >
-                      <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
-                        🌐 All Projects ({userProjects.length} Assigned)
-                      </option>
-                      {userProjects.map(p => (
-                        <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100 font-medium">
-                          📁 [{p.projectCode}] {p.projectName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="mt-1.5 flex items-center gap-2 max-w-full">
+                  <ResponsiveSelect
+                    value={selectedScopeProjectId}
+                    onChange={setSelectedScopeProjectId}
+                    icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+                    label="Scope:"
+                    options={[
+                      {
+                        value: 'all',
+                        label: `All Projects (${userProjects.length} Assigned)`,
+                        icon: <span className="text-sm">🌐</span>
+                      },
+                      ...userProjects.map(p => ({
+                        value: p.id,
+                        label: `[${p.projectCode}] ${p.projectName}`,
+                        sublabel: p.description,
+                        icon: <span className="text-sm">📁</span>
+                      }))
+                    ]}
+                    align="auto"
+                    className="border-slate-800 hover:border-slate-700 text-emerald-300 text-[11px] py-1 px-2.5"
+                  />
                 </div>
               </div>
             </div>
@@ -514,7 +518,7 @@ export const IndividualReportCardModal: React.FC<IndividualReportCardModalProps>
           <div
             role="tablist"
             aria-label="Modal Views"
-            className="flex items-center gap-1.5 overflow-x-auto p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner scrollbar-none"
+            className="flex items-center gap-1.5 overflow-x-auto p-1 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner no-scrollbar overscroll-x-contain"
           >
             <button
               type="button"

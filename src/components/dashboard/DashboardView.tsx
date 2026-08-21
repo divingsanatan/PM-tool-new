@@ -8,6 +8,17 @@ import { PMExecutiveDossierModal } from './PMExecutiveDossierModal';
 import { PMAssignProjectModal } from './PMAssignProjectModal';
 import { PMAiBriefingModal } from './PMAiBriefingModal';
 import { PMTeamExecutiveDashboard } from './PMTeamExecutiveDashboard';
+import { ProjectForecastModal } from './ProjectForecastModal';
+import { ProjectForecastSection } from './ProjectForecastSection';
+import { calculateProjectForecast, formatFriendlyDate } from '../../utils/forecastUtils';
+import {
+  getEVMCardClass,
+  getEVMBadgeClass,
+  getEVMTextColorClass,
+  getEVMStatusLabel
+} from '../../utils/scorecardFormatting';
+import { EVMScorecardBadge } from '../common/EVMScorecardBadge';
+import { ResponsiveSelect } from '../common/ResponsiveSelect';
 import {
   Users,
   Building2,
@@ -105,7 +116,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'on_track' | 'at_risk' | 'critical' | 'on_leave'>('all');
   const [sortBy, setSortBy] = useState<'health' | 'budget' | 'projects' | 'spi' | 'cpi'>('health');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
-  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'efficiency' | 'radar' | 'hours' | 'evm' | 'distribution' | 'workload'>('efficiency');
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'efficiency' | 'radar' | 'hours' | 'evm' | 'distribution' | 'workload' | 'forecast'>('efficiency');
   const [selectedRadarPMId, setSelectedRadarPMId] = useState<string>('');
 
   // Modals
@@ -113,6 +124,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [preselectedPMId, setPreselectedPMId] = useState<string | undefined>(undefined);
   const [isAiBriefingModalOpen, setIsAiBriefingModalOpen] = useState(false);
+  const [isForecastModalOpen, setIsForecastModalOpen] = useState(false);
+  const [forecastModalProjectId, setForecastModalProjectId] = useState<string>('');
 
   // Default radar PM
   const activeRadarPM = useMemo(() => {
@@ -398,6 +411,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {/* Quick Actions */}
           <div className="flex items-center gap-2.5 flex-wrap shrink-0">
             <button
+              onClick={() => {
+                setForecastModalProjectId(allProjects[0]?.id || '');
+                setIsForecastModalOpen(true);
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 flex items-center gap-2 shadow-sm transition-all"
+              title="Predictive completion date forecast & EVM trend extrapolation"
+            >
+              <Calendar className="w-4 h-4 text-indigo-400" />
+              Forecast Dates
+            </button>
+
+            <button
               onClick={() => setIsAiBriefingModalOpen(true)}
               className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 flex items-center gap-2 shadow-sm transition-all"
             >
@@ -447,26 +472,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="text-[11px] text-slate-500 mt-0.5">Total managed budget</div>
           </div>
 
-          <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
+          <div className={`p-3.5 rounded-xl ${getEVMCardClass(parseFloat(avgPortfolioSPI) || 1.0, 0.9)}`}>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Avg Schedule SPI</span>
-              <TrendingUp className="w-4 h-4 text-indigo-400" />
+              {parseFloat(avgPortfolioSPI) < 0.9 ? (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+              ) : (
+                <TrendingUp className="w-4 h-4 text-indigo-400" />
+              )}
             </div>
-            <div className={`text-2xl font-black mt-1 ${parseFloat(avgPortfolioSPI) >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <div className={`text-2xl font-black mt-1 ${getEVMTextColorClass(parseFloat(avgPortfolioSPI) || 1.0, 0.9)}`}>
               {avgPortfolioSPI}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Baseline: 1.00</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {parseFloat(avgPortfolioSPI) < 0.9 ? '🚨 Critical Portfolio Delay' : 'Baseline: 1.00'}
+            </div>
           </div>
 
-          <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
+          <div className={`p-3.5 rounded-xl ${getEVMCardClass(parseFloat(avgPortfolioCPI) || 1.0, 0.9)}`}>
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Avg Cost CPI</span>
-              <BarChart3 className="w-4 h-4 text-teal-400" />
+              {parseFloat(avgPortfolioCPI) < 0.9 ? (
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+              ) : (
+                <BarChart3 className="w-4 h-4 text-teal-400" />
+              )}
             </div>
-            <div className={`text-2xl font-black mt-1 ${parseFloat(avgPortfolioCPI) >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <div className={`text-2xl font-black mt-1 ${getEVMTextColorClass(parseFloat(avgPortfolioCPI) || 1.0, 0.9)}`}>
               {avgPortfolioCPI}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Budget efficiency</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">
+              {parseFloat(avgPortfolioCPI) < 0.9 ? '🚨 Critical Cost Overrun' : 'Budget efficiency'}
+            </div>
           </div>
 
           <div className="bg-slate-950/60 border border-slate-800 p-3.5 rounded-xl">
@@ -507,24 +544,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           {/* Mobile Select Dropdown for screens < md */}
           <div className="block md:hidden w-full">
-            <label className="block text-[11px] font-semibold text-slate-400 mb-1.5">
-              Select Analytics Graph:
-            </label>
-            <div className="relative">
-              <select
-                value={activeAnalyticsTab}
-                onChange={(e) => setActiveAnalyticsTab(e.target.value as any)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs font-semibold text-slate-200 focus:outline-none focus:border-indigo-500 appearance-none pr-9 shadow-inner"
-              >
-                <option value="efficiency">📈 Schedule vs Cost Index (SPI / CPI)</option>
-                <option value="radar">🎯 360° PM Competency Radar</option>
-                <option value="hours">⏱️ Effort &amp; Hours (Est vs Act vs EV)</option>
-                <option value="evm">💲 EVM Financials ($ Valuation)</option>
-                <option value="distribution">📊 Task Status Distribution</option>
-                <option value="workload">👥 Workload &amp; Capital Allocation</option>
-              </select>
-              <ChevronRight className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 rotate-90 pointer-events-none" />
-            </div>
+            <ResponsiveSelect
+              value={activeAnalyticsTab}
+              onChange={(val) => setActiveAnalyticsTab(val as any)}
+              label="Analytics:"
+              options={[
+                { value: 'efficiency', label: 'Schedule vs Cost Index (SPI / CPI)', icon: <span>📈</span> },
+                { value: 'forecast', label: 'Completion Date Forecasts & Trends', icon: <span>🔮</span> },
+                { value: 'radar', label: '360° PM Competency Radar', icon: <span>🎯</span> },
+                { value: 'hours', label: 'Effort & Hours (Est vs Act vs EV)', icon: <span>⏱️</span> },
+                { value: 'evm', label: 'EVM Financials ($ Valuation)', icon: <span>💲</span> },
+                { value: 'distribution', label: 'Task Status Distribution', icon: <span>📊</span> },
+                { value: 'workload', label: 'Workload & Capital Allocation', icon: <span>👥</span> }
+              ]}
+              className="w-full bg-slate-950 border-slate-700 py-2 text-xs font-semibold"
+            />
           </div>
 
           {/* Smart Desktop & Tablet Pill Tabs for screens >= md */}
@@ -539,6 +573,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             >
               <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
               <span>SPI vs CPI</span>
+            </button>
+
+            <button
+              onClick={() => setActiveAnalyticsTab('forecast')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                activeAnalyticsTab === 'forecast'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/25'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+              }`}
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Forecast Dates</span>
             </button>
 
             <button
@@ -871,6 +917,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           )}
 
+          {/* TAB 7: Predictive Project Completion Dates & Portfolio Trends */}
+          {activeAnalyticsTab === 'forecast' && (
+            <div className="space-y-2.5 animate-in fade-in duration-200">
+              <ProjectForecastSection
+                projects={allProjects}
+                userRole="admin"
+                onOpenForecastModal={(pid) => {
+                  setForecastModalProjectId(pid);
+                  setIsForecastModalOpen(true);
+                }}
+                onSelectProject={(pid) => handleInspectProject(pid)}
+              />
+            </div>
+          )}
+
         </div>
       </div>
 
@@ -1009,12 +1070,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                     </div>
 
-                    <div>
-                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">SPI / CPI</span>
+                    <div className={`rounded-lg p-1 transition-all ${
+                      pm.aggregateSPI < 0.9 || pm.aggregateCPI < 0.9
+                        ? 'bg-rose-500/15 border border-rose-500/60 shadow-[0_0_10px_rgba(244,63,94,0.3)]'
+                        : ''
+                    }`}>
+                      <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                        SPI / CPI {(pm.aggregateSPI < 0.9 || pm.aggregateCPI < 0.9) && <span className="text-rose-400 font-bold text-[9px] block">Alert &lt; 0.9</span>}
+                      </span>
                       <span className="text-sm font-black font-mono mt-0.5 block">
-                        <span className={pm.aggregateSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>{pm.aggregateSPI.toFixed(2)}</span>
+                        <span className={getEVMTextColorClass(pm.aggregateSPI, 0.9)}>{pm.aggregateSPI.toFixed(2)}</span>
                         <span className="text-slate-600 mx-0.5">/</span>
-                        <span className={pm.aggregateCPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>{pm.aggregateCPI.toFixed(2)}</span>
+                        <span className={getEVMTextColorClass(pm.aggregateCPI, 0.9)}>{pm.aggregateCPI.toFixed(2)}</span>
                       </span>
                     </div>
 
@@ -1047,34 +1114,67 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                      {pm.managedProjects.map(proj => (
-                        <div
-                          key={proj.projectId}
-                          className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 flex items-center justify-between gap-3 text-xs"
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
-                              {proj.projectCode}
-                            </span>
-                            <span className="font-semibold text-slate-200 truncate">{proj.projectName}</span>
-                          </div>
+                      {pm.managedProjects.map(proj => {
+                        const fullProject = allProjectsMap[proj.projectId];
+                        const projForecast = fullProject ? calculateProjectForecast(fullProject) : null;
 
-                          <div className="flex items-center gap-3 shrink-0">
-                            <span className="text-slate-400 font-mono hidden sm:inline">
-                              SPI: <strong className={proj.spi >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>{proj.spi.toFixed(2)}</strong>
-                            </span>
-                            <span className="text-slate-400 hidden sm:inline">${(proj.budget / 1000).toFixed(0)}k</span>
-                            
-                            <button
-                              onClick={() => handleInspectProject(proj.projectId)}
-                              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                              title="Inspect Project Workspace"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </button>
+                        return (
+                          <div
+                            key={proj.projectId}
+                            className="p-2.5 rounded-xl border border-slate-800 bg-slate-950/40 flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
+                                {proj.projectCode}
+                              </span>
+                              <span className="font-semibold text-slate-200 truncate">{proj.projectName}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              {projForecast && (
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border hidden lg:inline ${
+                                    projForecast.scheduleVarianceDays <= 0
+                                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
+                                      : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                  }`}
+                                  title={`Target: ${formatFriendlyDate(projForecast.targetEndDate)} | Forecast: ${formatFriendlyDate(projForecast.forecastCompletionDate)}`}
+                                >
+                                  Est: {formatFriendlyDate(projForecast.forecastCompletionDate)}
+                                </span>
+                              )}
+
+                              <span className={`px-1.5 py-0.5 rounded font-mono hidden sm:inline text-[11px] ${
+                                proj.spi < 0.9
+                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/70 font-black shadow-[0_0_8px_rgba(244,63,94,0.3)]'
+                                  : 'text-slate-400'
+                              }`}>
+                                SPI: <strong className={getEVMTextColorClass(proj.spi, 0.9)}>{proj.spi.toFixed(2)}</strong>
+                              </span>
+                              <span className="text-slate-400 hidden sm:inline">${(proj.budget / 1000).toFixed(0)}k</span>
+
+                              <button
+                                onClick={() => {
+                                  setForecastModalProjectId(proj.projectId);
+                                  setIsForecastModalOpen(true);
+                                }}
+                                className="p-1 rounded-lg text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/50 transition-colors"
+                                title="Open Completion Forecast Dossier"
+                              >
+                                <Calendar className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                onClick={() => handleInspectProject(proj.projectId)}
+                                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                title="Inspect Project Workspace"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1164,14 +1264,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <span>{pm.totalActualHours}h</span> / <span className="text-slate-500">{pm.totalEstimatedHours}h</span>
                       </td>
 
-                      <td className="p-3.5 font-mono font-bold">
-                        <span className={pm.aggregateSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>
+                      <td className="p-3.5 font-mono">
+                        <span className={`px-2 py-0.5 rounded-lg inline-block ${getEVMBadgeClass(pm.aggregateSPI, 0.9)}`}>
                           {pm.aggregateSPI.toFixed(2)}
                         </span>
                       </td>
 
-                      <td className="p-3.5 font-mono font-bold">
-                        <span className={pm.aggregateCPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'}>
+                      <td className="p-3.5 font-mono">
+                        <span className={`px-2 py-0.5 rounded-lg inline-block ${getEVMBadgeClass(pm.aggregateCPI, 0.9)}`}>
                           {pm.aggregateCPI.toFixed(2)}
                         </span>
                       </td>
@@ -1239,6 +1339,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         onClose={() => setIsAiBriefingModalOpen(false)}
         pmsList={pmsList}
       />
+
+      {/* 🔮 Predictive Completion Date & SPI/CPI Trend Forecast Modal */}
+      {isForecastModalOpen && (
+        <ProjectForecastModal
+          isOpen={isForecastModalOpen}
+          onClose={() => setIsForecastModalOpen(false)}
+          projects={allProjects}
+          initialProjectId={forecastModalProjectId || allProjects[0]?.id}
+        />
+      )}
 
     </div>
   );

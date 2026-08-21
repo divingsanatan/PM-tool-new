@@ -3,6 +3,7 @@ import { useProject } from '../../context/ProjectContext';
 import { Task, Stakeholder, UserProfile, ProjectData } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
 import { getStatusProgress } from '../../utils/taskCalculations';
+import { ResponsiveSelect } from '../common/ResponsiveSelect';
 import {
   User,
   CheckCircle2,
@@ -749,56 +750,51 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         </div>
 
         {/* Member & Project Scope Selectors & Role Switcher */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full lg:w-auto flex-wrap">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto min-w-0 flex-wrap">
           {/* Project Scope Filter */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950/90 hover:bg-slate-950 px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none transition-all shadow-inner">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <div className="w-5 h-5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0">
-                <Building2 className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-slate-400 font-medium text-xs">Scope:</span>
-            </div>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="bg-transparent text-emerald-300 font-bold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[170px] text-right sm:text-left focus:text-emerald-200 transition-colors"
-            >
-              <option value="all" className="bg-slate-900 text-emerald-400 font-bold">
-                🌐 All Assigned ({memberProjects.length} Project{memberProjects.length !== 1 ? 's' : ''})
-              </option>
-              {memberProjects.map(p => (
-                <option key={p.id} value={p.id} className="bg-slate-900 text-slate-100 font-medium">
-                  📁 [{p.projectCode}] {p.projectName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <ResponsiveSelect
+            value={selectedProjectId}
+            onChange={setSelectedProjectId}
+            icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+            label="Scope:"
+            options={[
+              {
+                value: 'all',
+                label: `All Assigned (${memberProjects.length} Project${memberProjects.length !== 1 ? 's' : ''})`,
+                icon: <span className="text-sm">🌐</span>
+              },
+              ...memberProjects.map(p => ({
+                value: p.id,
+                label: `[${p.projectCode}] ${p.projectName}`,
+                sublabel: p.description,
+                icon: <span className="text-sm">📁</span>
+              }))
+            ]}
+            align="auto"
+            className="border-slate-800 hover:border-slate-700 text-emerald-300"
+          />
 
           {/* Member Selector (Target Selection) */}
-          <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-950/90 hover:bg-slate-950 px-3.5 py-2 sm:py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-xs text-slate-200 min-h-[40px] sm:min-h-0 flex-1 sm:flex-none transition-all shadow-inner">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-5 h-5 rounded-md bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 flex items-center justify-center shrink-0">
-                <User className="w-3.5 h-3.5" />
-              </div>
-              <span className="text-slate-400 font-medium text-xs">Member:</span>
-            </div>
-            <select
-              value={selectedMemberId}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
-              className="bg-transparent text-slate-100 font-semibold outline-none cursor-pointer text-xs truncate max-w-[200px] sm:max-w-[180px] text-right sm:text-left focus:text-indigo-300 transition-colors"
-            >
-              {selectableStakeholders.map(s => {
-                const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
-                const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
-                const roleBadge = isProjectManager ? 'PM' : 'Team';
-                return (
-                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-100">
-                    {isAdmin ? `[${roleBadge}] ` : ''}{s.name} ({s.role})
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          <ResponsiveSelect
+            value={selectedMemberId}
+            onChange={setSelectedMemberId}
+            icon={<User className="w-3.5 h-3.5 text-indigo-400" />}
+            label="Member:"
+            options={selectableStakeholders.map(s => {
+              const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+              const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
+              const roleBadge = isProjectManager ? 'PM' : 'Team';
+              return {
+                value: s.id,
+                label: `${isAdmin ? `[${roleBadge}] ` : ''}${s.name}`,
+                sublabel: `${s.role} • ${s.email}`,
+                badge: isAdmin ? roleBadge : undefined,
+                badgeColor: isProjectManager ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800 text-slate-300 border-slate-700'
+              };
+            })}
+            align="auto"
+            className="border-slate-800 hover:border-slate-700 text-slate-100"
+          />
 
           {/* Member Report Card & Availability Calendar Action */}
           <button
@@ -810,7 +806,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                 setShowReportCardModal(true);
               }
             }}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto cursor-pointer min-h-[40px] sm:min-h-0"
             title="Jump to comprehensive 360 Report Card & Availability Calendar card below"
           >
             <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -821,7 +817,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           {!isAdmin && (
             <button
               onClick={() => setShowLeaveModal(true)}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto"
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto min-h-[40px] sm:min-h-0"
               title="Apply for Day(s) Leave or a couple of Hours Off"
             >
               <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -1366,116 +1362,127 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
               </div>
             </div>
 
-            <div className="h-56 sm:h-64 w-full overflow-x-auto overflow-y-hidden pt-1">
-              {taskHoursChartData.length > 0 ? (
-                <div
-                  style={{
-                    minWidth: hoursChartViewMode === 'all' && taskHoursChartData.length > 5
-                      ? `${Math.max(300, taskHoursChartData.length * 56)}px`
-                      : '100%',
-                    height: '100%'
-                  }}
-                >
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={taskHoursChartData}
-                      margin={{ top: 5, right: 10, left: -20, bottom: 38 }}
-                      barGap={2}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis
-                        dataKey="name"
-                        stroke="#64748b"
-                        tick={{ fontSize: 9, fill: '#94a3b8' }}
-                        interval={0}
-                        angle={-30}
-                        textAnchor="end"
-                        height={40}
-                      />
-                      <YAxis stroke="#64748b" tick={{ fontSize: 9, fill: '#94a3b8' }} />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#0f172a',
-                          borderColor: '#334155',
-                          borderRadius: '0.75rem',
-                          fontSize: '11px',
-                          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
-                        }}
-                        content={({ active, payload }) => {
-                          if (active && payload && payload.length) {
-                            const data = payload[0].payload;
-                            const est = data.Estimated || 0;
-                            const act = data.Actual || 0;
-                            const earned = data.Earned || 0;
-                            const variance = est - act;
-                            return (
-                              <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl shadow-xl space-y-1.5 min-w-[180px]">
-                                <p className="font-bold text-xs text-slate-100 border-b border-slate-800 pb-1 leading-snug">
-                                  {data.fullName || data.name}
-                                </p>
-                                <div className="space-y-0.5 text-[11px] font-mono">
-                                  <div className="flex justify-between items-center text-indigo-300">
-                                    <span>Estimated:</span>
-                                    <span className="font-bold">{est}h</span>
-                                  </div>
-                                  <div className="flex justify-between items-center text-purple-300">
-                                    <span>Actual Logged:</span>
-                                    <span className="font-bold">{act}h</span>
-                                  </div>
-                                  <div className="flex justify-between items-center text-emerald-300">
-                                    <span>Earned Value:</span>
-                                    <span className="font-bold">{earned}h</span>
-                                  </div>
-                                  {est > 0 && act > 0 && (
-                                    <div className="flex justify-between items-center text-slate-400 pt-1 border-t border-slate-800 text-[10px]">
-                                      <span>Variance (Est-Act):</span>
-                                      <span className={`font-bold ${variance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {variance >= 0 ? `+${variance.toFixed(1)}h` : `${variance.toFixed(1)}h`}
-                                      </span>
+            {/* Chart Container with smooth horizontal scroll and tap inspector */}
+            <div className="space-y-2">
+              <div className="h-64 sm:h-72 w-full overflow-x-auto overflow-y-hidden pt-1 pb-2 scrollbar-thin scrollbar-thumb-slate-700">
+                {taskHoursChartData.length > 0 ? (
+                  <div
+                    style={{
+                      minWidth: taskHoursChartData.length > 3
+                        ? `${Math.max(340, taskHoursChartData.length * 68)}px`
+                        : '100%',
+                      height: '100%'
+                    }}
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={taskHoursChartData}
+                        margin={{ top: 10, right: 12, left: -18, bottom: 42 }}
+                        barGap={3}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis
+                          dataKey="name"
+                          stroke="#64748b"
+                          tick={{ fontSize: 9, fill: '#94a3b8' }}
+                          interval={0}
+                          angle={-25}
+                          textAnchor="end"
+                          height={45}
+                          tickFormatter={(val: string) => (val && val.length > 13 ? `${val.substring(0, 11)}…` : val)}
+                        />
+                        <YAxis stroke="#64748b" tick={{ fontSize: 9, fill: '#94a3b8' }} />
+                        <Tooltip
+                          wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            borderColor: '#334155',
+                            borderRadius: '0.75rem',
+                            fontSize: '11px',
+                            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)'
+                          }}
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              const est = data.Estimated || 0;
+                              const act = data.Actual || 0;
+                              const earned = data.Earned || 0;
+                              const variance = est - act;
+                              return (
+                                <div className="bg-slate-900/95 backdrop-blur-md border border-slate-700 p-2 sm:p-2.5 rounded-xl shadow-2xl space-y-1 max-w-[210px] sm:max-w-[240px]">
+                                  <p className="font-bold text-[11px] sm:text-xs text-slate-100 border-b border-slate-800 pb-1 leading-tight truncate">
+                                    {data.fullName || data.name}
+                                  </p>
+                                  <div className="space-y-0.5 text-[10px] sm:text-[11px] font-mono">
+                                    <div className="flex justify-between items-center text-indigo-300">
+                                      <span>Estimated:</span>
+                                      <span className="font-bold">{est}h</span>
                                     </div>
-                                  )}
+                                    <div className="flex justify-between items-center text-purple-300">
+                                      <span>Actual:</span>
+                                      <span className="font-bold">{act}h</span>
+                                    </div>
+                                    <div className="flex justify-between items-center text-emerald-300">
+                                      <span>Earned:</span>
+                                      <span className="font-bold">{earned}h</span>
+                                    </div>
+                                    {est > 0 && act > 0 && (
+                                      <div className="flex justify-between items-center text-slate-400 pt-0.5 border-t border-slate-800 text-[9px] sm:text-[10px]">
+                                        <span>Variance:</span>
+                                        <span className={`font-bold ${variance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                          {variance >= 0 ? `+${variance.toFixed(1)}h` : `${variance.toFixed(1)}h`}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        }}
-                      />
-                      <Legend
-                        verticalAlign="top"
-                        align="right"
-                        height={26}
-                        iconType="circle"
-                        iconSize={7}
-                        wrapperStyle={{ fontSize: '10px', paddingBottom: '4px' }}
-                      />
-                      <Bar
-                        dataKey="Estimated"
-                        fill="#6366f1"
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
-                        isAnimationActive={false}
-                      />
-                      <Bar
-                        dataKey="Actual"
-                        fill="#a855f7"
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
-                        isAnimationActive={false}
-                      />
-                      <Bar
-                        dataKey="Earned"
-                        fill="#10b981"
-                        radius={[3, 3, 0, 0]}
-                        maxBarSize={hoursChartViewMode === 'all' ? 14 : 22}
-                        isAnimationActive={false}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
-                  No deliverables or task hours recorded in the selected scope.
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Legend
+                          verticalAlign="top"
+                          align="right"
+                          height={24}
+                          iconType="circle"
+                          iconSize={6}
+                          wrapperStyle={{ fontSize: '10px', paddingBottom: '2px' }}
+                        />
+                        <Bar
+                          dataKey="Estimated"
+                          fill="#6366f1"
+                          radius={[3, 3, 0, 0]}
+                          maxBarSize={hoursChartViewMode === 'all' ? 14 : 20}
+                          isAnimationActive={false}
+                        />
+                        <Bar
+                          dataKey="Actual"
+                          fill="#a855f7"
+                          radius={[3, 3, 0, 0]}
+                          maxBarSize={hoursChartViewMode === 'all' ? 14 : 20}
+                          isAnimationActive={false}
+                        />
+                        <Bar
+                          dataKey="Earned"
+                          fill="#10b981"
+                          radius={[3, 3, 0, 0]}
+                          maxBarSize={hoursChartViewMode === 'all' ? 14 : 20}
+                          isAnimationActive={false}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-500 italic">
+                    No deliverables or task hours recorded in the selected scope.
+                  </div>
+                )}
+              </div>
+              {taskHoursChartData.length > 3 && (
+                <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono px-1 sm:hidden">
+                  <span>← Swipe horizontally to see all bars →</span>
+                  <span>{taskHoursChartData.length} items</span>
                 </div>
               )}
             </div>
@@ -1489,22 +1496,23 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                   <Target className="w-4 h-4 text-purple-400 shrink-0" />
                   <span className="truncate">360° Performance Radar Profile</span>
                 </h3>
-                <p className="text-[10px] sm:text-[11px] text-slate-400">Multidimensional score across schedule, cost, efficiency, completion & capacity</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-400">Multidimensional score across schedule, cost, efficiency, completion &amp; capacity</p>
               </div>
               <span className="text-[10px] sm:text-[11px] font-mono text-emerald-300 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
                 Grade {metrics.reportCardGrade}
               </span>
             </div>
 
-            <div className="h-56 sm:h-64 w-full">
+            <div className="h-64 sm:h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
+                <RadarChart cx="50%" cy="50%" outerRadius="58%" data={radarData}>
                   <PolarGrid stroke="#334155" />
                   <PolarAngleAxis dataKey="subject" stroke="#94a3b8" tick={{ fontSize: 9, fill: '#cbd5e1' }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fontSize: 8 }} />
                   <Radar name={selectedStakeholder.name} dataKey="value" stroke="#818cf8" fill="#6366f1" fillOpacity={0.45} isAnimationActive={false} />
                   <Tooltip
-                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px' }}
+                    wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '11px' }}
                     formatter={(value: any) => [`${value}%`, 'Score']}
                   />
                 </RadarChart>
@@ -1514,39 +1522,40 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
           {/* GRAPH 3: EVM Value Financials Comparison (PV vs EV vs AC) */}
           <div className="p-3 sm:p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 min-w-0">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-xs sm:text-sm text-slate-100 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span className="truncate">Individual EVM Value Breakdown ($)</span>
-                  </h3>
-                  <p className="text-[10px] sm:text-[11px] text-slate-400">Planned Value (PV) vs Earned Value (EV) vs Actual Cost (AC)</p>
-                </div>
-                <div className="flex items-center gap-2 font-mono text-[10px] sm:text-[11px] shrink-0">
-                  <span className="text-slate-400">SPI: <strong className={metrics.individualSPI >= 1 ? 'text-emerald-400' : 'text-rose-400'}>{metrics.individualSPI}</strong></span>
-                  <span className="text-slate-400">CPI: <strong className={metrics.individualCPI >= 1 ? 'text-emerald-400' : 'text-rose-400'}>{metrics.individualCPI}</strong></span>
-                </div>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-xs sm:text-sm text-slate-100 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">Individual EVM Value Breakdown ($)</span>
+                </h3>
+                <p className="text-[10px] sm:text-[11px] text-slate-400">Planned Value (PV) vs Earned Value (EV) vs Actual Cost (AC)</p>
               </div>
-
-              <div className="h-56 sm:h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={evmChartData} margin={{ top: 15, right: 10, left: -10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 10 }} />
-                    <YAxis stroke="#64748b" tick={{ fontSize: 9 }} tickFormatter={v => `$${v}`} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '12px' }}
-                      formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Amount']}
-                    />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
-                      {evmChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="flex items-center gap-2 font-mono text-[10px] sm:text-[11px] shrink-0">
+                <span className="text-slate-400">SPI: <strong className={metrics.individualSPI >= 1 ? 'text-emerald-400' : 'text-rose-400'}>{metrics.individualSPI}</strong></span>
+                <span className="text-slate-400">CPI: <strong className={metrics.individualCPI >= 1 ? 'text-emerald-400' : 'text-rose-400'}>{metrics.individualCPI}</strong></span>
               </div>
             </div>
+
+            <div className="h-64 sm:h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={evmChartData} margin={{ top: 15, right: 10, left: -15, bottom: 15 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 9 }} />
+                  <YAxis stroke="#64748b" tick={{ fontSize: 9 }} tickFormatter={v => `$${v}`} />
+                  <Tooltip
+                    wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '0.75rem', fontSize: '11px' }}
+                    formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Amount']}
+                  />
+                  <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={false}>
+                    {evmChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
       </div>
 

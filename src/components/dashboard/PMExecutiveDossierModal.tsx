@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 import { CrossProjectPMPerformance, ManagedProjectSummary } from '../../utils/portfolioAndLeaveUtils';
 import { UserProfile, ProjectData, MemberLeave } from '../../types';
 import {
+  getEVMCardClass,
+  getEVMBadgeClass,
+  getEVMTextColorClass,
+  getEVMStatusLabel
+} from '../../utils/scorecardFormatting';
+import {
   X,
   Building2,
   TrendingUp,
@@ -220,20 +226,30 @@ export const PMExecutiveDossierModal: React.FC<PMExecutiveDossierModalProps> = (
             </div>
           </div>
 
-          <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
-            <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Composite SPI</span>
+          <div className={`p-3 rounded-xl ${getEVMCardClass(pm.aggregateSPI, 0.9)}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Composite SPI</span>
+              {pm.aggregateSPI < 0.9 && (
+                <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert</span>
+              )}
+            </div>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className={`text-xl font-black ${pm.aggregateSPI >= 1.0 ? 'text-emerald-400' : pm.aggregateSPI >= 0.9 ? 'text-amber-400' : 'text-rose-400'}`}>
+              <span className={`text-xl font-black ${getEVMTextColorClass(pm.aggregateSPI, 0.9)}`}>
                 {pm.aggregateSPI.toFixed(2)}
               </span>
               <span className="text-[10px] text-slate-500">Target 1.0</span>
             </div>
           </div>
 
-          <div className="bg-slate-900/90 border border-slate-800 p-3 rounded-xl">
-            <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Composite CPI</span>
+          <div className={`p-3 rounded-xl ${getEVMCardClass(pm.aggregateCPI, 0.9)}`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-400 block uppercase tracking-wider">Composite CPI</span>
+              {pm.aggregateCPI < 0.9 && (
+                <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert</span>
+              )}
+            </div>
             <div className="flex items-baseline gap-1.5 mt-1">
-              <span className={`text-xl font-black ${pm.aggregateCPI >= 1.0 ? 'text-emerald-400' : pm.aggregateCPI >= 0.9 ? 'text-amber-400' : 'text-rose-400'}`}>
+              <span className={`text-xl font-black ${getEVMTextColorClass(pm.aggregateCPI, 0.9)}`}>
                 {pm.aggregateCPI.toFixed(2)}
               </span>
               <span className="text-[10px] text-slate-500">Cost Eff.</span>
