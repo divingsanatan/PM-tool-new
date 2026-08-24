@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useProject } from '../../context/ProjectContext';
 import { Task, Feature, Epic, Milestone, Subtask, Priority, TaskStatus } from '../../types';
 import { DEFAULT_STATUS_PERCENTAGES } from '../../utils/taskCalculations';
@@ -51,7 +52,12 @@ import {
   FileSpreadsheet,
   Bug,
   GitPullRequest,
-  Columns
+  Columns,
+  ArrowLeftRight,
+  Check,
+  Inbox,
+  X,
+  BookOpen
 } from 'lucide-react';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
 import { CsvImportModal } from '../modals/CsvImportModal';
@@ -60,6 +66,7 @@ import { SprintModal } from '../modals/SprintModal';
 import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
 import { Sprint } from '../../types';
 import { calculateEVMMetrics } from '../../utils/evm';
+import { triggerHaptic } from '../../utils/haptics';
 
 export type ColumnKey = 'name' | 'assignee' | 'startDate' | 'dueDate' | 'estHours' | 'status' | 'itemType' | 'cost' | 'priority' | 'tags';
 
@@ -140,9 +147,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     deleteFeature,
     deleteMilestone,
     updateStatusPercentages,
-    currentUser
+    currentUser,
+    assignTaskToSprint
   } = useProject();
 
+  const [taskForSprintChange, setTaskForSprintChange] = useState<Task | null>(null);
   const [showStatusConfigModal, setShowStatusConfigModal] = useState(false);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
   const [tempPercentages, setTempPercentages] = useState<Record<string, number | string>>(
@@ -308,7 +317,20 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     parentId?: string;
   } | null>(null);
   const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
+  const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
   const [dragNotice, setDragNotice] = useState<string | null>(null);
+
+  const triggerDropSuccess = (id: string) => {
+    setJustDroppedId(id);
+    setTimeout(() => {
+      setJustDroppedId((curr) => (curr === id ? null : curr));
+    }, 750);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverTargetId(null);
+  };
 
   const showNotice = (msg: string) => {
     setDragNotice(msg);
@@ -326,6 +348,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         return;
       }
     }
+    triggerHaptic('light');
     const payload = { type, id, parentId };
     setDraggedItem(payload);
     e.dataTransfer.setData('text/plain', JSON.stringify(payload));
@@ -338,6 +361,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.dataTransfer.dropEffect = 'move';
     if (dragOverTargetId !== targetId) {
       setDragOverTargetId(targetId);
+      triggerHaptic('threshold');
     }
   };
 
@@ -375,6 +399,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           epicId: targetFeature.epicId,
           milestoneId: targetFeature.milestoneId
         });
+        triggerHaptic('success');
+        triggerDropSuccess(task.id);
+        triggerDropSuccess(targetFeature.id);
         showNotice(`Moved task "${task.title}" under Feature "${targetFeature.title}"`);
       }
     } else if (item.type === 'subtask') {
@@ -393,6 +420,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           plannedCost: 500
         });
         await deleteSubtask(subtask.id);
+        triggerHaptic('success');
+        triggerDropSuccess(targetFeature.id);
         showNotice(`Promoted subtask "${subtask.title}" to a full task under Feature "${targetFeature.title}"`);
       }
     }
@@ -426,6 +455,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           epicId: targetEpic.id,
           milestoneId: targetEpic.milestoneId || feat.milestoneId
         });
+        triggerHaptic('success');
+        triggerDropSuccess(feat.id);
+        triggerDropSuccess(targetEpic.id);
         showNotice(`Moved Feature "${feat.title}" under Epic "${targetEpic.title}"`);
       }
     } else if (item.type === 'task') {
@@ -437,6 +469,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           milestoneId: targetEpic.milestoneId || task.milestoneId,
           featureId: undefined
         });
+        triggerHaptic('success');
+        triggerDropSuccess(task.id);
+        triggerDropSuccess(targetEpic.id);
         showNotice(`Moved Task "${task.title}" directly under Epic "${targetEpic.title}"`);
       }
     }
@@ -466,18 +501,27 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       const epic = (projectData.epics || []).find(ep => ep.id === item.id);
       if (epic) {
         await saveEpic({ ...epic, milestoneId: targetMilestone.id });
+        triggerHaptic('success');
+        triggerDropSuccess(epic.id);
+        triggerDropSuccess(targetMilestone.id);
         showNotice(`Moved Epic "${epic.title}" under Milestone "${targetMilestone.title}"`);
       }
     } else if (item.type === 'feature') {
       const feat = projectData.features.find(f => f.id === item.id);
       if (feat) {
         await saveFeature({ ...feat, milestoneId: targetMilestone.id });
+        triggerHaptic('success');
+        triggerDropSuccess(feat.id);
+        triggerDropSuccess(targetMilestone.id);
         showNotice(`Moved Feature "${feat.title}" under Milestone "${targetMilestone.title}"`);
       }
     } else if (item.type === 'task') {
       const task = projectData.tasks.find(t => t.id === item.id);
       if (task) {
         await saveTask({ ...task, milestoneId: targetMilestone.id, featureId: undefined, epicId: undefined });
+        triggerHaptic('success');
+        triggerDropSuccess(task.id);
+        triggerDropSuccess(targetMilestone.id);
         showNotice(`Moved Task "${task.title}" directly under Milestone "${targetMilestone.title}"`);
       }
     }
@@ -508,6 +552,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           status: targetStatus,
           completionPercent: getStatusProgress(targetStatus, projectData.statusPercentages)
         });
+        triggerHaptic('success');
+        triggerDropSuccess(task.id);
         showNotice(`Updated Task "${task.title}" status to ${targetStatus.toUpperCase().replace('_', ' ')}`);
       }
     }
@@ -537,6 +583,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       const subtask = projectData.subtasks.find(st => st.id === item.id);
       if (subtask) {
         await saveSubtask({ ...subtask, taskId: targetTaskId });
+        triggerHaptic('success');
+        triggerDropSuccess(subtask.id);
+        triggerDropSuccess(targetTaskId);
         showNotice(`Moved Subtask "${subtask.title}" under Task "${targetTask.title}"`);
       }
     } else if (item.type === 'task') {
@@ -548,6 +597,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           epicId: targetTask.epicId,
           milestoneId: targetTask.milestoneId
         });
+        triggerHaptic('success');
+        triggerDropSuccess(draggedTask.id);
+        triggerDropSuccess(targetTaskId);
         showNotice(`Re-aligned Task "${draggedTask.title}" into Feature/Epic of "${targetTask.title}"`);
       }
     }
@@ -931,6 +983,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const [initialParentEpicId, setInitialParentEpicId] = useState('');
   const [itemToEdit, setItemToEdit] = useState<Milestone | Epic | Feature | null>(null);
 
+  // Backlog state
+  const [isBacklogExpanded, setIsBacklogExpanded] = useState(true);
+  const [selectedBacklogTaskIds, setSelectedBacklogTaskIds] = useState<string[]>([]);
+  const [sprintScopeFilter, setSprintScopeFilter] = useState<'all' | 'active_sprints' | 'backlog'>('all');
+
   const openCreateModal = (type: HierarchyType, parentMilestoneId = '', parentEpicId = '') => {
     setItemToEdit(null);
     setHierarchyModalType(type);
@@ -1044,13 +1101,30 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
 
       let matchesSprint = true;
-      if (isSprintFiltered) {
+      if (sprintScopeFilter === 'backlog') {
+        matchesSprint = !task.sprintId;
+      } else if (isSprintFiltered) {
         matchesSprint = !!(task.sprintId && selectedSprintIds.includes(task.sprintId));
+      } else if (sprintScopeFilter === 'active_sprints') {
+        matchesSprint = !!task.sprintId;
       }
 
       return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesConflict && matchesSprint;
     });
-  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts, isSprintFiltered, selectedSprintIds]);
+  }, [projectData.tasks, projectData.features, projectData.epics, projectData.milestones, searchQuery, statusFilter, priorityFilter, typeFilter, onlyConflicts, isSprintFiltered, selectedSprintIds, sprintScopeFilter]);
+
+  const getMilestoneHasMatchingTasks = (milestoneId: string): boolean => {
+    return filteredTasks.some(t => isTaskInMilestone(t, milestoneId));
+  };
+
+  const getEpicHasMatchingTasks = (epicId: string): boolean => {
+    const epicFeatureIds = projectData.features.filter(f => f.epicId === epicId).map(f => f.id);
+    return filteredTasks.some(t => t.epicId === epicId || (t.featureId && epicFeatureIds.includes(t.featureId)));
+  };
+
+  const getFeatureHasMatchingTasks = (featureId: string): boolean => {
+    return filteredTasks.some(t => t.featureId === featureId);
+  };
 
   // Calendar view grid computations
   const calendarGridDays = useMemo(() => {
@@ -1323,54 +1397,6 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         </div>
       </div>
 
-      {/* Financial Baseline & EVM Summary Bar on WBS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-3">
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>Project Baseline (BAC)</span>
-            </div>
-            <div className="text-base font-bold font-mono text-emerald-400 mt-1">
-              ${(projectData.budget || 250000).toLocaleString()}
-            </div>
-            <span className="text-[10px] text-slate-500">Authorized Target Budget</span>
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-              <Calculator className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              <span>WBS Planned Cost</span>
-            </div>
-            <div className="text-base font-bold font-mono text-indigo-300 mt-1">
-              ${projectRollup.plannedCost.toLocaleString()}
-            </div>
-            <span className="text-[10px] text-slate-500">Sum of All WBS Tasks</span>
-          </div>
-        </div>
-
-        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 shadow-xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
-              <PieChart className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-              <span>Cost Efficiency (CPI)</span>
-            </div>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className={`text-base font-bold font-mono ${evmMetrics.cpi >= 1 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {evmMetrics.cpi.toFixed(2)}
-              </span>
-              <span className="text-[11px] font-mono text-slate-400">
-                (EV: ${evmMetrics.earnedValue.toLocaleString()})
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500">
-              CV: {evmMetrics.costVariance >= 0 ? '+' : ''}${evmMetrics.costVariance.toLocaleString()}
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* Drag and Drop Realtime Feedback Banner */}
       {dragNotice && (
@@ -1447,7 +1473,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <div className="flex flex-wrap items-center gap-1.5 py-0.5 min-w-0">
             <button
               onClick={() => openCreateModal('milestone')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Milestone</span>
@@ -1455,7 +1481,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
             <button
               onClick={() => openCreateModal('epic')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Epic</span>
@@ -1463,18 +1489,20 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
             <button
               onClick={() => openCreateModal('feature')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
               <span>Feature</span>
             </button>
 
             <button
+              id="wbs-add-work-item-btn"
               onClick={() => onOpenTaskModal()}
-              className="flex items-center gap-1 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors shadow-sm shrink-0 whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-sm shrink-0 whitespace-nowrap active:scale-95 cursor-pointer"
+              title="Add a new Work Item / Task using the full task form"
             >
               <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>Work Item</span>
+              <span>Add Work Item</span>
             </button>
 
             <button
@@ -1504,6 +1532,89 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
         {/* Bottom Row: Search & Filters */}
         <div className="flex items-center gap-2 flex-wrap min-w-0 w-full pt-2 border-t border-slate-800/60">
+          {/* Sprint Scope Filter: All | Sprints | Backlog */}
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0">
+            <button
+              type="button"
+              onClick={() => setSprintScopeFilter('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                sprintScopeFilter === 'all'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              All Items ({projectData.tasks.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSprintScopeFilter('active_sprints')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+                sprintScopeFilter === 'active_sprints'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'text-purple-300/80 hover:text-purple-200'
+              }`}
+            >
+              <Layers className="w-3 h-3" />
+              <span>In Sprints ({projectData.tasks.filter(t => !!t.sprintId).length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSprintScopeFilter('backlog')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+                sprintScopeFilter === 'backlog'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-300/80 hover:text-amber-200'
+              }`}
+            >
+              <Inbox className="w-3 h-3" />
+              <span>Backlog ({projectData.tasks.filter(t => !t.sprintId).length})</span>
+            </button>
+          </div>
+
+          {/* Sprint Filter Selector (Visible when NOT on Backlog) */}
+          {sprintScopeFilter !== 'backlog' && (
+            <div className="flex items-center gap-1.5 bg-slate-950 border border-purple-500/40 text-purple-300 px-2.5 py-1.5 rounded-xl text-xs shrink-0 shadow-xs">
+              <Layers className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="text-[11px] font-semibold text-purple-400 hidden sm:inline">Sprint:</span>
+              <select
+                id="wbs-sprint-filter-select"
+                value={selectedSprintIds.length === 1 ? selectedSprintIds[0] : 'all'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'all') {
+                    setSelectedSprintIds([]);
+                  } else {
+                    setSelectedSprintIds([val]);
+                  }
+                }}
+                className="bg-transparent text-purple-200 font-semibold outline-none cursor-pointer text-xs pr-1 border-none"
+                title="Filter WBS hierarchy items by selected sprint or all sprints"
+              >
+                <option value="all" className="bg-slate-900 text-slate-200">
+                  All Sprints ({sprints.length})
+                </option>
+                {sprints.map((sp) => {
+                  const count = projectData.tasks.filter(t => t.sprintId === sp.id).length;
+                  const statusTag = sp.status === 'active' ? 'Active' : sp.status === 'completed' ? 'Done' : 'Planning';
+                  return (
+                    <option key={sp.id} value={sp.id} className="bg-slate-900 text-purple-200">
+                      {sp.name} [{statusTag}] ({count} {count === 1 ? 'task' : 'tasks'})
+                    </option>
+                  );
+                })}
+              </select>
+              {selectedSprintIds.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedSprintIds([])}
+                  className="ml-1 text-purple-400 hover:text-purple-100 hover:bg-purple-900/50 rounded p-0.5"
+                  title="Reset to All Sprints"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800/80 text-slate-300 flex-1 sm:flex-none sm:w-56 min-w-[140px]">
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 pointer-events-none" />
             <input
@@ -1651,8 +1762,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               </span>
             )}
             {isSprintFiltered && (
-              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono">
-                Sprint: {selectedSprintIds.map(id => sprints.find(s => s.id === id)?.name).filter(Boolean).join(', ')}
+              <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 font-mono flex items-center gap-1">
+                <span>Sprint: {selectedSprintIds.map(id => sprints.find(s => s.id === id)?.name).filter(Boolean).join(', ')}</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSprintIds([])}
+                  className="hover:text-white p-0.5 rounded ml-0.5"
+                  title="Remove Sprint filter"
+                >
+                  <X className="w-3 h-3" />
+                </button>
               </span>
             )}
             {typeFilter !== 'all' && (
@@ -1945,11 +2064,30 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           const fEff = getFeatureEffectiveValues(feature.id, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
           const completionPercent = fEff.completionPercent;
           const featureCost = fEff.plannedCost;
+          const isFDragTarget = dragOverTargetId === feature.id;
+          const isFJustDropped = justDroppedId === feature.id;
+          const isFDragging = draggedItem?.id === feature.id;
 
           return (
             <div key={feature.id} className={`bg-blue-500/5 dark:bg-slate-950/40 ${isNestedInEpic ? 'border-l-2 border-indigo-500/30 dark:border-indigo-500/20' : ''}`}>
               {/* Feature Header Row */}
-              <div className="flex items-center justify-between py-2.5 px-4 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0">
+              <motion.div
+                layout="position"
+                initial={false}
+                animate={{
+                  scale: isFDragging ? 0.985 : isFDragTarget ? 1.015 : isFJustDropped ? [1.025, 0.99, 1] : 1,
+                  opacity: isFDragging ? 0.6 : 1,
+                  boxShadow: isFDragTarget ? '0 4px 16px -2px rgba(99, 102, 241, 0.2)' : 'none'
+                }}
+                transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
+                onDragOver={(e) => handleDragOver(e, feature.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDropOnFeature(feature.id, e)}
+                onDragEnd={handleDragEnd}
+                className={`flex items-center justify-between py-2.5 px-4 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0 ${
+                  isFDragTarget ? 'ring-2 ring-indigo-500/60 bg-indigo-950/40' : ''
+                }`}
+              >
                 <div style={{ width: columnWidths.name }} className={`flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden ${isNestedInEpic ? 'pl-8' : 'pl-4'}`}>
                   <button
                     onClick={() => toggleNode(feature.id)}
@@ -2080,7 +2218,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     </div>
                   )}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Tasks inside Feature */}
               {isFExpanded && (
@@ -2169,8 +2307,10 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         };
 
         return (
-          <div className="bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm backdrop-blur-md overflow-x-auto">
-            <div style={{ minWidth: totalTableWidth }}>
+          <div className="space-y-6">
+            {sprintScopeFilter !== 'backlog' && (
+              <div className="bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm backdrop-blur-md overflow-x-auto">
+                <div style={{ minWidth: totalTableWidth }}>
               {/* Column Header Row */}
               <div className="flex items-center justify-between py-3 px-4 text-[11px] font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 uppercase tracking-wider bg-slate-100/80 dark:bg-slate-900/90 rounded-t-2xl relative select-none">
                 <div
@@ -2357,417 +2497,881 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               </div>
 
             <div className="divide-y divide-slate-200/80 dark:divide-slate-800/60">
-              {/* 1. MILESTONES SECTION */}
-              {projectData.milestones.map((milestone, mIdx) => {
-                const isMExpanded = expandedNodes[milestone.id] !== false;
-                const milestoneEpics = (projectData.epics || []).filter(e => e.milestoneId === milestone.id);
-                const milestoneFeatures = projectData.features.filter(f => f.milestoneId === milestone.id && !f.epicId);
-                const milestoneDirectTasks = filteredTasks.filter(t => t.milestoneId === milestone.id && !t.epicId && !t.featureId);
-                const mEff = getMilestoneEffectiveValues(milestone.id, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.epics || [], projectData.features, projectData.statusPercentages);
-                const mPercent = mEff.completionPercent;
-                const mCost = mEff.plannedCost;
+              {/* GROUPING MODE 1: MILESTONE HIERARCHY (Milestone -> Epic -> Feature -> Task) */}
+              {groupBy === 'milestone-feature' && (
+                <>
+                  {/* 1. MILESTONES SECTION */}
+                  {projectData.milestones
+                    .filter(milestone => (sprintScopeFilter === 'all' && !isSprintFiltered) || getMilestoneHasMatchingTasks(milestone.id))
+                    .map((milestone, mIdx) => {
+                      const isMExpanded = expandedNodes[milestone.id] !== false;
+                      const milestoneEpics = (projectData.epics || [])
+                        .filter(e => e.milestoneId === milestone.id)
+                        .filter(epic => (sprintScopeFilter === 'all' && !isSprintFiltered) || getEpicHasMatchingTasks(epic.id));
+                      const milestoneFeatures = projectData.features
+                        .filter(f => f.milestoneId === milestone.id && !f.epicId)
+                        .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id));
+                      const milestoneDirectTasks = filteredTasks.filter(t => t.milestoneId === milestone.id && !t.epicId && !t.featureId);
+                      const mEff = getMilestoneEffectiveValues(milestone.id, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.epics || [], projectData.features, projectData.statusPercentages);
+                      const mPercent = mEff.completionPercent;
+                      const mCost = mEff.plannedCost;
 
-                return (
-                  <div key={milestone.id} className="bg-amber-500/5 dark:bg-amber-950/20">
-                    {/* Milestone Header Row */}
-                    <div className="flex items-center justify-between py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0">
-                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
-                        <button
-                          onClick={() => toggleNode(milestone.id)}
-                          className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors shrink-0"
+                      const isMDragTarget = dragOverTargetId === milestone.id;
+                      const isMJustDropped = justDroppedId === milestone.id;
+                      const isMDragging = draggedItem?.id === milestone.id;
+
+                    return (
+                      <div key={milestone.id} className="bg-amber-500/5 dark:bg-amber-950/20">
+                        {/* Milestone Header Row */}
+                        <motion.div
+                          layout="position"
+                          initial={false}
+                          animate={{
+                            scale: isMDragging ? 0.985 : isMDragTarget ? 1.015 : isMJustDropped ? [1.025, 0.99, 1] : 1,
+                            opacity: isMDragging ? 0.6 : 1,
+                            boxShadow: isMDragTarget ? '0 4px 16px -2px rgba(245, 158, 11, 0.25)' : 'none'
+                          }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
+                          onDragOver={(e) => handleDragOver(e, milestone.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDropOnMilestone(milestone.id, e)}
+                          onDragEnd={handleDragEnd}
+                          className={`flex items-center justify-between py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0 ${
+                            isMDragTarget ? 'ring-2 ring-amber-500/60 bg-amber-950/40' : ''
+                          }`}
                         >
-                          {isMExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        </button>
-
-                        <Flag className="w-4 h-4 text-amber-500 shrink-0" />
-                        <span className="font-mono text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}</span>
-
-                        <span
-                          onClick={() => openEditModal(milestone)}
-                          className="font-bold text-xs text-slate-900 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 cursor-pointer truncate"
-                          title="Click to view/edit Milestone screen"
-                        >
-                          {milestone.title}
-                        </span>
-
-                        {/* Hover Quick Actions */}
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                          <button
-                            onClick={() => openCreateModal('epic', milestone.id)}
-                            className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
-                            title="Add Epic"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => openEditModal(milestone)}
-                            className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
-                            title="Open Milestone Screen"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => deleteMilestone(milestone.id)}
-                            className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
-                            title="Delete Milestone"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center shrink-0 text-xs">
-                        {visibleColumns.assignee && (
-                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
-                            {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
-                          </div>
-                        )}
-
-                        {visibleColumns.startDate && (
-                          <div style={{ width: columnWidths.startDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
-                            <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <span className="truncate">{milestone.dueDate || 'No date'}</span>
-                          </div>
-                        )}
-
-                        {visibleColumns.dueDate && (
-                          <div style={{ width: columnWidths.dueDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
-                            <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                            <span className="truncate">{milestone.dueDate || 'No date'}</span>
-                          </div>
-                        )}
-
-                        {visibleColumns.estHours && (
-                          <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-300 shrink-0 overflow-hidden px-2.5">
-                            {mEff.estimatedHours}h
-                          </div>
-                        )}
-
-                        {visibleColumns.status && (
-                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 overflow-hidden px-2.5">
-                            <span>{mPercent}% done</span>
-                          </div>
-                        )}
-
-                        {visibleColumns.itemType && (
-                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
-                            <select
-                              value="milestone"
-                              onChange={(e) => handleConvertItemType(e.target.value as any, { id: milestone.id, type: 'milestone' })}
-                              className="bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors shadow-2xs w-full"
-                              title="Convert WBS Item Type"
+                          <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
+                            <button
+                              onClick={() => toggleNode(milestone.id)}
+                              className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 transition-colors shrink-0"
                             >
-                              <option value="milestone">Milestone</option>
-                              <option value="epic">Epic</option>
-                              <option value="feature">Feature</option>
-                              <option value="task">Task</option>
-                              <option value="subtask">Subtask</option>
-                            </select>
-                          </div>
-                        )}
+                              {isMExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
 
-                        {visibleColumns.cost && (
-                          <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
-                            ${mCost.toLocaleString()}
-                          </div>
-                        )}
+                            <Flag className="w-4 h-4 text-amber-500 shrink-0" />
+                            <span className="font-mono text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}</span>
 
-                        {visibleColumns.priority && (
-                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
-                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                          </div>
-                        )}
+                            <span
+                              onClick={() => openEditModal(milestone)}
+                              className="font-bold text-xs text-slate-900 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 cursor-pointer truncate"
+                              title="Click to view/edit Milestone screen"
+                            >
+                              {milestone.title}
+                            </span>
 
-                        {visibleColumns.tags && (
-                          <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Milestone Children */}
-                    {isMExpanded && (
-                      <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                        {/* Epics under Milestone */}
-                        {milestoneEpics.map((epic, eIdx) => {
-                          const isEExpanded = expandedNodes[epic.id] !== false;
-                          const epicFeatures = projectData.features.filter(f => f.epicId === epic.id);
-                          const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
-
-                          return (
-                            <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
-                              {/* Epic Header Row */}
-                              <div className="flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
-                                <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 pl-4 min-w-0 overflow-hidden">
-                                  <button
-                                    onClick={() => toggleNode(epic.id)}
-                                    className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0"
-                                  >
-                                    {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                                  </button>
-
-                                  <Layers className="w-4 h-4 text-purple-500 shrink-0" />
-                                  <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}.E{eIdx + 1}</span>
-
-                                  <span
-                                    onClick={() => openEditModal(epic)}
-                                    className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
-                                    title="Click to view/edit Epic screen"
-                                  >
-                                    {epic.title}
-                                  </span>
-
-                                  {/* Hover Quick Actions */}
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <button
-                                      onClick={() => openCreateModal('feature', milestone.id, epic.id)}
-                                      className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
-                                      title="Add Feature"
-                                    >
-                                      <Plus className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={() => openEditModal(epic)}
-                                      className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
-                                      title="Open Epic Screen"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </button>
-                                    <button
-                                      onClick={() => deleteEpic(epic.id)}
-                                      className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
-                                      title="Delete Epic"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center shrink-0 text-xs">
-                                  {visibleColumns.assignee && (
-                                    <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
-                                      {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.startDate && (
-                                    <div style={{ width: columnWidths.startDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
-                                      <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                                      <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.dueDate && (
-                                    <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
-                                      <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                                      <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.estHours && (
-                                    <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-300 shrink-0 overflow-hidden px-2.5">
-                                      {getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages).estimatedHours}h
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.status && (
-                                    <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
-                                      {(() => {
-                                        const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
-                                        return <span>{eEff.completionPercent}% done</span>;
-                                      })()}
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.itemType && (
-                                    <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
-                                      <select
-                                        value="epic"
-                                        onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
-                                        className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
-                                        title="Convert WBS Item Type"
-                                      >
-                                        <option value="milestone">Milestone</option>
-                                        <option value="epic">Epic</option>
-                                        <option value="feature">Feature</option>
-                                        <option value="task">Task</option>
-                                        <option value="subtask">Subtask</option>
-                                      </select>
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.cost && (
-                                    <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
-                                      {(() => {
-                                        const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
-                                        return `$${eEff.plannedCost.toLocaleString()}`;
-                                      })()}
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.priority && (
-                                    <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
-                                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                                    </div>
-                                  )}
-
-                                  {visibleColumns.tags && (
-                                    <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
-                                      —
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Epic Children */}
-                              {isEExpanded && (
-                                <div>
-                                  {epicFeatures.map((feat, fIdx) => renderFeatureItem(feat, `M${mIdx + 1}.E${eIdx + 1}.F${fIdx + 1}`, true))}
-                                  {epicDirectTasks.map((t, tIdx) => renderTaskNode(t, `M${mIdx + 1}.E${eIdx + 1}.T${tIdx + 1}`))}
-                                </div>
-                              )}
+                            {/* Hover Quick Actions */}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                              <button
+                                onClick={() => openCreateModal('epic', milestone.id)}
+                                className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
+                                title="Add Epic"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(milestone)}
+                                className="p-0.5 text-slate-500 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950 rounded transition-colors"
+                                title="Open Milestone Screen"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => deleteMilestone(milestone.id)}
+                                className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                                title="Delete Milestone"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
                             </div>
-                          );
-                        })}
+                          </div>
 
-                        {/* Direct Features under Milestone */}
-                        {milestoneFeatures.map((feat, fIdx) => renderFeatureItem(feat, `M${mIdx + 1}.F${fIdx + 1}`))}
+                          <div className="flex items-center shrink-0 text-xs">
+                            {visibleColumns.assignee && (
+                              <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
+                                {renderAssigneeAvatars(getMilestoneAllAssigneeIds(milestone.id, projectData.epics || [], projectData.features, filteredTasks, projectData.subtasks))}
+                              </div>
+                            )}
 
-                        {/* Direct Tasks under Milestone */}
-                        {milestoneDirectTasks.map((t, tIdx) => renderTaskNode(t, `M${mIdx + 1}.T${tIdx + 1}`))}
+                            {visibleColumns.startDate && (
+                              <div style={{ width: columnWidths.startDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span className="truncate">{milestone.dueDate || 'No date'}</span>
+                              </div>
+                            )}
+
+                            {visibleColumns.dueDate && (
+                              <div style={{ width: columnWidths.dueDate }} className="text-amber-700 dark:text-amber-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                                <span className="truncate">{milestone.dueDate || 'No date'}</span>
+                              </div>
+                            )}
+
+                            {visibleColumns.estHours && (
+                              <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-300 shrink-0 overflow-hidden px-2.5">
+                                {mEff.estimatedHours}h
+                              </div>
+                            )}
+
+                            {visibleColumns.status && (
+                              <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-amber-600 dark:text-amber-400 shrink-0 overflow-hidden px-2.5">
+                                <span>{mPercent}% done</span>
+                              </div>
+                            )}
+
+                            {visibleColumns.itemType && (
+                              <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
+                                <select
+                                  value="milestone"
+                                  onChange={(e) => handleConvertItemType(e.target.value as any, { id: milestone.id, type: 'milestone' })}
+                                  className="bg-white dark:bg-slate-900 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors shadow-2xs w-full"
+                                  title="Convert WBS Item Type"
+                                >
+                                  <option value="milestone">Milestone</option>
+                                  <option value="epic">Epic</option>
+                                  <option value="feature">Feature</option>
+                                  <option value="task">Task</option>
+                                  <option value="subtask">Subtask</option>
+                                </select>
+                              </div>
+                            )}
+
+                            {visibleColumns.cost && (
+                              <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
+                                ${mCost.toLocaleString()}
+                              </div>
+                            )}
+
+                            {visibleColumns.priority && (
+                              <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                              </div>
+                            )}
+
+                            {visibleColumns.tags && (
+                              <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
+                                —
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+
+                        {/* Milestone Children */}
+                        {isMExpanded && (
+                          <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
+                            {/* Epics under Milestone */}
+                            {milestoneEpics.map((epic, eIdx) => {
+                              const isEExpanded = expandedNodes[epic.id] !== false;
+                              const epicFeatures = projectData.features
+                                .filter(f => f.epicId === epic.id)
+                                .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id));
+                              const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
+                              const isEDragTarget = dragOverTargetId === epic.id;
+                              const isEJustDropped = justDroppedId === epic.id;
+                              const isEDragging = draggedItem?.id === epic.id;
+
+                              return (
+                                <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
+                                  {/* Epic Header Row */}
+                                  <motion.div
+                                    layout="position"
+                                    initial={false}
+                                    animate={{
+                                      scale: isEDragging ? 0.985 : isEDragTarget ? 1.015 : isEJustDropped ? [1.025, 0.99, 1] : 1,
+                                      opacity: isEDragging ? 0.6 : 1,
+                                      boxShadow: isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
+                                    }}
+                                    transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
+                                    onDragOver={(e) => handleDragOver(e, epic.id)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDropOnEpic(epic.id, e)}
+                                    onDragEnd={handleDragEnd}
+                                    className={`flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0 ${
+                                      isEDragTarget ? 'ring-2 ring-purple-500/60 bg-purple-950/40' : ''
+                                    }`}
+                                  >
+                                    <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 pl-4 min-w-0 overflow-hidden">
+                                      <button
+                                        onClick={() => toggleNode(epic.id)}
+                                        className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0"
+                                      >
+                                        {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                      </button>
+
+                                      <Layers className="w-4 h-4 text-purple-500 shrink-0" />
+                                      <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}.E{eIdx + 1}</span>
+
+                                      <span
+                                        onClick={() => openEditModal(epic)}
+                                        className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                                        title="Click to view/edit Epic screen"
+                                      >
+                                        {epic.title}
+                                      </span>
+
+                                      {/* Hover Quick Actions */}
+                                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        <button
+                                          onClick={() => openCreateModal('feature', milestone.id, epic.id)}
+                                          className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                          title="Add Feature"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => openEditModal(epic)}
+                                          className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                          title="Open Epic Screen"
+                                        >
+                                          <Edit2 className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          onClick={() => deleteEpic(epic.id)}
+                                          className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                                          title="Delete Epic"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center shrink-0 text-xs">
+                                      {visibleColumns.assignee && (
+                                        <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
+                                          {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.startDate && (
+                                        <div style={{ width: columnWidths.startDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                          <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                          <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.dueDate && (
+                                        <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                          <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                          <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.estHours && (
+                                        <div style={{ width: columnWidths.estHours }} className="text-left font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-300 shrink-0 overflow-hidden px-2.5">
+                                          {getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages).estimatedHours}h
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.status && (
+                                        <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
+                                          {(() => {
+                                            const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                            return <span>{eEff.completionPercent}% done</span>;
+                                          })()}
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.itemType && (
+                                        <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
+                                          <select
+                                            value="epic"
+                                            onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
+                                            className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
+                                            title="Convert WBS Item Type"
+                                          >
+                                            <option value="milestone">Milestone</option>
+                                            <option value="epic">Epic</option>
+                                            <option value="feature">Feature</option>
+                                            <option value="task">Task</option>
+                                            <option value="subtask">Subtask</option>
+                                          </select>
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.cost && (
+                                        <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
+                                          {(() => {
+                                            const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                            return `$${eEff.plannedCost.toLocaleString()}`;
+                                          })()}
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.priority && (
+                                        <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
+                                          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                                        </div>
+                                      )}
+
+                                      {visibleColumns.tags && (
+                                        <div style={{ width: columnWidths.tags }} className="flex items-center justify-start shrink-0 px-2.5 text-[11px] text-slate-500 font-mono">
+                                          —
+                                        </div>
+                                      )}
+                                    </div>
+                                  </motion.div>
+
+                                  {/* Epic Children */}
+                                  {isEExpanded && (
+                                    <div>
+                                      {epicFeatures.map((feat, fIdx) => renderFeatureItem(feat, `M${mIdx + 1}.E${eIdx + 1}.F${fIdx + 1}`, true))}
+                                      {epicDirectTasks.map((t, tIdx) => renderTaskNode(t, `M${mIdx + 1}.E${eIdx + 1}.T${tIdx + 1}`))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {/* Direct Features under Milestone */}
+                            {milestoneFeatures.map((feat, fIdx) => renderFeatureItem(feat, `M${mIdx + 1}.F${fIdx + 1}`))}
+
+                            {/* Direct Tasks under Milestone */}
+                            {milestoneDirectTasks.map((t, tIdx) => renderTaskNode(t, `M${mIdx + 1}.T${tIdx + 1}`))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    );
+                  })}
 
-              {/* 2. STANDALONE / UNASSIGNED EPICS */}
-              {(projectData.epics || []).filter(e => !e.milestoneId).map((epic, eIdx) => {
-                const isEExpanded = expandedNodes[epic.id] !== false;
-                const epicFeatures = projectData.features.filter(f => f.epicId === epic.id);
-                const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
+                  {/* 2. STANDALONE / UNASSIGNED EPICS */}
+                  {(projectData.epics || [])
+                    .filter(e => !e.milestoneId)
+                    .filter(epic => (sprintScopeFilter === 'all' && !isSprintFiltered) || getEpicHasMatchingTasks(epic.id))
+                    .map((epic, eIdx) => {
+                    const isEExpanded = expandedNodes[epic.id] !== false;
+                    const epicFeatures = projectData.features
+                      .filter(f => f.epicId === epic.id)
+                      .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id));
+                    const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
+                    const isEDragTarget = dragOverTargetId === epic.id;
+                    const isEJustDropped = justDroppedId === epic.id;
+                    const isEDragging = draggedItem?.id === epic.id;
 
-                return (
-                  <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
-                    <div className="flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0">
-                      <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
-                        <button onClick={() => toggleNode(epic.id)} className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0">
-                          {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                        </button>
-                        <Layers className="w-4 h-4 text-purple-500 shrink-0" />
-                        <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">E{eIdx + 1}</span>
-                        <span
-                          onClick={() => openEditModal(epic)}
-                          className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
-                          title="Click to view/edit Epic screen"
+                    return (
+                      <div key={epic.id} className="bg-purple-500/5 dark:bg-purple-950/10">
+                        <motion.div
+                          layout="position"
+                          initial={false}
+                          animate={{
+                            scale: isEDragging ? 0.985 : isEDragTarget ? 1.015 : isEJustDropped ? [1.025, 0.99, 1] : 1,
+                            opacity: isEDragging ? 0.6 : 1,
+                            boxShadow: isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
+                          }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
+                          onDragOver={(e) => handleDragOver(e, epic.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDropOnEpic(epic.id, e)}
+                          onDragEnd={handleDragEnd}
+                          className={`flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0 ${
+                            isEDragTarget ? 'ring-2 ring-purple-500/60 bg-purple-950/40' : ''
+                          }`}
                         >
-                          {epic.title}
-                        </span>
-
-                        {/* Hover Quick Actions */}
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-                          <button
-                            onClick={() => openCreateModal('feature', undefined, epic.id)}
-                            className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
-                            title="Add Feature"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => openEditModal(epic)}
-                            className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
-                            title="Open Epic Screen"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => deleteEpic(epic.id)}
-                            className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
-                            title="Delete Epic"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center shrink-0 text-xs">
-                        {visibleColumns.assignee && (
-                          <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
-                            {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
-                          </div>
-                        )}
-                        {visibleColumns.dueDate && (
-                          <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
-                            <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                            <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
-                          </div>
-                        )}
-                        {visibleColumns.status && (
-                          <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
-                            {(() => {
-                              const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
-                              return <span>{eEff.completionPercent}% done</span>;
-                            })()}
-                          </div>
-                        )}
-                        {visibleColumns.itemType && (
-                          <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
-                            <select
-                              value="epic"
-                              onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
-                              className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
-                              title="Convert WBS Item Type"
+                          <div style={{ width: columnWidths.name }} className="flex items-center gap-2.5 shrink-0 pr-4 min-w-0 overflow-hidden">
+                            <button onClick={() => toggleNode(epic.id)} className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-200 transition-colors shrink-0">
+                              {isEExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            <Layers className="w-4 h-4 text-purple-500 shrink-0" />
+                            <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">E{eIdx + 1}</span>
+                            <span
+                              onClick={() => openEditModal(epic)}
+                              className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                              title="Click to view/edit Epic screen"
                             >
-                              <option value="milestone">Milestone</option>
-                              <option value="epic">Epic</option>
-                              <option value="feature">Feature</option>
-                              <option value="task">Task</option>
-                              <option value="subtask">Subtask</option>
-                            </select>
+                              {epic.title}
+                            </span>
+
+                            {/* Hover Quick Actions */}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                              <button
+                                onClick={() => openCreateModal('feature', undefined, epic.id)}
+                                className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                title="Add Feature"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => openEditModal(epic)}
+                                className="p-0.5 text-slate-500 hover:text-purple-500 hover:bg-purple-50 dark:hover:bg-purple-950 rounded transition-colors"
+                                title="Open Epic Screen"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => deleteEpic(epic.id)}
+                                className="p-0.5 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950 rounded transition-colors"
+                                title="Delete Epic"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex items-center shrink-0 text-xs">
+                            {visibleColumns.assignee && (
+                              <div style={{ width: columnWidths.assignee }} className="flex items-center justify-start shrink-0 overflow-hidden px-2.5">
+                                {renderAssigneeAvatars(getEpicAllAssigneeIds(epic.id, projectData.features, filteredTasks, projectData.subtasks))}
+                              </div>
+                            )}
+                            {visibleColumns.dueDate && (
+                              <div style={{ width: columnWidths.dueDate }} className="text-purple-700 dark:text-purple-300/90 text-xs flex items-center gap-1 font-mono shrink-0 overflow-hidden px-2.5">
+                                <Calendar className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                                <span className="truncate">{epic.targetReleaseDate || 'No date'}</span>
+                              </div>
+                            )}
+                            {visibleColumns.status && (
+                              <div style={{ width: columnWidths.status }} className="flex items-center justify-start font-mono text-[11px] font-semibold text-purple-600 dark:text-purple-400 shrink-0 overflow-hidden px-2.5">
+                                {(() => {
+                                  const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                  return <span>{eEff.completionPercent}% done</span>;
+                                })()}
+                              </div>
+                            )}
+                            {visibleColumns.itemType && (
+                              <div style={{ width: columnWidths.itemType }} className="flex items-center justify-start shrink-0 px-2.5">
+                                <select
+                                  value="epic"
+                                  onChange={(e) => handleConvertItemType(e.target.value as any, { id: epic.id, type: 'epic' })}
+                                  className="bg-white dark:bg-slate-900 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 rounded-md px-1.5 py-0.5 text-[11px] font-semibold outline-none cursor-pointer hover:border-purple-400 transition-colors shadow-2xs w-full"
+                                  title="Convert WBS Item Type"
+                                >
+                                  <option value="milestone">Milestone</option>
+                                  <option value="epic">Epic</option>
+                                  <option value="feature">Feature</option>
+                                  <option value="task">Task</option>
+                                  <option value="subtask">Subtask</option>
+                                </select>
+                              </div>
+                            )}
+                            {visibleColumns.cost && (
+                              <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
+                                {(() => {
+                                  const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
+                                  return `$${eEff.plannedCost.toLocaleString()}`;
+                                })()}
+                              </div>
+                            )}
+                            {visibleColumns.priority && (
+                              <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+
+                        {isEExpanded && (
+                          <div>
+                            {epicFeatures.map((feat, fIdx) => renderFeatureItem(feat, `E${eIdx + 1}.F${fIdx + 1}`, true))}
+                            {epicDirectTasks.map((t, tIdx) => renderTaskNode(t, `E${eIdx + 1}.T${tIdx + 1}`))}
                           </div>
                         )}
-                        {visibleColumns.cost && (
-                          <div style={{ width: columnWidths.cost }} className="text-left font-mono text-[11px] font-semibold text-emerald-400 shrink-0 overflow-hidden px-2.5">
-                            {(() => {
-                              const eEff = getEpicEffectiveValues(epic.id, projectData.features, filteredTasks, projectData.subtasks, projectData.stakeholders, projectData.statusPercentages);
-                              return `$${eEff.plannedCost.toLocaleString()}`;
-                            })()}
-                          </div>
-                        )}
-                        {visibleColumns.priority && (
-                          <div style={{ width: columnWidths.priority }} className="flex items-center justify-start shrink-0 px-2.5">
-                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">—</span>
-                          </div>
-                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* 3. STANDALONE FEATURES */}
+                  {projectData.features
+                    .filter(f => !f.milestoneId && !f.epicId)
+                    .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id))
+                    .map((feature, fIdx) => renderFeatureItem(feature, `F${fIdx + 1}`))}
+
+                  {/* 4. UNASSIGNED / STANDALONE HIERARCHY TASKS */}
+                  {filteredTasks.filter(t => !t.milestoneId && !t.epicId && !t.featureId).length > 0 && (
+                    <div className="bg-slate-50/50 dark:bg-slate-950/40">
+                      <div className="py-2.5 px-3 font-bold text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                        Standalone Hierarchy Work Items
+                      </div>
+                      <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
+                        {filteredTasks.filter(t => !t.milestoneId && !t.epicId && !t.featureId).map((task, idx) => renderTaskNode(task, `U.${idx + 1}`))}
                       </div>
                     </div>
+                  )}
+                </>
+              )}
 
-                    {isEExpanded && (
-                      <div>
-                        {epicFeatures.map((feat, fIdx) => renderFeatureItem(feat, `E${eIdx + 1}.F${fIdx + 1}`, true))}
-                        {epicDirectTasks.map((t, tIdx) => renderTaskNode(t, `E${eIdx + 1}.T${tIdx + 1}`))}
+              {/* GROUPING MODE 2: FEATURE VIEW (Flat Feature list with their respective tasks + direct/standalone tasks) */}
+              {groupBy === 'feature-task' && (
+                <>
+                  {projectData.features
+                    .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id))
+                    .map((feature, fIdx) => {
+                    const parentMilestone = projectData.milestones.find(m => m.id === feature.milestoneId);
+                    const parentEpic = (projectData.epics || []).find(e => e.id === feature.epicId);
+                    const prefix = parentMilestone ? `M.${feature.title.slice(0, 3)}` : parentEpic ? `E.${feature.title.slice(0, 3)}` : `F${fIdx + 1}`;
+                    return renderFeatureItem(feature, prefix);
+                  })}
+
+                  {/* Tasks not associated with any feature */}
+                  {filteredTasks.filter(t => !t.featureId).length > 0 && (
+                    <div className="bg-slate-50/50 dark:bg-slate-950/40">
+                      <div className="py-2.5 px-4 font-bold text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <CheckSquare className="w-4 h-4 text-amber-500" />
+                          <span>Direct & Standalone Tasks (Not in Features)</span>
+                        </span>
+                        <span className="font-mono text-[11px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+                          {filteredTasks.filter(t => !t.featureId).length}
+                        </span>
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                      <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
+                        {filteredTasks.filter(t => !t.featureId).map((task, idx) => renderTaskNode(task, `T.${idx + 1}`))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
 
-              {/* 3. STANDALONE FEATURES */}
-              {projectData.features.filter(f => !f.milestoneId && !f.epicId).map((feature, fIdx) => renderFeatureItem(feature, `F${fIdx + 1}`))}
+              {/* GROUPING MODE 3: BY STATUS (Grouped into To Do, In Progress, In Testing, Done, etc.) */}
+              {groupBy === 'status' && (
+                <>
+                  {(['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'] as TaskStatus[]).map(statusKey => {
+                    const statusTasks = filteredTasks.filter(t => t.status === statusKey);
+                    const isStatusExpanded = expandedNodes[`status_${statusKey}`] !== false;
+                    const statusLabel = statusKey === 'todo' ? 'To Do' :
+                                       statusKey === 'in_progress' ? 'In Progress' :
+                                       statusKey === 'demoable' ? 'Demo-able' :
+                                       statusKey === 'review' ? 'In Testing' :
+                                       statusKey === 'on_hold' ? 'On Hold' :
+                                       statusKey === 'blocked' ? 'Blocked' : 'Done';
+                    const statusColor = statusKey === 'done' ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' :
+                                       statusKey === 'blocked' ? 'text-rose-500 border-rose-500/30 bg-rose-500/10' :
+                                       statusKey === 'in_progress' ? 'text-blue-500 border-blue-500/30 bg-blue-500/10' :
+                                       statusKey === 'demoable' ? 'text-cyan-500 border-cyan-500/30 bg-cyan-500/10' :
+                                       statusKey === 'review' ? 'text-purple-500 border-purple-500/30 bg-purple-500/10' :
+                                       statusKey === 'on_hold' ? 'text-amber-500 border-amber-500/30 bg-amber-500/10' :
+                                       'text-slate-400 border-slate-700 bg-slate-800/40';
 
-              {/* 4. UNASSIGNED TASKS */}
-              {filteredTasks.filter(t => !t.milestoneId && !t.epicId && !t.featureId).length > 0 && (
-                <div className="bg-slate-50/50 dark:bg-slate-950/40">
-                  <div className="py-2.5 px-3 font-bold text-xs text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                    Unassigned / Standalone Work Items
-                  </div>
-                  <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
-                    {filteredTasks.filter(t => !t.milestoneId && !t.epicId && !t.featureId).map((task, idx) => renderTaskNode(task, `U.${idx + 1}`))}
-                  </div>
-                </div>
+                    return (
+                      <div key={statusKey} className="bg-slate-900/40">
+                        <div className="flex items-center justify-between py-2.5 px-4 bg-slate-100 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800 transition-colors group select-none">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <button
+                              onClick={() => toggleNode(`status_${statusKey}`)}
+                              className="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors shrink-0"
+                            >
+                              {isStatusExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                            </button>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold border uppercase tracking-wider ${statusColor}`}>
+                              {statusLabel}
+                            </span>
+                            <span className="font-mono text-xs text-slate-500">
+                              ({statusTasks.length} {statusTasks.length === 1 ? 'task' : 'tasks'})
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-xs font-mono text-slate-400">
+                            <span>Total Est: <strong className="text-slate-200">{statusTasks.reduce((acc, t) => acc + (t.estimatedHours || 0), 0)}h</strong></span>
+                            <span>Total Cost: <strong className="text-emerald-400">${statusTasks.reduce((acc, t) => acc + (t.plannedCost || 0), 0).toLocaleString()}</strong></span>
+                          </div>
+                        </div>
+
+                        {isStatusExpanded && (
+                          <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
+                            {statusTasks.length === 0 ? (
+                              <div className="py-4 text-center text-xs text-slate-500 italic">
+                                No tasks currently in {statusLabel}
+                              </div>
+                            ) : (
+                              statusTasks.map((task, idx) => renderTaskNode(task, `${statusKey.toUpperCase().slice(0, 3)}.${idx + 1}`))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {/* Empty state for filtered WBS hierarchy */}
+                  {filteredTasks.length === 0 && (
+                    <div className="p-8 text-center space-y-3 bg-slate-900/40">
+                      <Layers className="w-8 h-8 text-slate-600 mx-auto" />
+                      <p className="text-sm font-semibold text-slate-300">
+                        {isSprintFiltered
+                          ? `No WBS hierarchy items or tasks found for selected sprint`
+                          : 'No WBS hierarchy items match current filters'}
+                      </p>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        {isSprintFiltered
+                          ? 'There are currently no work items assigned to this sprint. You can assign tasks from the Backlog or reset the filter.'
+                          : 'Try clearing your search query or status/priority filters to see work items.'}
+                      </p>
+                      {isSprintFiltered && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSprintIds([])}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm"
+                        >
+                          View All Sprints
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
+        </div>
+      )}
+
+          {/* ==================== 5. DEDICATED SPRINT BACKLOG SECTION ==================== */}
+          {(sprintScopeFilter === 'backlog' || sprintScopeFilter === 'all') && (() => {
+            const allBacklogTasks = (projectData.tasks || []).filter(t => !t.sprintId);
+            const visibleBacklogTasks = filteredTasks.filter(t => !t.sprintId);
+            const totalBacklogHours = allBacklogTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
+            const totalBacklogBudget = allBacklogTasks.reduce((sum, t) => sum + (t.plannedCost || 0), 0);
+            const isAllSelected = visibleBacklogTasks.length > 0 && visibleBacklogTasks.every(t => selectedBacklogTaskIds.includes(t.id));
+
+            return (
+              <div id="wbs-product-backlog-section" className="border border-amber-500/30 dark:border-amber-500/20 bg-slate-900/90 rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-200">
+                {/* Backlog Header */}
+                <div className="bg-amber-950/40 border-b border-amber-500/20 p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => setIsBacklogExpanded(!isBacklogExpanded)}
+                      className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer"
+                      title={isBacklogExpanded ? "Collapse Backlog" : "Expand Backlog"}
+                    >
+                      {isBacklogExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                    </button>
+                    <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                      <Inbox className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-sm sm:text-base text-slate-100">Product Backlog (Unassigned Sprint Items)</h3>
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-semibold">
+                          {allBacklogTasks.length} {allBacklogTasks.length === 1 ? 'item' : 'items'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Work items not assigned to any sprint. Use the dropdown on any item to schedule into active sprints.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Backlog Header Actions & Metrics */}
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
+                      <span className="text-slate-400">Total Effort: <strong className="text-amber-300 font-mono">{totalBacklogHours}h</strong></span>
+                      <span className="text-slate-700">|</span>
+                      <span className="text-slate-400">Planned Cost: <strong className="text-emerald-400 font-mono">${totalBacklogBudget.toLocaleString()}</strong></span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => onOpenTaskModal({ sprintId: '' } as any)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add to Backlog</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bulk Sprint Assignment Bar when items are selected */}
+                {isBacklogExpanded && selectedBacklogTaskIds.length > 0 && (
+                  <div className="bg-indigo-950/90 border-b border-indigo-500/30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
+                    <div className="flex items-center gap-2 text-indigo-200">
+                      <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+                      <span><strong>{selectedBacklogTaskIds.length}</strong> backlog item(s) selected</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-slate-300 font-medium">Move selected to:</span>
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const targetSprint = e.target.value === 'backlog' ? undefined : e.target.value;
+                            selectedBacklogTaskIds.forEach(id => assignTaskToSprint(id, targetSprint));
+                            const spName = targetSprint ? (projectData.sprints || []).find(s => s.id === targetSprint)?.name || 'Sprint' : 'Backlog';
+                            showNotice(`Moved ${selectedBacklogTaskIds.length} work item(s) to ${spName}`);
+                            setSelectedBacklogTaskIds([]);
+                          }
+                        }}
+                        defaultValue=""
+                        className="bg-slate-900 text-slate-100 border border-indigo-500/40 rounded-lg px-2.5 py-1 text-xs outline-none cursor-pointer hover:border-indigo-400"
+                      >
+                        <option value="" disabled>Select target sprint...</option>
+                        {(projectData.sprints || []).map(sp => (
+                          <option key={sp.id} value={sp.id}>{sp.name} ({sp.status})</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBacklogTaskIds([])}
+                        className="text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Backlog Item List */}
+                {isBacklogExpanded && (
+                  <div className="divide-y divide-slate-800/60">
+                    {visibleBacklogTasks.length === 0 ? (
+                      <div className="p-8 text-center space-y-2">
+                        <Inbox className="w-8 h-8 text-slate-600 mx-auto mb-1" />
+                        <p className="text-sm font-semibold text-slate-300">
+                          {allBacklogTasks.length === 0 ? 'No unassigned backlog items' : 'No backlog items match current search filters'}
+                        </p>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto">
+                          {allBacklogTasks.length === 0
+                            ? 'All work items are currently scheduled into active sprints. Click "Add to Backlog" above or unassign items from a sprint to place them here.'
+                            : 'Adjust your search query or filters above to reveal unassigned backlog items.'}
+                        </p>
+                      </div>
+                    ) : (
+                      visibleBacklogTasks.map((task) => {
+                        const parentStory = (projectData.userStories || []).find(s => s.id === task.userStoryId);
+                        const parentFeat = projectData.features.find(f => f.id === task.featureId || f.id === parentStory?.featureId);
+                        const parentEpic = projectData.epics.find(e => e.id === task.epicId || e.id === parentFeat?.epicId || e.id === parentStory?.epicId);
+                        const parentMilestone = projectData.milestones.find(m => m.id === task.milestoneId || m.id === parentFeat?.milestoneId || m.id === parentEpic?.milestoneId || m.id === parentStory?.milestoneId);
+                        const isSelected = selectedBacklogTaskIds.includes(task.id);
+
+                        return (
+                          <div
+                            key={task.id}
+                            className={`p-3 sm:px-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors ${
+                              isSelected ? 'bg-indigo-950/30' : ''
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBacklogTaskIds(prev => [...prev, task.id]);
+                                  } else {
+                                    setSelectedBacklogTaskIds(prev => prev.filter(id => id !== task.id));
+                                  }
+                                }}
+                                className="mt-1 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0 cursor-pointer shrink-0"
+                              />
+                              <div className="mt-0.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                                {task.type === 'bug' ? <Bug className="w-4 h-4 text-rose-400" /> : <CheckSquare className="w-4 h-4 text-amber-400" />}
+                              </div>
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenTaskModal(task)}
+                                    className="font-bold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left break-words line-clamp-2 md:line-clamp-1 cursor-pointer"
+                                  >
+                                    {task.title}
+                                  </button>
+                                  {task.type === 'bug' && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                                      Bug
+                                    </span>
+                                  )}
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                    task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                                    task.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' :
+                                    task.priority === 'normal' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+                                    'bg-slate-800 text-slate-400 border-slate-700'
+                                  }`}>
+                                    {task.priority}
+                                  </span>
+                                </div>
+
+                                {/* Hierarchy breadcrumbs */}
+                                <div className="flex items-center gap-1 text-[11px] text-slate-500 flex-wrap">
+                                  {parentMilestone && (
+                                    <span className="inline-flex items-center gap-1 text-amber-400/80 max-w-[200px] truncate" title={`Milestone: ${parentMilestone.title}`}>
+                                      <Flag className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{parentMilestone.title}</span>
+                                    </span>
+                                  )}
+                                  {parentEpic && (
+                                    <span className="inline-flex items-center gap-1 text-purple-400/80 max-w-[200px] truncate" title={`Epic: ${parentEpic.title}`}>
+                                      <span className="text-slate-600 mr-0.5">/</span>
+                                      <Box className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{parentEpic.title}</span>
+                                    </span>
+                                  )}
+                                  {parentFeat && (
+                                    <span className="inline-flex items-center gap-1 text-blue-400/80 max-w-[200px] truncate" title={`Feature: ${parentFeat.title}`}>
+                                      <span className="text-slate-600 mr-0.5">/</span>
+                                      <FolderGit2 className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{parentFeat.title}</span>
+                                    </span>
+                                  )}
+                                  {parentStory && (
+                                    <span className="inline-flex items-center gap-1 text-emerald-400/80 max-w-[200px] truncate" title={`Story: ${parentStory.title}`}>
+                                      <span className="text-slate-600 mr-0.5">/</span>
+                                      <BookOpen className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{parentStory.title}</span>
+                                    </span>
+                                  )}
+                                  {!parentMilestone && !parentEpic && !parentFeat && !parentStory && (
+                                    <span className="text-slate-500 italic">Standalone Work Item</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Right side controls: Assign to Sprint dropdown, effort, status & actions */}
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap justify-between sm:justify-end mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/40">
+                              <div className="flex items-center gap-2 text-xs">
+                                {task.estimatedHours && (
+                                  <span className="font-mono text-[11px] text-slate-400 bg-slate-950 px-2 py-1 rounded-md border border-slate-800 shrink-0">
+                                    {task.estimatedHours}h
+                                  </span>
+                                )}
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
+                                  {task.status.replace('_', ' ')}
+                                </span>
+                              </div>
+
+                              {/* Interactive Sprint Assignment Dropdown */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <select
+                                  value=""
+                                  onChange={async (e) => {
+                                    const targetSprintId = e.target.value;
+                                    if (targetSprintId) {
+                                      await assignTaskToSprint(task.id, targetSprintId);
+                                      const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
+                                      showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
+                                    }
+                                  }}
+                                  className="bg-purple-950/40 hover:bg-purple-950/70 border border-purple-500/30 hover:border-purple-400 text-purple-300 text-xs font-semibold px-2.5 py-1 rounded-lg outline-none cursor-pointer transition-all shadow-xs max-w-[150px] sm:max-w-none truncate"
+                                  title="Assign this backlog item to a sprint"
+                                >
+                                  <option value="" disabled>⚡ Move to Sprint ▾</option>
+                                  {(projectData.sprints || []).map(sp => (
+                                    <option key={sp.id} value={sp.id}>
+                                      {sp.name} {sp.status === 'active' ? '(Active)' : ''}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenTaskModal(task)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                  title="Edit Work Item Details"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => deleteTask(task.id)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
+                                  title="Delete Work Item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       );
       })()}
@@ -2840,6 +3444,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     const subtasks = getSubtasksForTask(task.id);
                     const completedSub = subtasks.filter(st => st.completed).length;
                     const isCardTarget = dragOverTargetId === task.id;
+                    const isCardDragging = draggedItem?.id === task.id;
+                    const isCardDropped = justDroppedId === task.id;
 
                     return (
                       <SwipeableCard
@@ -2856,9 +3462,18 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         showFirstTimeHint={idx === 0}
                         hintStorageKey="pmo_kanban_task_swipe_hint"
                       >
-                        <div
+                        <motion.div
+                          layout="position"
+                          initial={false}
+                          animate={{
+                            scale: isCardDragging ? 0.975 : isCardTarget ? 1.025 : isCardDropped ? [1.04, 0.99, 1] : 1,
+                            opacity: isCardDragging ? 0.55 : 1,
+                            boxShadow: isCardTarget ? '0 8px 24px -4px rgba(99, 102, 241, 0.35)' : 'none'
+                          }}
+                          transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
                           draggable={true}
                           onDragStart={(e) => handleDragStart(e, 'task', task.id)}
+                          onDragEnd={handleDragEnd}
                           onDragOver={(e) => handleDragOver(e, task.id)}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnTask(task.id, e)}
@@ -2942,7 +3557,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
-                        </div>
+                        </motion.div>
                       </SwipeableCard>
                     );
                   })}
@@ -2983,6 +3598,168 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         onClose={() => setIsSprintModalOpen(false)}
         sprintToEdit={editingSprint}
       />
+
+      {/* Quick Change Sprint for Work Item Dialog */}
+      {taskForSprintChange && (
+        <div 
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setTaskForSprintChange(null)}
+        >
+          <div 
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-100">Change Sprint</h3>
+                  <p className="text-xs text-slate-400 truncate max-w-[260px]" title={taskForSprintChange.title}>
+                    {taskForSprintChange.title}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTaskForSprintChange(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+                Select Destination Sprint
+              </div>
+
+              {/* Option: Unassigned / Backlog */}
+              <button
+                type="button"
+                onClick={async () => {
+                  await assignTaskToSprint(taskForSprintChange.id, undefined);
+                  setTaskForSprintChange(null);
+                }}
+                className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                  !taskForSprintChange.sprintId
+                    ? 'bg-indigo-600/15 border-indigo-500/50 text-indigo-200 ring-1 ring-indigo-500/30'
+                    : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/60 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0">
+                    <ListTodo className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-slate-200">No Sprint (Backlog)</div>
+                    <div className="text-[11px] text-slate-500">Unassign work item from all active sprints</div>
+                  </div>
+                </div>
+                {!taskForSprintChange.sprintId && (
+                  <span className="text-xs font-bold text-indigo-400 flex items-center gap-1 shrink-0 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/30">
+                    <Check className="w-3 h-3" /> Current
+                  </span>
+                )}
+              </button>
+
+              {/* Sprints List */}
+              {(projectData.sprints || []).map(sp => {
+                const isCurrent = taskForSprintChange.sprintId === sp.id;
+                const isSprintActive = sp.status === 'active';
+                const isSprintCompleted = sp.status === 'completed';
+
+                return (
+                  <button
+                    key={sp.id}
+                    type="button"
+                    onClick={async () => {
+                      await assignTaskToSprint(taskForSprintChange.id, sp.id);
+                      setTaskForSprintChange(null);
+                    }}
+                    className={`w-full text-left p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+                      isCurrent
+                        ? 'bg-purple-600/15 border-purple-500/50 text-purple-200 ring-1 ring-purple-500/30'
+                        : 'bg-slate-950/60 border-slate-800/80 hover:bg-slate-800/60 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${
+                        isSprintActive
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : isSprintCompleted
+                          ? 'bg-slate-800 border-slate-700 text-slate-500'
+                          : 'bg-purple-500/10 border-purple-500/30 text-purple-400'
+                      }`}>
+                        <Layers className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                          <span className="truncate">{sp.name}</span>
+                          {isSprintActive && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                              Active
+                            </span>
+                          )}
+                          {isSprintCompleted && (
+                            <span className="text-[9px] font-medium px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700 shrink-0">
+                              Completed
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          <Calendar className="w-3 h-3 text-slate-500 shrink-0" />
+                          <span>
+                            {sp.startDate && sp.endDate
+                              ? `${sp.startDate} → ${sp.endDate}`
+                              : 'No dates set'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {isCurrent && (
+                      <span className="text-xs font-bold text-purple-400 flex items-center gap-1 shrink-0 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/30">
+                        <Check className="w-3 h-3" /> Current
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+
+              {(projectData.sprints || []).length === 0 && (
+                <div className="p-4 rounded-xl bg-slate-950/40 border border-dashed border-slate-800 text-center text-xs text-slate-400">
+                  No sprints defined yet. Create your first sprint below.
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTaskForSprintChange(null);
+                  setEditingSprint(undefined);
+                  setIsSprintModalOpen(true);
+                }}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-indigo-500/10 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Create New Sprint</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setTaskForSprintChange(null)}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project Manager Status Completion Thresholds Modal */}
       {showStatusConfigModal && (
@@ -3092,19 +3869,40 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     const subtasks = getSubtasksForTask(task.id);
     const predecessors = getTaskPredecessors(task, projectData.tasks);
     const isDragTarget = dragOverTargetId === task.id;
+    const isDraggingThis = draggedItem?.id === task.id;
+    const isJustDropped = justDroppedId === task.id;
     const taskEff = getTaskEffectiveValues(task, subtasks, projectData.stakeholders, projectData.statusPercentages);
 
     return (
       <div
         key={task.id}
-        className="group"
+        className="group relative"
         onDragOver={(e) => handleDragOver(e, task.id)}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDropOnTask(task.id, e)}
       >
-        <div
+        <motion.div
+          layout="position"
+          initial={false}
+          animate={{
+            scale: isDraggingThis ? 0.985 : isDragTarget ? 1.015 : isJustDropped ? [1.035, 0.99, 1] : 1,
+            y: isDragTarget ? 2 : 0,
+            opacity: isDraggingThis ? 0.55 : 1,
+            boxShadow: isDragTarget
+              ? '0 6px 20px -2px rgba(99, 102, 241, 0.25)'
+              : isJustDropped
+              ? '0 0 0 2px rgba(99, 102, 241, 0.5)'
+              : '0 0 0 0px transparent'
+          }}
+          transition={{
+            type: 'spring',
+            stiffness: 450,
+            damping: 28,
+            mass: 0.8
+          }}
           draggable={true}
           onDragStart={(e) => handleDragStart(e, 'task', task.id)}
+          onDragEnd={handleDragEnd}
           className={`flex items-center justify-between py-2 px-4 border-b border-slate-200/80 dark:border-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/40 transition-colors group ${
             isDragTarget ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-400' : ''
           }`}
@@ -3172,18 +3970,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   const spName = sp?.name || 'Sprint';
                   return (
                     <span
-                      className="bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 font-medium px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 max-w-[110px] cursor-pointer hover:bg-purple-500/20 transition-colors"
-                      title={`Sprint: ${spName} (Click to manage)`}
+                      className="bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 hover:border-purple-400 font-medium px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1.5 shrink-0 max-w-[130px] cursor-pointer hover:bg-purple-500/25 active:scale-95 transition-all shadow-2xs group/sprint"
+                      title={`Sprint: ${spName} (Click to change sprint)`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (sp) {
-                          setEditingSprint(sp);
-                          setIsSprintModalOpen(true);
-                        }
+                        setTaskForSprintChange(task);
                       }}
                     >
-                      <Layers className="w-3 h-3 text-purple-400 shrink-0" />
+                      <Layers className="w-3 h-3 text-purple-400 shrink-0 group-hover/sprint:scale-110 transition-transform" />
                       <span className="truncate">{spName}</span>
+                      <ArrowLeftRight className="w-2.5 h-2.5 text-purple-400/70 shrink-0 ml-0.5 group-hover/sprint:text-purple-200 transition-colors" />
                     </span>
                   );
                 })()}
@@ -3393,42 +4189,69 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Subtasks Container & Inline Subtask Creation */}
         {(isExpanded || activeInlineTaskId === task.id) && (
           <div className="pl-12 bg-slate-50/50 dark:bg-slate-950/40 border-b border-slate-200/80 dark:border-slate-800/60 divide-y divide-slate-200/60 dark:divide-slate-800/40">
-            {subtasks.map((st) => (
-              <div key={st.id} className="flex items-center justify-between py-1.5 px-3 text-xs">
-                <div className="flex items-center gap-2 flex-1">
-                  <input
-                    type="checkbox"
-                    checked={st.completed}
-                    onChange={(e) => saveSubtask({ ...st, completed: e.target.checked })}
-                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span className={`text-slate-700 dark:text-slate-300 ${st.completed ? 'line-through text-slate-400' : ''}`}>
-                    {st.title}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 font-mono text-[11px] text-slate-500">
-                  <select
-                    value="subtask"
-                    onChange={(e) => handleConvertItemType(e.target.value as any, { id: st.id, type: 'subtask', parentTaskId: task.id })}
-                    className="bg-slate-950 text-amber-300 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors"
-                    title="Convert Subtask Type"
-                  >
-                    <option value="milestone">Milestone</option>
-                    <option value="epic">Epic</option>
-                    <option value="feature">Feature</option>
-                    <option value="task">Task</option>
-                    <option value="subtask">Subtask</option>
-                  </select>
-                  <span>{st.estimatedHours}h est</span>
-                  <button onClick={() => deleteSubtask(st.id)} className="hover:text-rose-500">×</button>
-                </div>
-              </div>
-            ))}
+            {subtasks.map((st) => {
+              const isSubDragging = draggedItem?.id === st.id;
+              const isSubDropped = justDroppedId === st.id;
+
+              return (
+                <motion.div
+                  key={st.id}
+                  layout="position"
+                  initial={false}
+                  animate={{
+                    scale: isSubDragging ? 0.97 : isSubDropped ? [1.03, 0.98, 1] : 1,
+                    opacity: isSubDragging ? 0.5 : 1
+                  }}
+                  transition={{ type: 'spring', stiffness: 450, damping: 26 }}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, 'subtask', st.id, task.id)}
+                  onDragEnd={handleDragEnd}
+                  className="flex items-center justify-between py-1.5 px-3 text-xs group/subtask hover:bg-slate-100 dark:hover:bg-slate-900/60 transition-colors"
+                >
+                  <div className="flex items-center gap-2 flex-1">
+                    <div
+                      className="text-slate-400 hover:text-indigo-500 cursor-grab active:cursor-grabbing opacity-0 group-hover/subtask:opacity-100 transition-opacity"
+                      title="Drag subtask to move or promote"
+                    >
+                      <GripVertical className="w-3 h-3" />
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={st.completed}
+                      onChange={(e) => {
+                        saveSubtask({ ...st, completed: e.target.checked });
+                        triggerHaptic('success');
+                      }}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span className={`text-slate-700 dark:text-slate-300 ${st.completed ? 'line-through text-slate-400' : ''}`}>
+                      {st.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 font-mono text-[11px] text-slate-500">
+                    <select
+                      value="subtask"
+                      onChange={(e) => handleConvertItemType(e.target.value as any, { id: st.id, type: 'subtask', parentTaskId: task.id })}
+                      className="bg-slate-950 text-amber-300 border border-amber-500/30 rounded px-1.5 py-0.5 text-[10px] font-semibold outline-none cursor-pointer hover:border-amber-400 transition-colors"
+                      title="Convert Subtask Type"
+                    >
+                      <option value="milestone">Milestone</option>
+                      <option value="epic">Epic</option>
+                      <option value="feature">Feature</option>
+                      <option value="task">Task</option>
+                      <option value="subtask">Subtask</option>
+                    </select>
+                    <span>{st.estimatedHours}h est</span>
+                    <button onClick={() => deleteSubtask(st.id)} className="hover:text-rose-500">×</button>
+                  </div>
+                </motion.div>
+              );
+            })}
 
             {/* Inline Subtask Input Row */}
             <div className="flex items-center gap-2 py-1.5 px-3 text-xs bg-indigo-950/20 border-t border-indigo-500/20">

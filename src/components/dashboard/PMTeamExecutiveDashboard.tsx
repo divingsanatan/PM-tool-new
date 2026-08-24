@@ -739,70 +739,83 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
       {/* 📈 TAB 1: Team Visual Analytics */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
-          {/* Sub-Tabs for Analytics */}
+          {/* Sub-Tabs for Analytics with Responsive Scrolling and Single-line Pills */}
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-1.5 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
-              <button
-                onClick={() => setActiveAnalyticsView('workload')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeAnalyticsView === 'workload'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Workload &amp; Capacity
-              </button>
-              <button
-                onClick={() => setActiveAnalyticsView('radar')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeAnalyticsView === 'radar'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                360° Team Radar
-              </button>
-              <button
-                onClick={() => setActiveAnalyticsView('hours')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeAnalyticsView === 'hours'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Effort &amp; Hours Log
-              </button>
-              <button
-                onClick={() => setActiveAnalyticsView('status')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeAnalyticsView === 'status'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                Task Status Breakdown
-              </button>
-              <button
-                onClick={() => setActiveAnalyticsView('financials')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                  activeAnalyticsView === 'financials'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                EVM Capital ($k)
-              </button>
-              <button
-                onClick={() => setActiveAnalyticsView('forecast')}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
-                  activeAnalyticsView === 'forecast'
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Calendar className="w-3.5 h-3.5 text-indigo-400" />
-                Forecast Dates
-              </button>
+            <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-0.5">
+              <div className="inline-flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800/90 shadow-inner min-w-full sm:min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('workload')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'workload'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5 shrink-0" />
+                  <span>Workload &amp; Capacity</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('radar')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'radar'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <Target className="w-3.5 h-3.5 shrink-0" />
+                  <span>360° Team Radar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('hours')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'hours'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Effort &amp; Hours Log</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('status')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'status'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <PieChartIcon className="w-3.5 h-3.5 shrink-0" />
+                  <span>Task Status Breakdown</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('financials')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'financials'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                  <span>EVM Capital ($k)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAnalyticsView('forecast')}
+                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
+                    activeAnalyticsView === 'forecast'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+                  <span>Forecast Dates</span>
+                </button>
+              </div>
             </div>
           </div>
 

@@ -19,6 +19,7 @@ import {
   Bookmark,
   Layers,
   Bug,
+  FolderGit2,
   Sparkles,
   CheckCircle2,
   GitPullRequest,
@@ -64,13 +65,23 @@ interface TaskModalProps {
   onClose: () => void;
   taskToEdit?: Task | null;
   defaultStatus?: TaskStatus;
+  initialParentStoryId?: string;
+  initialParentFeatureId?: string;
+  initialParentEpicId?: string;
+  initialParentMilestoneId?: string;
+  initialSprintId?: string;
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
   taskToEdit,
-  defaultStatus
+  defaultStatus,
+  initialParentStoryId,
+  initialParentFeatureId,
+  initialParentEpicId,
+  initialParentMilestoneId,
+  initialSprintId
 }) => {
   const { projectData, saveTask, deleteTask, saveSubtask, currentUser, leaves } = useProject();
 
@@ -108,6 +119,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<TaskStatus>(defaultStatus || 'todo');
   const [priority, setPriority] = useState<Priority>('normal');
+  const [storyId, setStoryId] = useState('');
   const [epicId, setEpicId] = useState('');
   const [featureId, setFeatureId] = useState('');
   const [milestoneId, setMilestoneId] = useState('');
@@ -219,6 +231,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDescription(taskToEdit.description || '');
       setStatus(taskToEdit.status);
       setPriority(taskToEdit.priority);
+      setStoryId(taskToEdit.storyId || taskToEdit.userStoryId || '');
       setEpicId(taskToEdit.epicId || '');
       setFeatureId(taskToEdit.featureId || '');
       setMilestoneId(taskToEdit.milestoneId || '');
@@ -266,18 +279,30 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setStatus(defaultStatus || 'todo');
       setPriority('normal');
       setChangeRequestId('');
-      const firstFeat = projectData.features[0];
-      if (firstFeat) {
-        setFeatureId(firstFeat.id);
-        const parentEp = (projectData.epics || []).find(e => e.id === firstFeat.epicId);
-        setEpicId(firstFeat.epicId || '');
-        setMilestoneId(firstFeat.milestoneId || parentEp?.milestoneId || '');
+      const targetStoryId = initialParentStoryId || '';
+      setStoryId(targetStoryId);
+      if (targetStoryId) {
+        const targetStory = (projectData.userStories || []).find(s => s.id === targetStoryId);
+        if (targetStory) {
+          setFeatureId(targetStory.featureId || initialParentFeatureId || '');
+          setEpicId(targetStory.epicId || initialParentEpicId || '');
+          setMilestoneId(targetStory.milestoneId || initialParentMilestoneId || '');
+          if (targetStory.sprintId && !initialSprintId) setSprintId(targetStory.sprintId);
+        }
       } else {
-        setFeatureId('');
-        setEpicId('');
-        setMilestoneId('');
+        const targetFeatId = initialParentFeatureId || '';
+        setFeatureId(targetFeatId);
+        if (targetFeatId) {
+          const targetFeat = projectData.features.find(f => f.id === targetFeatId);
+          const parentEp = targetFeat?.epicId ? (projectData.epics || []).find(e => e.id === targetFeat.epicId) : undefined;
+          setEpicId(targetFeat?.epicId || initialParentEpicId || '');
+          setMilestoneId(targetFeat?.milestoneId || parentEp?.milestoneId || initialParentMilestoneId || '');
+        } else {
+          setEpicId(initialParentEpicId || '');
+          setMilestoneId(initialParentMilestoneId || '');
+        }
       }
-      setSprintId(projectData.sprints && projectData.sprints[0] ? projectData.sprints[0].id : '');
+      setSprintId(initialSprintId || '');
       setAssigneeIds([projectData.stakeholders[0]?.id || '']);
       setResponsibleIds([]);
       setAccountableIds([]);
@@ -317,7 +342,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, title, description, status, priority, epicId, featureId, milestoneId, sprintId, assigneeIds, startDate, dueDate, estimatedHours, actualHours, subtasksList, acceptanceCriteria, dependencies]);
+  }, [isOpen, title, description, status, priority, storyId, epicId, featureId, milestoneId, sprintId, assigneeIds, startDate, dueDate, estimatedHours, actualHours, subtasksList, acceptanceCriteria, dependencies]);
+
+  // Handle automatic hierarchy filling when story is selected
+  const handleStorySelect = (selectedStoryId: string) => {
+    setStoryId(selectedStoryId);
+    if (selectedStoryId) {
+      const story = (projectData.userStories || []).find(s => s.id === selectedStoryId);
+      if (story) {
+        if (story.featureId) {
+          setFeatureId(story.featureId);
+          const feat = projectData.features.find(f => f.id === story.featureId);
+          if (feat?.epicId) setEpicId(feat.epicId);
+          if (feat?.milestoneId) setMilestoneId(feat.milestoneId);
+        }
+        if (story.epicId) setEpicId(story.epicId);
+        if (story.milestoneId) setMilestoneId(story.milestoneId);
+        if (story.sprintId) setSprintId(story.sprintId);
+      }
+    }
+  };
 
   // Handle automatic hierarchy filling when feature is selected
   const handleFeatureSelect = (selectedFeatId: string) => {
@@ -356,9 +400,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   // Find selected CR details for validation display
   const selectedTaskCR = (projectData.changeRequests || []).find(cr => cr.id === changeRequestId);
 
-  // Parent feature/epic title for breadcrumbs & subtask line
-  const parentFeature = projectData.features.find(f => f.id === featureId);
-  const parentEpic = (projectData.epics || []).find(e => e.id === epicId);
+  // Parent user story, feature, epic title for breadcrumbs & subtask line
+  const parentStory = (projectData.userStories || []).find(s => s.id === storyId);
+  const parentFeature = projectData.features.find(f => f.id === (featureId || parentStory?.featureId));
+  const parentEpic = (projectData.epics || []).find(e => e.id === (epicId || parentFeature?.epicId || parentStory?.epicId));
   const parentSprint = (projectData.sprints || []).find(s => s.id === sprintId);
 
   if (!isOpen) return null;
@@ -379,6 +424,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       description,
       status,
       priority,
+      storyId: storyId || undefined,
+      userStoryId: storyId || undefined,
       epicId: epicId || undefined,
       featureId: featureId || undefined,
       milestoneId: milestoneId || undefined,
@@ -667,13 +714,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               </div>
 
-              {parentFeature && (
-                <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                  <span>Subtask of</span>
-                  <span className="font-semibold text-slate-300 flex items-center gap-1">
-                    <Circle className="w-3 h-3 text-indigo-400" />
-                    {parentFeature.title}
-                  </span>
+              {(parentStory || parentFeature) && (
+                <div className="text-xs text-slate-400 flex items-center gap-1.5 flex-wrap">
+                  <span>Part of</span>
+                  {parentStory ? (
+                    <span className="font-semibold text-emerald-300 flex items-center gap-1">
+                      <Bookmark className="w-3 h-3 text-emerald-400" />
+                      {parentStory.title}
+                    </span>
+                  ) : parentFeature ? (
+                    <span className="font-semibold text-blue-300 flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-blue-400" />
+                      {parentFeature.title}
+                    </span>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -737,19 +791,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             </div>
 
-            {/* ================= CLICKUP KEY-VALUE PROPERTY GRID (Matching Screenshot 2) ================= */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 bg-[#181922] p-4 rounded-2xl border border-slate-800/80 text-xs">
+            {/* ================= CLICKUP KEY-VALUE PROPERTY GRID ================= */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3.5 gap-x-6 bg-[#181922] p-3.5 sm:p-4 rounded-2xl border border-slate-800/80 text-xs">
               
               {/* Status Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
                   <Circle className="w-3.5 h-3.5 text-slate-500" /> Status
                 </span>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-0">
                   <select
                     value={status}
                     onChange={(e) => handleStatusChange(e.target.value as TaskStatus)}
-                    className="bg-indigo-600/20 text-indigo-200 border border-indigo-500/40 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:bg-indigo-600/30 transition-all uppercase"
+                    className="w-full min-w-0 bg-indigo-600/20 text-indigo-200 border border-indigo-500/40 rounded-lg px-2.5 py-1 text-xs font-bold outline-none cursor-pointer hover:bg-indigo-600/30 transition-all uppercase truncate"
                   >
                     <option value="todo" className="bg-slate-900 text-slate-200">TO DO</option>
                     <option value="in_progress" className="bg-slate-900 text-indigo-200">IN PROGRESS</option>
@@ -762,7 +816,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleStatusChange(status === 'done' ? 'todo' : 'done')}
-                    className={`p-1 rounded-md border transition-all ${
+                    className={`p-1 rounded-md border shrink-0 transition-all cursor-pointer ${
                       status === 'done' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                     }`}
                     title="Toggle completed"
@@ -772,31 +826,140 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               </div>
 
-              {/* Assignees Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+              {/* Priority Row */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+                  <Flag className="w-3.5 h-3.5 text-slate-500" /> Priority
+                </span>
+                <div className="flex-1 min-w-0">
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as Priority)}
+                    className={`w-full min-w-0 border rounded-lg px-2.5 py-1 text-xs font-semibold outline-none cursor-pointer truncate ${
+                      priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                      priority === 'high' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
+                      priority === 'normal' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
+                      'bg-slate-800 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    <option value="urgent" className="bg-slate-900 text-rose-300">🚨 Urgent</option>
+                    <option value="high" className="bg-slate-900 text-amber-300">⚡ High</option>
+                    <option value="normal" className="bg-slate-900 text-indigo-300">🔹 Normal</option>
+                    <option value="low" className="bg-slate-900 text-slate-400">◽ Low</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Sprint Assignment Row */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+                  <Layers className="w-3.5 h-3.5 text-purple-400" /> Sprint
+                </span>
+                <div className="flex-1 min-w-0">
+                  <select
+                    value={sprintId}
+                    onChange={(e) => setSprintId(e.target.value)}
+                    className="w-full min-w-0 bg-slate-900 border border-purple-500/30 text-purple-200 rounded-lg px-2.5 py-1 text-xs font-medium outline-none cursor-pointer hover:border-purple-400 truncate"
+                  >
+                    <option value="" className="bg-slate-900 text-slate-300">📦 No Sprint (Backlog)</option>
+                    {(projectData.sprints || []).map(sp => (
+                      <option key={sp.id} value={sp.id} className="bg-slate-900 text-purple-200">
+                        ⚡ {sp.name} {sp.status === 'active' ? '(Active)' : `(${sp.status})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Parent User Story Alignment Row */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+                  <Bookmark className="w-3.5 h-3.5 text-emerald-400" /> Story
+                </span>
+                <div className="flex-1 min-w-0 flex items-center gap-1">
+                  <select
+                    value={storyId}
+                    onChange={(e) => handleStorySelect(e.target.value)}
+                    className="w-full min-w-0 bg-slate-900 border border-emerald-500/30 text-emerald-200 rounded-lg px-2.5 py-1 text-xs font-medium outline-none cursor-pointer hover:border-emerald-400 truncate"
+                  >
+                    <option value="" className="bg-slate-900 text-slate-300">-- No Parent Story --</option>
+                    {(projectData.userStories || []).map(s => {
+                      const feat = projectData.features.find(f => f.id === s.featureId);
+                      return (
+                        <option key={s.id} value={s.id} className="bg-slate-900 text-emerald-200">
+                          {s.title} {feat ? `[${feat.title}]` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => openQuickCreate('userStory')}
+                    className="p-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0"
+                    title="Quick create User Story"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Parent Feature Alignment Row */}
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+                  <FolderGit2 className="w-3.5 h-3.5 text-blue-400" /> Feature
+                </span>
+                <div className="flex-1 min-w-0 flex items-center gap-1">
+                  <select
+                    value={featureId}
+                    onChange={(e) => handleFeatureSelect(e.target.value)}
+                    className="w-full min-w-0 bg-slate-900 border border-blue-500/30 text-blue-200 rounded-lg px-2.5 py-1 text-xs font-medium outline-none cursor-pointer hover:border-blue-400 truncate"
+                  >
+                    <option value="" className="bg-slate-900 text-slate-300">-- Standalone / Direct --</option>
+                    {(projectData.features || []).map(f => {
+                      const ep = (projectData.epics || []).find(e => e.id === f.epicId);
+                      return (
+                        <option key={f.id} value={f.id} className="bg-slate-900 text-blue-200">
+                          {f.title} {ep ? `(${ep.title})` : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => openQuickCreate('feature')}
+                    className="p-1 rounded-md bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0"
+                    title="Quick create Feature"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Assignees Row (Spans full width when multiple members assigned) */}
+              <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 pt-1 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
                   <Users className="w-3.5 h-3.5 text-slate-500" /> Assignees
                 </span>
-                <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 flex-wrap min-w-0 flex-1">
                   {assigneeIds.map(stkId => {
                     const stk = projectData.stakeholders.find(s => s.id === stkId);
                     if (!stk) return null;
                     return (
                       <span
                         key={stkId}
-                        className="inline-flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full text-slate-200 text-xs font-medium shrink-0"
+                        className="inline-flex items-center gap-1.5 bg-slate-800 border border-slate-700 px-2 py-0.5 rounded-full text-slate-200 text-xs font-medium shrink-0 max-w-full"
                       >
-                        <span className="w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-bold text-white flex items-center justify-center uppercase">
+                        <span className="w-4 h-4 rounded-full bg-indigo-600 text-[9px] font-bold text-white flex items-center justify-center uppercase shrink-0">
                           {stk.name.slice(0, 2)}
                         </span>
-                        <span>{stk.name}</span>
+                        <span className="truncate max-w-[140px] sm:max-w-none">{stk.name}</span>
                       </span>
                     );
                   })}
                   <div className="relative group">
                     <button
                       type="button"
-                      className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                      className="p-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
                       title="Add assignee"
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -808,9 +971,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             type="checkbox"
                             checked={assigneeIds.includes(s.id)}
                             onChange={() => toggleAssignee(s.id)}
-                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                            className="rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                           />
-                          <span>{s.name}</span>
+                          <span className="truncate">{s.name}</span>
                         </label>
                       ))}
                     </div>
@@ -818,31 +981,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               </div>
 
-              {/* Dates Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+              {/* Dates Row (Spans full width so date pickers never get cut off or overflow) */}
+              <div className="col-span-1 md:col-span-2 flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 pt-1 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
                   <Calendar className="w-3.5 h-3.5 text-slate-500" /> Dates
                 </span>
-                <div className="flex items-center gap-1.5 text-slate-200">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 outline-none"
-                  />
-                  <span className="text-slate-500 font-mono">→</span>
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 outline-none"
-                  />
+                <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1 min-w-0 max-w-full">
+                    <span className="text-[11px] text-slate-400 shrink-0">Start:</span>
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer min-w-0 max-w-[130px] sm:max-w-none"
+                    />
+                  </div>
+                  <span className="text-slate-500 font-mono shrink-0">→</span>
+                  <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1 min-w-0 max-w-full">
+                    <span className="text-[11px] text-slate-400 shrink-0">Due:</span>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="bg-transparent text-xs text-slate-200 outline-none cursor-pointer min-w-0 max-w-[130px] sm:max-w-none"
+                    />
+                  </div>
                 </div>
               </div>
 
               {/* Leave Conflict Warning Banner */}
               {leaveConflict.hasConflict && (
-                <div className="col-span-1 sm:col-span-2 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
+                <div className="col-span-1 md:col-span-2 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
                   <div className="min-w-0">
                     <span className="font-bold">Availability Conflict: </span>
@@ -851,55 +1020,33 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               )}
 
-              {/* Priority Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
-                  <Flag className="w-3.5 h-3.5 text-slate-500" /> Priority
-                </span>
-                <select
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as Priority)}
-                  className={`border rounded-lg px-2.5 py-1 text-xs font-semibold outline-none cursor-pointer ${
-                    priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
-                    priority === 'high' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                    priority === 'normal' ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40' :
-                    'bg-slate-800 text-slate-300 border-slate-700'
-                  }`}
-                >
-                  <option value="urgent" className="bg-slate-900 text-rose-300">🚨 Urgent</option>
-                  <option value="high" className="bg-slate-900 text-amber-300">⚡ High</option>
-                  <option value="normal" className="bg-slate-900 text-indigo-300">🔹 Normal</option>
-                  <option value="low" className="bg-slate-900 text-slate-400">◽ Low</option>
-                </select>
-              </div>
-
               {/* Time Estimate Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
-                  <Clock className="w-3.5 h-3.5 text-slate-500" /> Time estimate
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-slate-500" /> Estimate
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
                   <input
                     type="number"
                     min="0"
                     value={estimatedHours}
                     onChange={(e) => setEstimatedHours(Number(e.target.value))}
-                    className="w-16 bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs font-mono text-slate-200 outline-none"
+                    className="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500 shrink-0"
                   />
-                  <span className="text-slate-500">hours</span>
+                  <span className="text-slate-500 text-xs shrink-0">hours</span>
                 </div>
               </div>
 
               {/* Track Time Stopwatch Row */}
-              <div className="flex items-center gap-3">
-                <span className="w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <span className="w-20 sm:w-24 text-slate-400 font-medium flex items-center gap-1.5 shrink-0">
                   <Zap className="w-3.5 h-3.5 text-amber-500" /> Track time
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
                   <button
                     type="button"
                     onClick={handleToggleTimer}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
                       isTimerRunning
                         ? 'bg-rose-600 text-white animate-pulse'
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
@@ -908,12 +1055,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     {isTimerRunning ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
                     <span>{isTimerRunning ? formatTimerTime(timerSeconds) : 'Start Timer'}</span>
                   </button>
-                  <span className="text-slate-400 font-mono text-[11px]">Logged: {Math.round(actualHours * 100) / 100}h</span>
+                  <span className="text-slate-400 font-mono text-[11px] shrink-0">Logged: {Math.round(actualHours * 100) / 100}h</span>
                 </div>
               </div>
 
               {/* Linked Change Request Row (Optional) */}
-              <div className="col-span-1 sm:col-span-2 pt-2 border-t border-slate-800/80 space-y-1.5">
+              <div className="col-span-1 md:col-span-2 pt-2 border-t border-slate-800/80 space-y-1.5 min-w-0">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300 font-semibold text-xs flex items-center gap-1.5">
                     <GitPullRequest className="w-3.5 h-3.5 text-indigo-400" /> Linked Change Request <span className="text-slate-500 font-normal text-[10px]">(Optional)</span>
@@ -936,7 +1083,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <select
                   value={changeRequestId}
                   onChange={(e) => setChangeRequestId(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500"
+                  className="w-full min-w-0 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 truncate"
                 >
                   <option value="">-- No Linked Change Request (Optional) --</option>
                   {(projectData.changeRequests || []).map((cr) => (
@@ -955,14 +1102,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
 
               {/* RACI Matrix Row inside Work Item */}
-              <div className="col-span-1 sm:col-span-2 pt-2 border-t border-slate-800/80">
+              <div className="col-span-1 md:col-span-2 pt-2 border-t border-slate-800/80 min-w-0">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-slate-300 font-semibold text-xs flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" /> RACI Responsibility Matrix
                   </span>
                   <span className="text-[10px] text-slate-500">Click role badges to assign stakeholders</span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {/* Responsible (R) */}
                   <div className="p-2 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-1">
                     <div className="flex items-center justify-between text-[11px]">
@@ -1117,12 +1264,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowSubtaskSection(!showSubtaskSection)}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left"
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left min-w-0"
                 >
-                  <Plus className="w-4 h-4 text-indigo-400" />
-                  <span>Add subtask</span>
+                  <Plus className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span className="truncate">Add subtask</span>
                   {subtasksList.length > 0 && (
-                    <span className="ml-auto text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                    <span className="ml-auto text-[10px] font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded shrink-0">
                       {subtasksList.filter(s => s.completed).length}/{subtasksList.length}
                     </span>
                   )}
@@ -1132,12 +1279,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowDepSection(!showDepSection)}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left"
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left min-w-0"
                 >
-                  <Link2 className="w-4 h-4 text-purple-400" />
-                  <span>Relate items or add dependencies</span>
+                  <Link2 className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span className="truncate">Dependencies & Relations</span>
                   {dependencies.length > 0 && (
-                    <span className="ml-auto text-[10px] font-mono text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded">
+                    <span className="ml-auto text-[10px] font-mono text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded shrink-0">
                       {dependencies.length}
                     </span>
                   )}
@@ -1147,24 +1294,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowAcSection(!showAcSection)}
-                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left"
+                  className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all text-left min-w-0"
                 >
-                  <CheckSquare className="w-4 h-4 text-emerald-400" />
-                  <span>Create checklist / Acceptance criteria</span>
+                  <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">Acceptance criteria</span>
                   {acceptanceCriteria.length > 0 && (
-                    <span className="ml-auto text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                    <span className="ml-auto text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
                       {acceptanceCriteria.length}
                     </span>
                   )}
                 </button>
 
                 {/* Attach File */}
-                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all cursor-pointer text-left">
-                  <Paperclip className="w-4 h-4 text-amber-400" />
-                  <span>Attach file</span>
+                <label className="flex items-center gap-2 p-2.5 rounded-xl bg-[#181922] hover:bg-slate-800/80 border border-slate-800 text-slate-200 font-medium transition-all cursor-pointer text-left min-w-0">
+                  <Paperclip className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Attach file</span>
                   <input type="file" onChange={handleFileUploadSimulated} className="hidden" />
                   {attachedFiles.length > 0 && (
-                    <span className="ml-auto text-[10px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                    <span className="ml-auto text-[10px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
                       {attachedFiles.length}
                     </span>
                   )}

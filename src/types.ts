@@ -38,6 +38,7 @@ export interface Stakeholder {
 }
 
 export type EpicStatus = 'backlog' | 'in_progress' | 'completed';
+export type UserStoryStatus = 'backlog' | 'in_progress' | 'testing' | 'completed';
 
 export type SprintStatus = 'future' | 'active' | 'completed';
 
@@ -73,6 +74,24 @@ export interface Feature {
   priority: Priority;
   targetReleaseDate: string;
   color: string;
+  changeRequestId?: string;
+}
+
+export interface UserStory {
+  id: string;
+  title: string;
+  description: string;
+  featureId?: string;
+  epicId?: string;
+  milestoneId?: string;
+  sprintId?: string;
+  status: UserStoryStatus;
+  priority: Priority;
+  storyPoints?: number;
+  acceptanceCriteria?: AcceptanceCriterion[];
+  assigneeIds?: string[];
+  targetReleaseDate?: string;
+  color?: string;
   changeRequestId?: string;
 }
 
@@ -140,6 +159,8 @@ export interface Task {
   type?: WorkItemType; // 'task' | 'bug', defaults to 'task'
   title: string;
   description?: string;
+  storyId?: string; // Parent User Story ID in Milestone -> Epic -> Feature -> User Story -> Task -> Subtask
+  userStoryId?: string; // alias
   epicId?: string;
   featureId?: string;
   milestoneId?: string;
@@ -236,6 +257,7 @@ export interface ChangeRequest {
   linkedMilestoneId?: string;
   linkedEpicId?: string;
   linkedFeatureId?: string;
+  linkedStoryId?: string;
   linkedRaidId?: string;
   createdBy?: string;
   createdByEmail?: string;
@@ -487,6 +509,7 @@ export interface ProjectData {
   milestones: Milestone[];
   epics: Epic[];
   features: Feature[];
+  userStories?: UserStory[];
   tasks: Task[];
   subtasks: Subtask[];
   sprints?: Sprint[];

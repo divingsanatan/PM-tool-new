@@ -1,4 +1,4 @@
-import { Task, Subtask, Stakeholder, Feature, Milestone, Epic, TaskStatus } from '../types';
+import { Task, Subtask, Stakeholder, Feature, Milestone, Epic, UserStory, TaskStatus } from '../types';
 
 export const DEFAULT_STATUS_PERCENTAGES: Record<TaskStatus, number> = {
   todo: 0,
@@ -42,34 +42,64 @@ export function getTaskAllAssigneeIds(task: Task, subtasks: Subtask[] = []): str
 }
 
 /**
- * Gets all unique assignee/stakeholder IDs for a feature including all child tasks and subtasks
+ * Gets all unique assignee/stakeholder IDs for a user story including its direct assignees, child tasks, and subtasks
  */
-export function getFeatureAllAssigneeIds(
-  featureOrId: Feature | string,
+export function getStoryAllAssigneeIds(
+  storyOrId: UserStory | string,
   tasks: Task[],
   subtasks: Subtask[] = []
 ): string[] {
-  const fId = typeof featureOrId === 'string' ? featureOrId : featureOrId.id;
-  const featureTasks = tasks.filter(t => t.featureId === fId);
-  const ids: string[] = [];
-  featureTasks.forEach(task => {
+  const sId = typeof storyOrId === 'string' ? storyOrId : storyOrId.id;
+  const directAssignees = typeof storyOrId === 'object' && storyOrId.assigneeIds ? storyOrId.assigneeIds : [];
+  const storyTasks = tasks.filter(t => t.storyId === sId || t.userStoryId === sId);
+  const ids: string[] = [...directAssignees];
+  storyTasks.forEach(task => {
     ids.push(...getTaskAllAssigneeIds(task, subtasks));
   });
   return Array.from(new Set(ids));
 }
 
 /**
- * Gets all unique assignee/stakeholder IDs for an epic including all features, child tasks, and subtasks
+ * Gets all unique assignee/stakeholder IDs for a feature including user stories, child tasks, and subtasks
+ */
+export function getFeatureAllAssigneeIds(
+  featureOrId: Feature | string,
+  tasks: Task[],
+  subtasks: Subtask[] = [],
+  userStories: UserStory[] = []
+): string[] {
+  const fId = typeof featureOrId === 'string' ? featureOrId : featureOrId.id;
+  const featureStoryIds = new Set(userStories.filter(s => s.featureId === fId).map(s => s.id));
+  const featureTasks = tasks.filter(t => t.featureId === fId || (t.storyId && featureStoryIds.has(t.storyId)) || (t.userStoryId && featureStoryIds.has(t.userStoryId)));
+  const ids: string[] = [];
+  featureTasks.forEach(task => {
+    ids.push(...getTaskAllAssigneeIds(task, subtasks));
+  });
+  userStories.filter(s => s.featureId === fId).forEach(s => {
+    if (s.assigneeIds) ids.push(...s.assigneeIds);
+  });
+  return Array.from(new Set(ids));
+}
+
+/**
+ * Gets all unique assignee/stakeholder IDs for an epic including all features, user stories, child tasks, and subtasks
  */
 export function getEpicAllAssigneeIds(
   epicOrId: Epic | string,
   features: Feature[] = [],
   tasks: Task[],
-  subtasks: Subtask[] = []
+  subtasks: Subtask[] = [],
+  userStories: UserStory[] = []
 ): string[] {
   const eId = typeof epicOrId === 'string' ? epicOrId : epicOrId.id;
   const epicFeatureIds = new Set(features.filter(f => f.epicId === eId).map(f => f.id));
-  const epicTasks = tasks.filter(t => t.epicId === eId || (t.featureId && epicFeatureIds.has(t.featureId)));
+  const epicStoryIds = new Set(userStories.filter(s => s.epicId === eId || (s.featureId && epicFeatureIds.has(s.featureId))).map(s => s.id));
+  const epicTasks = tasks.filter(
+    t => t.epicId === eId ||
+      (t.featureId && epicFeatureIds.has(t.featureId)) ||
+      (t.storyId && epicStoryIds.has(t.storyId)) ||
+      (t.userStoryId && epicStoryIds.has(t.userStoryId))
+  );
   const ids: string[] = [];
   epicTasks.forEach(task => {
     ids.push(...getTaskAllAssigneeIds(task, subtasks));
@@ -78,25 +108,31 @@ export function getEpicAllAssigneeIds(
 }
 
 /**
- * Gets all unique assignee/stakeholder IDs for a milestone including all epics, features, child tasks, and subtasks
+ * Gets all unique assignee/stakeholder IDs for a milestone including all epics, features, user stories, child tasks, and subtasks
  */
 export function getMilestoneAllAssigneeIds(
   milestoneOrId: Milestone | string,
   epics: Epic[] = [],
   features: Feature[] = [],
   tasks: Task[],
-  subtasks: Subtask[] = []
+  subtasks: Subtask[] = [],
+  userStories: UserStory[] = []
 ): string[] {
   const mId = typeof milestoneOrId === 'string' ? milestoneOrId : milestoneOrId.id;
   const milestoneEpicIds = new Set((epics || []).filter(e => e.milestoneId === mId).map(e => e.id));
   const milestoneFeatureIds = new Set(
     features.filter(f => f.milestoneId === mId || (f.epicId && milestoneEpicIds.has(f.epicId))).map(f => f.id)
   );
+  const milestoneStoryIds = new Set(
+    userStories.filter(s => s.milestoneId === mId || (s.epicId && milestoneEpicIds.has(s.epicId)) || (s.featureId && milestoneFeatureIds.has(s.featureId))).map(s => s.id)
+  );
 
   const milestoneTasks = tasks.filter(
     t => t.milestoneId === mId ||
       (t.epicId && milestoneEpicIds.has(t.epicId)) ||
-      (t.featureId && milestoneFeatureIds.has(t.featureId))
+      (t.featureId && milestoneFeatureIds.has(t.featureId)) ||
+      (t.storyId && milestoneStoryIds.has(t.storyId)) ||
+      (t.userStoryId && milestoneStoryIds.has(t.userStoryId))
   );
 
   const ids: string[] = [];
@@ -292,7 +328,96 @@ export function calculateTimestampActualHours(
 }
 
 /**
- * Computes Epic Effective Values by aggregating its child features and tasks
+ * Computes User Story Effective Values by aggregating its child tasks and subtasks
+ */
+export function getStoryEffectiveValues(
+  storyOrId: UserStory | string,
+  tasks: Task[],
+  subtasks: Subtask[],
+  stakeholders: Stakeholder[],
+  statusPercentages?: Partial<Record<TaskStatus, number>>
+) {
+  const sId = typeof storyOrId === 'string' ? storyOrId : storyOrId.id;
+  const storyTasks = tasks.filter(t => t.storyId === sId || t.userStoryId === sId);
+  const allAssigneeIds = getStoryAllAssigneeIds(storyOrId, tasks, subtasks);
+
+  let totalEstHours = 0;
+  let totalActHours = 0;
+  let totalPlannedCost = 0;
+  let totalActualCost = 0;
+  let sumCompletion = 0;
+
+  storyTasks.forEach(task => {
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
+    totalEstHours += eff.estimatedHours;
+    totalActHours += eff.actualHours;
+    totalPlannedCost += eff.plannedCost;
+    totalActualCost += eff.actualCost;
+    sumCompletion += eff.completionPercent;
+  });
+
+  const completion = storyTasks.length > 0 ? Math.round(sumCompletion / storyTasks.length) : 0;
+
+  return {
+    taskCount: storyTasks.length,
+    totalTasks: storyTasks.length,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
+    plannedCost: totalPlannedCost,
+    actualCost: totalActualCost,
+    completionPercent: completion,
+    assigneeIds: allAssigneeIds
+  };
+}
+
+/**
+ * Computes Feature Effective Values by aggregating its child user stories and tasks
+ */
+export function getFeatureEffectiveValues(
+  featureOrId: Feature | string,
+  tasks: Task[],
+  subtasks: Subtask[],
+  stakeholders: Stakeholder[],
+  statusPercentages?: Partial<Record<TaskStatus, number>>,
+  userStories: UserStory[] = []
+) {
+  const fId = typeof featureOrId === 'string' ? featureOrId : featureOrId.id;
+  const featureStoryIds = new Set(userStories.filter(s => s.featureId === fId).map(s => s.id));
+  const featureTasks = tasks.filter(t => t.featureId === fId || (t.storyId && featureStoryIds.has(t.storyId)) || (t.userStoryId && featureStoryIds.has(t.userStoryId)));
+  const allAssigneeIds = getFeatureAllAssigneeIds(fId, tasks, subtasks, userStories);
+
+  let totalEstHours = 0;
+  let totalActHours = 0;
+  let totalPlannedCost = 0;
+  let totalActualCost = 0;
+  let sumCompletion = 0;
+
+  featureTasks.forEach(task => {
+    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
+    totalEstHours += eff.estimatedHours;
+    totalActHours += eff.actualHours;
+    totalPlannedCost += eff.plannedCost;
+    totalActualCost += eff.actualCost;
+    sumCompletion += eff.completionPercent;
+  });
+
+  const completion = featureTasks.length > 0 ? Math.round(sumCompletion / featureTasks.length) : 0;
+
+  return {
+    taskCount: featureTasks.length,
+    totalTasks: featureTasks.length,
+    storyCount: userStories.filter(s => s.featureId === fId).length,
+    estimatedHours: Math.round(totalEstHours * 100) / 100,
+    actualHours: Math.round(totalActHours * 100) / 100,
+    plannedCost: totalPlannedCost,
+    actualCost: totalActualCost,
+    completionPercent: completion,
+    assigneeIds: allAssigneeIds
+  };
+}
+
+/**
+ * Computes Epic Effective Values by aggregating its child features, user stories, and tasks
  */
 export function getEpicEffectiveValues(
   epicOrId: Epic | string,
@@ -300,12 +425,19 @@ export function getEpicEffectiveValues(
   tasks: Task[],
   subtasks: Subtask[],
   stakeholders: Stakeholder[],
-  statusPercentages?: Partial<Record<TaskStatus, number>>
+  statusPercentages?: Partial<Record<TaskStatus, number>>,
+  userStories: UserStory[] = []
 ) {
   const eId = typeof epicOrId === 'string' ? epicOrId : epicOrId.id;
   const epicFeatureIds = new Set(features.filter(f => f.epicId === eId).map(f => f.id));
-  const epicTasks = tasks.filter(t => t.epicId === eId || (t.featureId && epicFeatureIds.has(t.featureId)));
-  const allAssigneeIds = getEpicAllAssigneeIds(eId, features, tasks, subtasks);
+  const epicStoryIds = new Set(userStories.filter(s => s.epicId === eId || (s.featureId && epicFeatureIds.has(s.featureId))).map(s => s.id));
+  const epicTasks = tasks.filter(
+    t => t.epicId === eId ||
+      (t.featureId && epicFeatureIds.has(t.featureId)) ||
+      (t.storyId && epicStoryIds.has(t.storyId)) ||
+      (t.userStoryId && epicStoryIds.has(t.userStoryId))
+  );
+  const allAssigneeIds = getEpicAllAssigneeIds(eId, features, tasks, subtasks, userStories);
 
   let totalEstHours = 0;
   let totalActHours = 0;
@@ -337,50 +469,7 @@ export function getEpicEffectiveValues(
 }
 
 /**
- * Computes Feature Effective Values by aggregating its child tasks
- */
-export function getFeatureEffectiveValues(
-  featureOrId: Feature | string,
-  tasks: Task[],
-  subtasks: Subtask[],
-  stakeholders: Stakeholder[],
-  statusPercentages?: Partial<Record<TaskStatus, number>>
-) {
-  const fId = typeof featureOrId === 'string' ? featureOrId : featureOrId.id;
-  const featureTasks = tasks.filter(t => t.featureId === fId);
-  const allAssigneeIds = getFeatureAllAssigneeIds(fId, tasks, subtasks);
-
-  let totalEstHours = 0;
-  let totalActHours = 0;
-  let totalPlannedCost = 0;
-  let totalActualCost = 0;
-  let sumCompletion = 0;
-
-  featureTasks.forEach(task => {
-    const eff = getTaskEffectiveValues(task, subtasks, stakeholders, statusPercentages);
-    totalEstHours += eff.estimatedHours;
-    totalActHours += eff.actualHours;
-    totalPlannedCost += eff.plannedCost;
-    totalActualCost += eff.actualCost;
-    sumCompletion += eff.completionPercent;
-  });
-
-  const completion = featureTasks.length > 0 ? Math.round(sumCompletion / featureTasks.length) : 0;
-
-  return {
-    taskCount: featureTasks.length,
-    totalTasks: featureTasks.length,
-    estimatedHours: Math.round(totalEstHours * 100) / 100,
-    actualHours: Math.round(totalActHours * 100) / 100,
-    plannedCost: totalPlannedCost,
-    actualCost: totalActualCost,
-    completionPercent: completion,
-    assigneeIds: allAssigneeIds
-  };
-}
-
-/**
- * Computes Milestone Effective Values by aggregating its child tasks
+ * Computes Milestone Effective Values by aggregating its child epics, features, user stories, and tasks
  */
 export function getMilestoneEffectiveValues(
   milestoneOrId: Milestone | string,
@@ -389,20 +478,26 @@ export function getMilestoneEffectiveValues(
   stakeholders: Stakeholder[],
   epics: Epic[] = [],
   features: Feature[] = [],
-  statusPercentages?: Partial<Record<TaskStatus, number>>
+  statusPercentages?: Partial<Record<TaskStatus, number>>,
+  userStories: UserStory[] = []
 ) {
   const mId = typeof milestoneOrId === 'string' ? milestoneOrId : milestoneOrId.id;
   const milestoneEpicIds = new Set((epics || []).filter(e => e.milestoneId === mId).map(e => e.id));
   const milestoneFeatureIds = new Set(
     features.filter(f => f.milestoneId === mId || (f.epicId && milestoneEpicIds.has(f.epicId))).map(f => f.id)
   );
+  const milestoneStoryIds = new Set(
+    userStories.filter(s => s.milestoneId === mId || (s.epicId && milestoneEpicIds.has(s.epicId)) || (s.featureId && milestoneFeatureIds.has(s.featureId))).map(s => s.id)
+  );
 
   const milestoneTasks = tasks.filter(
     t => t.milestoneId === mId ||
       (t.epicId && milestoneEpicIds.has(t.epicId)) ||
-      (t.featureId && milestoneFeatureIds.has(t.featureId))
+      (t.featureId && milestoneFeatureIds.has(t.featureId)) ||
+      (t.storyId && milestoneStoryIds.has(t.storyId)) ||
+      (t.userStoryId && milestoneStoryIds.has(t.userStoryId))
   );
-  const allAssigneeIds = getMilestoneAllAssigneeIds(mId, epics, features, tasks, subtasks);
+  const allAssigneeIds = getMilestoneAllAssigneeIds(mId, epics, features, tasks, subtasks, userStories);
 
   let totalEstHours = 0;
   let totalActHours = 0;
@@ -529,15 +624,17 @@ export function calculateWbsProjectEndDate(startDate: string, tasks: Task[]): st
 }
 
 /**
- * Calculates start and end dates for a sprint based on assigned tasks and features
+ * Calculates start and end dates for a sprint based on assigned tasks, user stories, and features
  */
 export function calculateSprintDates(
   sprintId: string,
   tasks: Task[] = [],
-  features: Feature[] = []
+  features: Feature[] = [],
+  userStories: UserStory[] = []
 ): { startDate: string; endDate: string } | null {
   const assignedTasks = tasks.filter(t => t.sprintId === sprintId);
   const assignedFeatures = features.filter(f => f.sprintId === sprintId);
+  const assignedStories = userStories.filter(s => s.sprintId === sprintId);
 
   const startDates: string[] = [];
   const endDates: string[] = [];
@@ -551,6 +648,13 @@ export function calculateSprintDates(
     if (f.targetReleaseDate) {
       startDates.push(f.targetReleaseDate);
       endDates.push(f.targetReleaseDate);
+    }
+  });
+
+  assignedStories.forEach(s => {
+    if (s.targetReleaseDate) {
+      startDates.push(s.targetReleaseDate);
+      endDates.push(s.targetReleaseDate);
     }
   });
 

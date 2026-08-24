@@ -8,6 +8,7 @@ import {
   Feature,
   Epic,
   Milestone,
+  UserStory,
   Subtask,
   Sprint,
   EVMMetrics,
@@ -64,6 +65,7 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
   if (!data) return data;
   const tasks = data.tasks || [];
   const features = data.features || [];
+  const userStories = data.userStories || [];
   const subtasks = data.subtasks || [];
   const stakeholders = data.stakeholders || [];
   const sprints = data.sprints || [];
@@ -88,7 +90,7 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
       // If user manually set isAutoDates: false, do not override manually entered dates
       if (sprint.isAutoDates === false) return sprint;
 
-      const calculated = calculateSprintDates(sprint.id, tasks, features);
+      const calculated = calculateSprintDates(sprint.id, tasks, features, userStories);
       if (calculated) {
         if (sprint.startDate !== calculated.startDate || sprint.endDate !== calculated.endDate) {
           sprintsChanged = true;
@@ -104,12 +106,15 @@ function syncProjectCalculatedAttributes(data: ProjectData): ProjectData {
     });
   }
 
-  if (data.budget === finalBudget && data.targetEndDate === computedEndDate && !sprintsChanged && !stakeholdersChanged) {
+  const userStoriesChanged = !data.userStories;
+
+  if (data.budget === finalBudget && data.targetEndDate === computedEndDate && !sprintsChanged && !stakeholdersChanged && !userStoriesChanged) {
     return data;
   }
 
   return {
     ...data,
+    userStories: userStories,
     budget: finalBudget,
     targetEndDate: computedEndDate,
     sprints: updatedSprints,
@@ -250,10 +255,13 @@ interface ProjectContextType {
   deleteEpic: (epicId: string) => Promise<void>;
   saveFeature: (feature: Partial<Feature>) => Promise<void>;
   deleteFeature: (featureId: string) => Promise<void>;
-  saveSprint: (sprint: Partial<Sprint>, assignedTaskIds?: string[], assignedFeatureIds?: string[]) => Promise<void>;
+  saveUserStory: (story: Partial<UserStory>) => Promise<void>;
+  deleteUserStory: (storyId: string) => Promise<void>;
+  saveSprint: (sprint: Partial<Sprint>, assignedTaskIds?: string[], assignedFeatureIds?: string[], assignedStoryIds?: string[]) => Promise<void>;
   deleteSprint: (sprintId: string) => Promise<void>;
   assignTaskToSprint: (taskId: string, sprintId?: string) => Promise<void>;
   assignFeatureToSprint: (featureId: string, sprintId?: string) => Promise<void>;
+  assignStoryToSprint: (storyId: string, sprintId?: string) => Promise<void>;
   saveMilestone: (milestone: Partial<Milestone>) => Promise<void>;
   deleteMilestone: (milestoneId: string) => Promise<void>;
   saveChangeRequest: (cr: Partial<ChangeRequest>) => Promise<void>;
@@ -280,6 +288,7 @@ interface ProjectContextType {
       milestones: Milestone[];
       epics: Epic[];
       features: Feature[];
+      userStories?: UserStory[];
       tasks: Task[];
       subtasks: Subtask[];
       raidItems: RaidItem[];
@@ -1238,13 +1247,24 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const taskId = task.id || 'task-' + Date.now();
     const existingTask = projectData.tasks.find(t => t.id === taskId);
 
+    const hasStoryId = 'storyId' in task || 'userStoryId' in task;
     const hasFeatureId = 'featureId' in task;
     const hasEpicId = 'epicId' in task;
     const hasMilestoneId = 'milestoneId' in task;
 
+    let targetStoryId = hasStoryId ? (task.storyId || task.userStoryId || undefined) : (existingTask?.storyId || existingTask?.userStoryId);
     let targetFeatureId = hasFeatureId ? (task.featureId || undefined) : existingTask?.featureId;
     let targetEpicId = hasEpicId ? (task.epicId || undefined) : existingTask?.epicId;
     let targetMilestoneId = hasMilestoneId ? (task.milestoneId || undefined) : existingTask?.milestoneId;
+
+    if (targetStoryId) {
+      const story = (projectData.userStories || []).find(s => s.id === targetStoryId);
+      if (story) {
+        if (story.featureId) targetFeatureId = story.featureId;
+        if (story.epicId) targetEpicId = story.epicId;
+        if (story.milestoneId) targetMilestoneId = story.milestoneId;
+      }
+    }
 
     if (targetFeatureId) {
       const feat = projectData.features.find(f => f.id === targetFeatureId);
@@ -1263,7 +1283,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     let targetCRId = 'changeRequestId' in task ? (task.changeRequestId || undefined) : existingTask?.changeRequestId;
     if (!targetCRId) {
-      if (targetFeatureId) {
+      if (targetStoryId) {
+        const story = (projectData.userStories || []).find(s => s.id === targetStoryId);
+        if (story?.changeRequestId) targetCRId = story.changeRequestId;
+      }
+      if (!targetCRId && targetFeatureId) {
         const feat = projectData.features.find(f => f.id === targetFeatureId);
         if (feat?.changeRequestId) targetCRId = feat.changeRequestId;
       }
@@ -1284,6 +1308,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       type: task.type || existingTask?.type || 'task',
       title: task.title || existingTask?.title || 'Untitled Task',
       description: task.description !== undefined ? task.description : (existingTask?.description || ''),
+      storyId: targetStoryId,
+      userStoryId: targetStoryId,
       epicId: targetEpicId,
       featureId: targetFeatureId,
       milestoneId: targetMilestoneId,
@@ -1593,7 +1619,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedEpics.push(newEpic);
     }
 
-    // Cascade milestone updates to features and tasks under this epic
+    // Cascade milestone updates to features, stories, and tasks under this epic
     let updatedFeatures = [...projectData.features];
     updatedFeatures = updatedFeatures.map(f => {
       if (f.epicId === newEpic.id) {
@@ -1606,6 +1632,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return f;
     });
 
+    let updatedStories = [...(projectData.userStories || [])];
+    updatedStories = updatedStories.map(s => {
+      let match = false;
+      if (s.epicId === newEpic.id) match = true;
+      if (s.featureId) {
+        const feat = updatedFeatures.find(f => f.id === s.featureId);
+        if (feat && feat.epicId === newEpic.id) match = true;
+      }
+      if (match) {
+        return {
+          ...s,
+          epicId: newEpic.id,
+          milestoneId: newEpic.milestoneId || s.milestoneId,
+          changeRequestId: newEpic.changeRequestId || s.changeRequestId
+        };
+      }
+      return s;
+    });
+
     let updatedTasks = [...projectData.tasks];
     updatedTasks = updatedTasks.map(t => {
       let match = false;
@@ -1613,6 +1658,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (t.featureId) {
         const feat = updatedFeatures.find(f => f.id === t.featureId);
         if (feat && feat.epicId === newEpic.id) match = true;
+      }
+      const tStoryId = t.storyId || t.userStoryId;
+      if (tStoryId) {
+        const story = updatedStories.find(s => s.id === tStoryId);
+        if (story && story.epicId === newEpic.id) match = true;
       }
       if (match) {
         return {
@@ -1629,6 +1679,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       ...projectData,
       epics: updatedEpics,
       features: updatedFeatures,
+      userStories: updatedStories,
       tasks: updatedTasks
     };
     setProjectData(updated);
@@ -1638,8 +1689,9 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const deleteEpic = async (epicId: string) => {
     const updatedEpics = (projectData.epics || []).filter(e => e.id !== epicId);
     const updatedFeatures = projectData.features.map(f => f.epicId === epicId ? { ...f, epicId: undefined } : f);
+    const updatedStories = (projectData.userStories || []).map(s => s.epicId === epicId ? { ...s, epicId: undefined } : s);
     const updatedTasks = projectData.tasks.map(t => t.epicId === epicId ? { ...t, epicId: undefined } : t);
-    const updated = { ...projectData, epics: updatedEpics, features: updatedFeatures, tasks: updatedTasks };
+    const updated = { ...projectData, epics: updatedEpics, features: updatedFeatures, userStories: updatedStories, tasks: updatedTasks };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
   };
@@ -1684,11 +1736,28 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedFeatures.push(newFeature);
     }
 
+    // Cascade updates to child user stories
+    let updatedStories = [...(projectData.userStories || [])];
+    updatedStories = updatedStories.map(s => {
+      if (s.featureId === newFeature.id) {
+        return {
+          ...s,
+          epicId: newFeature.epicId || s.epicId,
+          milestoneId: newFeature.milestoneId || s.milestoneId,
+          changeRequestId: newFeature.changeRequestId || s.changeRequestId
+        };
+      }
+      return s;
+    });
+
     // Cascade updates to child tasks automatically
     const updatedTasks = projectData.tasks.map(t => {
-      if (t.featureId === newFeature.id) {
+      const tStoryId = t.storyId || t.userStoryId;
+      const childOfStory = tStoryId ? updatedStories.some(s => s.id === tStoryId && s.featureId === newFeature.id) : false;
+      if (t.featureId === newFeature.id || childOfStory) {
         return {
           ...t,
+          featureId: newFeature.id,
           epicId: newFeature.epicId || t.epicId,
           milestoneId: newFeature.milestoneId || t.milestoneId,
           changeRequestId: newFeature.changeRequestId || t.changeRequestId
@@ -1697,15 +1766,108 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return t;
     });
 
-    const updated = { ...projectData, features: updatedFeatures, tasks: updatedTasks };
+    const updated = { ...projectData, features: updatedFeatures, userStories: updatedStories, tasks: updatedTasks };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
   };
 
   const deleteFeature = async (featureId: string) => {
     const updatedFeatures = projectData.features.filter(f => f.id !== featureId);
+    const updatedStories = (projectData.userStories || []).map(s => s.featureId === featureId ? { ...s, featureId: undefined } : s);
     const updatedTasks = projectData.tasks.map(t => t.featureId === featureId ? { ...t, featureId: undefined } : t);
-    const updated = { ...projectData, features: updatedFeatures, tasks: updatedTasks };
+    const updated = { ...projectData, features: updatedFeatures, userStories: updatedStories, tasks: updatedTasks };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const saveUserStory = async (story: Partial<UserStory>) => {
+    let resolvedFeatureId = story.featureId;
+    let resolvedEpicId = story.epicId;
+    let resolvedMilestoneId = story.milestoneId;
+
+    if (resolvedFeatureId) {
+      const parentFeat = projectData.features.find(f => f.id === resolvedFeatureId);
+      if (parentFeat) {
+        if (!resolvedEpicId && parentFeat.epicId) resolvedEpicId = parentFeat.epicId;
+        if (!resolvedMilestoneId && parentFeat.milestoneId) resolvedMilestoneId = parentFeat.milestoneId;
+      }
+    }
+    if (resolvedEpicId && !resolvedMilestoneId) {
+      const parentEpic = (projectData.epics || []).find(e => e.id === resolvedEpicId);
+      if (parentEpic?.milestoneId) resolvedMilestoneId = parentEpic.milestoneId;
+    }
+
+    let resolvedCRId = 'changeRequestId' in story ? (story.changeRequestId || undefined) : undefined;
+    if (!resolvedCRId) {
+      if (resolvedFeatureId) {
+        const parentFeat = projectData.features.find(f => f.id === resolvedFeatureId);
+        if (parentFeat?.changeRequestId) resolvedCRId = parentFeat.changeRequestId;
+      }
+      if (!resolvedCRId && resolvedEpicId) {
+        const parentEpic = (projectData.epics || []).find(e => e.id === resolvedEpicId);
+        if (parentEpic?.changeRequestId) resolvedCRId = parentEpic.changeRequestId;
+      }
+      if (!resolvedCRId && resolvedMilestoneId) {
+        const parentMs = projectData.milestones.find(m => m.id === resolvedMilestoneId);
+        if (parentMs?.changeRequestId) resolvedCRId = parentMs.changeRequestId;
+      }
+    }
+
+    const newStory: UserStory = {
+      id: story.id || 'story-' + Date.now(),
+      title: story.title || 'New User Story',
+      description: story.description || '',
+      acceptanceCriteria: Array.isArray(story.acceptanceCriteria) ? story.acceptanceCriteria : [],
+      featureId: resolvedFeatureId,
+      epicId: resolvedEpicId,
+      milestoneId: resolvedMilestoneId,
+      sprintId: story.sprintId,
+      status: story.status || 'in_progress',
+      priority: story.priority || 'normal',
+      storyPoints: story.storyPoints !== undefined ? story.storyPoints : 3,
+      targetReleaseDate: story.targetReleaseDate || new Date().toISOString().split('T')[0],
+      color: story.color || '#10b981',
+      changeRequestId: resolvedCRId
+    };
+
+    const stories = projectData.userStories || [];
+    const existingIdx = stories.findIndex(s => s.id === newStory.id);
+    const updatedStories = [...stories];
+    if (existingIdx >= 0) {
+      updatedStories[existingIdx] = newStory;
+    } else {
+      updatedStories.push(newStory);
+    }
+
+    // Cascade updates to child tasks
+    const updatedTasks = projectData.tasks.map(t => {
+      if (t.storyId === newStory.id || t.userStoryId === newStory.id) {
+        return {
+          ...t,
+          storyId: newStory.id,
+          userStoryId: newStory.id,
+          featureId: newStory.featureId || t.featureId,
+          epicId: newStory.epicId || t.epicId,
+          milestoneId: newStory.milestoneId || t.milestoneId,
+          changeRequestId: newStory.changeRequestId || t.changeRequestId
+        };
+      }
+      return t;
+    });
+
+    const updated = {
+      ...projectData,
+      userStories: updatedStories,
+      tasks: updatedTasks
+    };
+    setProjectData(updated);
+    broadcastLocalTabSync(updated);
+  };
+
+  const deleteUserStory = async (storyId: string) => {
+    const updatedStories = (projectData.userStories || []).filter(s => s.id !== storyId);
+    const updatedTasks = projectData.tasks.map(t => (t.storyId === storyId || t.userStoryId === storyId) ? { ...t, storyId: undefined, userStoryId: undefined } : t);
+    const updated = { ...projectData, userStories: updatedStories, tasks: updatedTasks };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
   };
@@ -1713,7 +1875,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const saveSprint = async (
     sprint: Partial<Sprint>,
     assignedTaskIds?: string[],
-    assignedFeatureIds?: string[]
+    assignedFeatureIds?: string[],
+    assignedStoryIds?: string[]
   ) => {
     setProjectData(prev => {
       const existingSprints = prev.sprints || [];
@@ -1735,10 +1898,45 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         });
       }
 
-      // 2. Update Tasks
+      // 2. Update User Stories
+      let updatedStories = prev.userStories || [];
+      if (assignedStoryIds !== undefined) {
+        updatedStories = updatedStories.map(s => {
+          const isSelected = assignedStoryIds.includes(s.id);
+          if (isSelected && s.sprintId !== sprintId) {
+            return { ...s, sprintId };
+          } else if (!isSelected && s.sprintId === sprintId) {
+            return { ...s, sprintId: undefined };
+          }
+          return s;
+        });
+      } else if (assignedFeatureIds !== undefined) {
+        const selectedFeatureSet = new Set(assignedFeatureIds);
+        updatedStories = updatedStories.map(s => {
+          if (s.featureId && selectedFeatureSet.has(s.featureId)) {
+            return { ...s, sprintId };
+          } else if (s.featureId && !selectedFeatureSet.has(s.featureId) && s.sprintId === sprintId) {
+            return { ...s, sprintId: undefined };
+          }
+          return s;
+        });
+      }
+
+      // 3. Update Tasks
       let updatedTasks = prev.tasks || [];
 
-      if (assignedFeatureIds !== undefined) {
+      if (assignedStoryIds !== undefined) {
+        const selectedStorySet = new Set(assignedStoryIds);
+        updatedTasks = updatedTasks.map(t => {
+          const tStoryId = t.storyId || t.userStoryId;
+          if (tStoryId && selectedStorySet.has(tStoryId)) {
+            return { ...t, sprintId };
+          } else if (tStoryId && !selectedStorySet.has(tStoryId) && t.sprintId === sprintId) {
+            return { ...t, sprintId: undefined };
+          }
+          return t;
+        });
+      } else if (assignedFeatureIds !== undefined) {
         const selectedFeatureSet = new Set(assignedFeatureIds);
         updatedTasks = updatedTasks.map(t => {
           if (t.featureId && selectedFeatureSet.has(t.featureId)) {
@@ -1755,14 +1953,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
           const isSelected = assignedTaskIds.includes(t.id);
           if (isSelected && t.sprintId !== sprintId) {
             return { ...t, sprintId };
-          } else if (!isSelected && t.sprintId === sprintId && !t.featureId) {
+          } else if (!isSelected && t.sprintId === sprintId && !t.featureId && !t.storyId && !t.userStoryId) {
             return { ...t, sprintId: undefined };
           }
           return t;
         });
       }
 
-      const autoCalc = calculateSprintDates(sprintId, updatedTasks, updatedFeatures);
+      const autoCalc = calculateSprintDates(sprintId, updatedTasks, updatedFeatures, updatedStories);
       const defaultStart = prev.startDate || new Date().toISOString().split('T')[0];
       const defaultEnd = prev.targetEndDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
 
@@ -1792,6 +1990,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ...prev,
         sprints: updatedSprints,
         features: updatedFeatures,
+        userStories: updatedStories,
         tasks: updatedTasks,
         activities: [
           {
@@ -1815,12 +2014,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const updatedSprints = (prev.sprints || []).filter(s => s.id !== sprintId);
       const updatedTasks = prev.tasks.map(t => t.sprintId === sprintId ? { ...t, sprintId: undefined } : t);
       const updatedFeatures = prev.features.map(f => f.sprintId === sprintId ? { ...f, sprintId: undefined } : f);
+      const updatedStories = (prev.userStories || []).map(s => s.sprintId === sprintId ? { ...s, sprintId: undefined } : s);
 
       const updated = {
         ...prev,
         sprints: updatedSprints,
         tasks: updatedTasks,
-        features: updatedFeatures
+        features: updatedFeatures,
+        userStories: updatedStories
       };
       broadcastLocalTabSync(updated);
       return updated;
@@ -1839,8 +2040,19 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const assignFeatureToSprint = async (featureId: string, sprintId?: string) => {
     setProjectData(prev => {
       const updatedFeatures = prev.features.map(f => f.id === featureId ? { ...f, sprintId } : f);
+      const updatedStories = (prev.userStories || []).map(s => s.featureId === featureId ? { ...s, sprintId } : s);
       const updatedTasks = prev.tasks.map(t => t.featureId === featureId ? { ...t, sprintId } : t);
-      const updated = { ...prev, features: updatedFeatures, tasks: updatedTasks };
+      const updated = { ...prev, features: updatedFeatures, userStories: updatedStories, tasks: updatedTasks };
+      broadcastLocalTabSync(updated);
+      return updated;
+    });
+  };
+
+  const assignStoryToSprint = async (storyId: string, sprintId?: string) => {
+    setProjectData(prev => {
+      const updatedStories = (prev.userStories || []).map(s => s.id === storyId ? { ...s, sprintId } : s);
+      const updatedTasks = prev.tasks.map(t => (t.storyId === storyId || t.userStoryId === storyId) ? { ...t, sprintId } : t);
+      const updated = { ...prev, userStories: updatedStories, tasks: updatedTasks };
       broadcastLocalTabSync(updated);
       return updated;
     });
@@ -1868,7 +2080,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updatedMilestones.push(newMilestone);
     }
 
-    // Cascade changeRequestId (and milestone updates) to lower hierarchy Epics, Features, Tasks
+    // Cascade changeRequestId (and milestone updates) to lower hierarchy Epics, Features, Stories, Tasks
     const updatedEpics = (projectData.epics || []).map(e => {
       if (e.milestoneId === newMilestone.id) {
         return {
@@ -1890,10 +2102,29 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       return f;
     });
 
+    const updatedStories = (projectData.userStories || []).map(s => {
+      const parentFeat = s.featureId ? updatedFeatures.find(f => f.id === s.featureId) : undefined;
+      const parentEp = s.epicId ? updatedEpics.find(e => e.id === s.epicId) : undefined;
+      if (s.milestoneId === newMilestone.id || parentFeat?.milestoneId === newMilestone.id || parentEp?.milestoneId === newMilestone.id) {
+        return {
+          ...s,
+          changeRequestId: newMilestone.changeRequestId || s.changeRequestId
+        };
+      }
+      return s;
+    });
+
     const updatedTasks = projectData.tasks.map(t => {
+      const tStoryId = t.storyId || t.userStoryId;
+      const parentStory = tStoryId ? updatedStories.find(s => s.id === tStoryId) : undefined;
       const parentFeat = t.featureId ? updatedFeatures.find(f => f.id === t.featureId) : undefined;
       const parentEp = t.epicId ? updatedEpics.find(e => e.id === t.epicId) : undefined;
-      if (t.milestoneId === newMilestone.id || parentFeat?.milestoneId === newMilestone.id || parentEp?.milestoneId === newMilestone.id) {
+      if (
+        t.milestoneId === newMilestone.id ||
+        parentStory?.milestoneId === newMilestone.id ||
+        parentFeat?.milestoneId === newMilestone.id ||
+        parentEp?.milestoneId === newMilestone.id
+      ) {
         return {
           ...t,
           changeRequestId: newMilestone.changeRequestId || t.changeRequestId
@@ -1907,6 +2138,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       milestones: updatedMilestones,
       epics: updatedEpics,
       features: updatedFeatures,
+      userStories: updatedStories,
       tasks: updatedTasks
     };
     setProjectData(updated);
@@ -1917,6 +2149,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updatedMilestones = projectData.milestones.filter(m => m.id !== milestoneId);
     const updatedEpics = (projectData.epics || []).map(e => e.milestoneId === milestoneId ? { ...e, milestoneId: undefined } : e);
     const updatedFeatures = projectData.features.map(f => f.milestoneId === milestoneId ? { ...f, milestoneId: undefined } : f);
+    const updatedStories = (projectData.userStories || []).map(s => s.milestoneId === milestoneId ? { ...s, milestoneId: undefined } : s);
     const updatedTasks = projectData.tasks.map(t => t.milestoneId === milestoneId ? { ...t, milestoneId: undefined } : t);
 
     const updated = {
@@ -1924,6 +2157,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       milestones: updatedMilestones,
       epics: updatedEpics,
       features: updatedFeatures,
+      userStories: updatedStories,
       tasks: updatedTasks
     };
     setProjectData(updated);
@@ -1964,6 +2198,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       milestones: Milestone[];
       epics: Epic[];
       features: Feature[];
+      userStories?: UserStory[];
       tasks: Task[];
       subtasks: Subtask[];
       raidItems: RaidItem[];
@@ -1973,6 +2208,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let updatedMilestones = [...(projectData.milestones || [])];
     let updatedEpics = [...(projectData.epics || [])];
     let updatedFeatures = [...(projectData.features || [])];
+    let updatedStories = [...(projectData.userStories || [])];
     let updatedTasks = [...(projectData.tasks || [])];
     let updatedSubtasks = [...(projectData.subtasks || [])];
     let updatedRaidItems = [...(projectData.raidItems || [])];
@@ -1981,6 +2217,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (parsed.milestones.length > 0) updatedMilestones = parsed.milestones;
       if (parsed.epics.length > 0) updatedEpics = parsed.epics;
       if (parsed.features.length > 0) updatedFeatures = parsed.features;
+      if (parsed.userStories && parsed.userStories.length > 0) updatedStories = parsed.userStories;
       if (parsed.tasks.length > 0) updatedTasks = parsed.tasks;
       if (parsed.subtasks.length > 0) updatedSubtasks = parsed.subtasks;
       if (parsed.raidItems.length > 0) updatedRaidItems = parsed.raidItems;
@@ -2002,6 +2239,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (idx >= 0) updatedFeatures[idx] = { ...updatedFeatures[idx], ...f };
         else updatedFeatures.push(f);
       });
+
+      if (parsed.userStories) {
+        parsed.userStories.forEach(s => {
+          const idx = updatedStories.findIndex(item => item.id === s.id || item.title.toLowerCase() === s.title.toLowerCase());
+          if (idx >= 0) updatedStories[idx] = { ...updatedStories[idx], ...s };
+          else updatedStories.push(s);
+        });
+      }
 
       parsed.tasks.forEach(t => {
         const idx = updatedTasks.findIndex(item => item.id === t.id || item.title.toLowerCase() === t.title.toLowerCase());
@@ -2027,6 +2272,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       milestones: updatedMilestones,
       epics: updatedEpics,
       features: updatedFeatures,
+      userStories: updatedStories,
       tasks: updatedTasks,
       subtasks: updatedSubtasks,
       raidItems: updatedRaidItems
@@ -2037,7 +2283,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     addAuditNote(
       'CSV WBS Data Feed Imported',
-      `Imported WBS dataset (${parsed.tasks.length} tasks, ${parsed.features.length} features, ${parsed.epics.length} epics, ${parsed.milestones.length} milestones) in ${mode} mode.`,
+      `Imported WBS dataset (${parsed.tasks.length} tasks, ${parsed.userStories?.length || 0} user stories, ${parsed.features.length} features, ${parsed.epics.length} epics, ${parsed.milestones.length} milestones) in ${mode} mode.`,
       'wbs'
     );
   };
@@ -2790,10 +3036,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         deleteEpic,
         saveFeature,
         deleteFeature,
+        saveUserStory,
+        deleteUserStory,
         saveSprint,
         deleteSprint,
         assignTaskToSprint,
         assignFeatureToSprint,
+        assignStoryToSprint,
         saveMilestone,
         deleteMilestone,
         saveChangeRequest,
