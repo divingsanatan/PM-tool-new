@@ -92,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({
       // Calculate responsive width and boundary constraints for mobile/desktop
       const dropdownWidth = isMobile
         ? Math.max(280, viewportWidth - 24)
-        : Math.min(Math.max(360, rect.width), viewportWidth - 24);
+        : Math.min(Math.max(360, rect.width), Math.min(540, viewportWidth - 24));
 
       const leftPos = isMobile
         ? 12
@@ -390,8 +390,16 @@ export const Header: React.FC<HeaderProps> = ({
                 className="fixed z-[9999] bg-slate-900/98 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 max-w-[calc(100vw-24px)] box-border"
                 style={{
                   top: `${searchDropdownPos.top}px`,
-                  left: `${searchDropdownPos.left}px`,
-                  width: `${searchDropdownPos.width}px`,
+                  ...(typeof window !== 'undefined' && window.innerWidth < 640
+                    ? {
+                        left: '12px',
+                        right: '12px',
+                        width: 'calc(100vw - 24px)',
+                      }
+                    : {
+                        left: `${searchDropdownPos.left}px`,
+                        width: `${searchDropdownPos.width}px`,
+                      }),
                   maxHeight: 'calc(100vh - 100px)'
                 }}
                 onMouseDown={e => e.preventDefault()} // Keep focus on input when clicking inside dropdown

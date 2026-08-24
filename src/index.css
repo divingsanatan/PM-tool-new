@@ -11,19 +11,40 @@
 }
 
 html,
-body,
-#root {
-  max-width: 100vw;
+body {
+  width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  background-color: #090d16;
 }
 
-html.dark {
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  position: relative;
+  background-color: #090d16;
+}
+
+html.dark,
+html.dark body,
+html.dark #root {
   color-scheme: dark;
-  background-color: #0f0e17;
+  background-color: #090d16 !important;
   color: #f8fafc;
 }
 
-html:not(.dark) {
+html:not(.dark),
+html:not(.dark) body,
+html:not(.dark) #root {
   color-scheme: light;
   background-color: #f8fafc;
   color: #0f172a;
