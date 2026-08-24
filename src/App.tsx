@@ -26,11 +26,19 @@ import { AiReportModal } from './components/modals/AiReportModal';
 import { AiSettingsModal } from './components/modals/AiSettingsModal';
 import { UserAuthModal } from './components/modals/UserAuthModal';
 import { SupabaseModal } from './components/modals/SupabaseModal';
+import { CommandPaletteModal } from './components/modals/CommandPaletteModal';
 import { LoginScreen } from './components/auth/LoginScreen';
 
 function MainLayout() {
   const { projectData, isAuthenticated, currentUser } = useProject();
   const [currentView, setCurrentViewRaw] = useState<ViewMode>('dashboard');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteInitialQuery, setCommandPaletteInitialQuery] = useState('');
+
+  const handleOpenCommandPalette = React.useCallback((initialQuery?: string) => {
+    setCommandPaletteInitialQuery(initialQuery || '');
+    setIsCommandPaletteOpen(true);
+  }, []);
 
   const handleSelectView = React.useCallback((view: ViewMode) => {
     React.startTransition(() => {
@@ -57,6 +65,35 @@ function MainLayout() {
       handleSelectView(isPM ? 'dashboard' : 'member_dashboard');
     }
   }, [isPM, isAdmin, currentView, handleSelectView]);
+
+  // Global Keyboard Shortcuts (Cmd/Ctrl + K or '/')
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen(prev => !prev);
+        return;
+      }
+      
+      // Pressing '/' when not typing in an input / textarea / editable element
+      if (e.key === '/' && !isCommandPaletteOpen) {
+        const target = e.target as HTMLElement;
+        const isInput = target && (
+          target.tagName === 'INPUT' || 
+          target.tagName === 'TEXTAREA' || 
+          target.isContentEditable ||
+          target.closest('input') ||
+          target.closest('textarea')
+        );
+        if (!isInput) {
+          e.preventDefault();
+          setIsCommandPaletteOpen(true);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCommandPaletteOpen]);
 
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -117,6 +154,7 @@ function MainLayout() {
         onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         onSelectView={handleSelectView}
+        onOpenCommandPalette={handleOpenCommandPalette}
       />
 
       {/* Main Workspace Body */}
@@ -130,6 +168,7 @@ function MainLayout() {
           pendingCRCount={pendingCRCount}
           onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
           onOpenUserModal={() => setIsUserModalOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
         {/* Central View Canvas */}
@@ -299,6 +338,22 @@ function MainLayout() {
       <SupabaseModal
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
+      />
+
+      <CommandPaletteModal
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        initialQuery={commandPaletteInitialQuery}
+        onSelectView={handleSelectView}
+        onOpenTaskModal={handleOpenTaskModal}
+        onOpenRaidModal={handleOpenRaidModal}
+        onOpenStakeholderModal={handleOpenStakeholderModal}
+        onOpenInviteModal={handleOpenInviteModal}
+        onOpenAiReportModal={() => setIsAiReportModalOpen(true)}
+        onOpenAiSettingsModal={() => setIsAiSettingsModalOpen(true)}
+        onOpenUserModal={() => setIsUserModalOpen(true)}
+        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        currentView={currentView}
       />
     </div>
   );

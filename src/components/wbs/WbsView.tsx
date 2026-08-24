@@ -987,6 +987,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const [isBacklogExpanded, setIsBacklogExpanded] = useState(true);
   const [selectedBacklogTaskIds, setSelectedBacklogTaskIds] = useState<string[]>([]);
   const [sprintScopeFilter, setSprintScopeFilter] = useState<'all' | 'active_sprints' | 'backlog'>('all');
+  const [backlogDensity, setBacklogDensity] = useState<'compact' | 'comfortable'>('compact');
+  const [backlogSearchQuery, setBacklogSearchQuery] = useState('');
 
   const openCreateModal = (type: HierarchyType, parentMilestoneId = '', parentEpicId = '') => {
     setItemToEdit(null);
@@ -3119,60 +3121,112 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             return (
               <div id="wbs-product-backlog-section" className="border border-amber-500/30 dark:border-amber-500/20 bg-slate-900/90 rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-200">
                 {/* Backlog Header */}
-                <div className="bg-amber-950/40 border-b border-amber-500/20 p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="bg-amber-950/40 border-b border-amber-500/20 p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
                     <button
                       type="button"
                       onClick={() => setIsBacklogExpanded(!isBacklogExpanded)}
                       className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer"
                       title={isBacklogExpanded ? "Collapse Backlog" : "Expand Backlog"}
                     >
-                      {isBacklogExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                      {isBacklogExpanded ? <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </button>
-                    <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
-                      <Inbox className="w-5 h-5" />
+                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                      <Inbox className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-sm sm:text-base text-slate-100">Product Backlog (Unassigned Sprint Items)</h3>
-                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full text-xs font-semibold">
+                        <h3 className="font-bold text-xs sm:text-sm text-slate-100">Product Backlog</h3>
+                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.2 rounded-full text-[11px] font-bold">
                           {allBacklogTasks.length} {allBacklogTasks.length === 1 ? 'item' : 'items'}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        Work items not assigned to any sprint. Use the dropdown on any item to schedule into active sprints.
+                      <p className="text-[11px] text-slate-400 hidden md:block truncate max-w-md mt-0.5">
+                        Work items ready to be scheduled into active sprints.
                       </p>
                     </div>
                   </div>
 
-                  {/* Backlog Header Actions & Metrics */}
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-950/60 border border-slate-800 text-xs">
-                      <span className="text-slate-400">Total Effort: <strong className="text-amber-300 font-mono">{totalBacklogHours}h</strong></span>
-                      <span className="text-slate-700">|</span>
-                      <span className="text-slate-400">Planned Cost: <strong className="text-emerald-400 font-mono">${totalBacklogBudget.toLocaleString()}</strong></span>
+                  {/* Header Right Actions: Search, Density Toggle, Metrics & Add */}
+                  <div className="flex items-center gap-2 flex-wrap ml-auto">
+                    {/* Backlog Quick Search */}
+                    {isBacklogExpanded && allBacklogTasks.length > 2 && (
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={backlogSearchQuery}
+                          onChange={(e) => setBacklogSearchQuery(e.target.value)}
+                          placeholder="Filter backlog..."
+                          className="w-28 sm:w-36 md:w-44 pl-8 pr-6 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                        />
+                        {backlogSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setBacklogSearchQuery('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Density Toggle (Compact vs Spacious) */}
+                    <div className="inline-flex rounded-lg bg-slate-950/80 border border-slate-800 p-0.5 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setBacklogDensity('compact')}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          backlogDensity === 'compact'
+                            ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Compact dense single-row layout"
+                      >
+                        Compact
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBacklogDensity('comfortable')}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                          backlogDensity === 'comfortable'
+                            ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Spacious 2-line layout"
+                      >
+                        Spacious
+                      </button>
+                    </div>
+
+                    {/* Effort & Planned Cost pills */}
+                    <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950/70 border border-slate-800/80 text-[11px]">
+                      <span className="text-slate-400">Effort: <strong className="text-amber-300 font-mono">{totalBacklogHours}h</strong></span>
+                      <span className="text-slate-700">•</span>
+                      <span className="text-slate-400">Budget: <strong className="text-emerald-400 font-mono">${totalBacklogBudget.toLocaleString()}</strong></span>
                     </div>
 
                     <button
                       type="button"
                       onClick={() => onOpenTaskModal({ sprintId: '' } as any)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span>Add to Backlog</span>
+                      <span className="hidden sm:inline">Add Item</span>
                     </button>
                   </div>
                 </div>
 
                 {/* Bulk Sprint Assignment Bar when items are selected */}
                 {isBacklogExpanded && selectedBacklogTaskIds.length > 0 && (
-                  <div className="bg-indigo-950/90 border-b border-indigo-500/30 px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs animate-in fade-in duration-150">
+                  <div className="bg-indigo-950/90 border-b border-indigo-500/30 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs animate-in fade-in duration-150">
                     <div className="flex items-center gap-2 text-indigo-200">
                       <CheckCircle2 className="w-4 h-4 text-indigo-400" />
-                      <span><strong>{selectedBacklogTaskIds.length}</strong> backlog item(s) selected</span>
+                      <span><strong>{selectedBacklogTaskIds.length}</strong> item(s) selected</span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-slate-300 font-medium">Move selected to:</span>
+                      <span className="text-slate-300 font-medium">Move to:</span>
                       <select
                         onChange={(e) => {
                           if (e.target.value) {
@@ -3186,7 +3240,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         defaultValue=""
                         className="bg-slate-900 text-slate-100 border border-indigo-500/40 rounded-lg px-2.5 py-1 text-xs outline-none cursor-pointer hover:border-indigo-400"
                       >
-                        <option value="" disabled>Select target sprint...</option>
+                        <option value="" disabled>Select destination sprint...</option>
                         {(projectData.sprints || []).map(sp => (
                           <option key={sp.id} value={sp.id}>{sp.name} ({sp.status})</option>
                         ))}
@@ -3194,7 +3248,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       <button
                         type="button"
                         onClick={() => setSelectedBacklogTaskIds([])}
-                        className="text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition-colors"
+                        className="text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition-colors text-xs"
                       >
                         Deselect All
                       </button>
@@ -3213,56 +3267,205 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         </p>
                         <p className="text-xs text-slate-500 max-w-md mx-auto">
                           {allBacklogTasks.length === 0
-                            ? 'All work items are currently scheduled into active sprints. Click "Add to Backlog" above or unassign items from a sprint to place them here.'
+                            ? 'All work items are currently scheduled into active sprints. Click "Add Item" above or unassign items from a sprint to place them here.'
                             : 'Adjust your search query or filters above to reveal unassigned backlog items.'}
                         </p>
                       </div>
                     ) : (
-                      visibleBacklogTasks.map((task) => {
-                        const parentStory = (projectData.userStories || []).find(s => s.id === task.userStoryId);
-                        const parentFeat = projectData.features.find(f => f.id === task.featureId || f.id === parentStory?.featureId);
-                        const parentEpic = projectData.epics.find(e => e.id === task.epicId || e.id === parentFeat?.epicId || e.id === parentStory?.epicId);
-                        const parentMilestone = projectData.milestones.find(m => m.id === task.milestoneId || m.id === parentFeat?.milestoneId || m.id === parentEpic?.milestoneId || m.id === parentStory?.milestoneId);
-                        const isSelected = selectedBacklogTaskIds.includes(task.id);
+                      visibleBacklogTasks
+                        .filter(t => {
+                          if (!backlogSearchQuery.trim()) return true;
+                          const q = backlogSearchQuery.toLowerCase();
+                          return t.title.toLowerCase().includes(q) || (t.description && t.description.toLowerCase().includes(q));
+                        })
+                        .map((task) => {
+                          const parentStory = (projectData.userStories || []).find(s => s.id === task.userStoryId);
+                          const parentFeat = projectData.features.find(f => f.id === task.featureId || f.id === parentStory?.featureId);
+                          const parentEpic = projectData.epics.find(e => e.id === task.epicId || e.id === parentFeat?.epicId || e.id === parentStory?.epicId);
+                          const parentMilestone = projectData.milestones.find(m => m.id === task.milestoneId || m.id === parentFeat?.milestoneId || m.id === parentEpic?.milestoneId || m.id === parentStory?.milestoneId);
+                          const isSelected = selectedBacklogTaskIds.includes(task.id);
 
-                        return (
-                          <div
-                            key={task.id}
-                            className={`p-3 sm:px-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-slate-800/40 transition-colors ${
-                              isSelected ? 'bg-indigo-950/30' : ''
-                            }`}
-                          >
-                            <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 flex-1">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedBacklogTaskIds(prev => [...prev, task.id]);
-                                  } else {
-                                    setSelectedBacklogTaskIds(prev => prev.filter(id => id !== task.id));
-                                  }
-                                }}
-                                className="mt-1 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0 cursor-pointer shrink-0"
-                              />
-                              <div className="mt-0.5 p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                                {task.type === 'bug' ? <Bug className="w-4 h-4 text-rose-400" /> : <CheckSquare className="w-4 h-4 text-amber-400" />}
-                              </div>
-                              <div className="min-w-0 flex-1 space-y-1">
-                                <div className="flex items-center gap-2 flex-wrap">
+                          if (backlogDensity === 'compact') {
+                            return (
+                              <div
+                                key={task.id}
+                                className={`px-3 py-2 sm:py-2.5 flex items-center justify-between gap-2.5 hover:bg-slate-800/40 transition-colors ${
+                                  isSelected ? 'bg-indigo-950/30' : ''
+                                }`}
+                              >
+                                {/* Left: Checkbox + Type Icon + Title + Badges + Inline Breadcrumb */}
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedBacklogTaskIds(prev => [...prev, task.id]);
+                                      } else {
+                                        setSelectedBacklogTaskIds(prev => prev.filter(id => id !== task.id));
+                                      }
+                                    }}
+                                    className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0 cursor-pointer shrink-0"
+                                  />
+                                  <div className="p-1 rounded bg-slate-800/60 text-slate-300 shrink-0">
+                                    {task.type === 'bug' ? <Bug className="w-3.5 h-3.5 text-rose-400" /> : <CheckSquare className="w-3.5 h-3.5 text-amber-400" />}
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenTaskModal(task)}
+                                      className="font-semibold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer shrink-0 max-w-[180px] sm:max-w-[260px] md:max-w-[340px]"
+                                      title={task.title}
+                                    >
+                                      {task.title}
+                                    </button>
+
+                                    {task.type === 'bug' && (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                                        Bug
+                                      </span>
+                                    )}
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                      task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
+                                      task.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' :
+                                      task.priority === 'normal' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
+                                      'bg-slate-800 text-slate-400 border-slate-700'
+                                    }`}>
+                                      {task.priority}
+                                    </span>
+
+                                    {/* Unified Single-Line Compact Breadcrumb trail */}
+                                    <div className="hidden lg:flex items-center gap-1 text-[10px] text-slate-500 min-w-0 truncate max-w-full pl-1.5 border-l border-slate-800/80">
+                                      {parentMilestone && (
+                                        <span className="inline-flex items-center gap-0.5 text-amber-400/80 max-w-[110px] truncate" title={`Milestone: ${parentMilestone.title}`}>
+                                          <Flag className="w-2.5 h-2.5 shrink-0" />
+                                          <span className="truncate">{parentMilestone.title}</span>
+                                        </span>
+                                      )}
+                                      {parentEpic && (
+                                        <span className="inline-flex items-center gap-0.5 text-purple-400/80 max-w-[100px] truncate" title={`Epic: ${parentEpic.title}`}>
+                                          <span className="text-slate-600">›</span>
+                                          <Box className="w-2.5 h-2.5 shrink-0" />
+                                          <span className="truncate">{parentEpic.title}</span>
+                                        </span>
+                                      )}
+                                      {parentFeat && (
+                                        <span className="inline-flex items-center gap-0.5 text-blue-400/80 max-w-[110px] truncate" title={`Feature: ${parentFeat.title}`}>
+                                          <span className="text-slate-600">›</span>
+                                          <FolderGit2 className="w-2.5 h-2.5 shrink-0" />
+                                          <span className="truncate">{parentFeat.title}</span>
+                                        </span>
+                                      )}
+                                      {parentStory && (
+                                        <span className="inline-flex items-center gap-0.5 text-emerald-400/80 max-w-[100px] truncate" title={`Story: ${parentStory.title}`}>
+                                          <span className="text-slate-600">›</span>
+                                          <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                          <span className="truncate">{parentStory.title}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right: Effort + Status + Move Sprint Selector + Action buttons */}
+                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                  {task.estimatedHours ? (
+                                    <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                                      {task.estimatedHours}h
+                                    </span>
+                                  ) : null}
+
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0 hidden sm:inline-block">
+                                    {task.status.replace('_', ' ')}
+                                  </span>
+
+                                  {/* Compact Sprint Assignment */}
+                                  <div className="relative shrink-0">
+                                    <select
+                                      value=""
+                                      onChange={async (e) => {
+                                        const targetSprintId = e.target.value;
+                                        if (targetSprintId) {
+                                          await assignTaskToSprint(task.id, targetSprintId);
+                                          const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
+                                          showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
+                                        }
+                                      }}
+                                      className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs"
+                                      title="Assign this backlog item to a sprint"
+                                    >
+                                      <option value="" disabled>⚡ Sprint ▾</option>
+                                      {(projectData.sprints || []).map(sp => (
+                                        <option key={sp.id} value={sp.id}>
+                                          {sp.name} {sp.status === 'active' ? '(Active)' : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+
                                   <button
                                     type="button"
                                     onClick={() => onOpenTaskModal(task)}
-                                    className="font-bold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left break-words line-clamp-2 md:line-clamp-1 cursor-pointer"
+                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                    title="Edit Work Item Details"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteTask(task.id)}
+                                    className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
+                                    title="Delete Work Item"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // Spacious / Comfortable View Mode (2-Line layout, ~46px height)
+                          return (
+                            <div
+                              key={task.id}
+                              className={`p-2.5 sm:px-3.5 hover:bg-slate-800/40 transition-colors ${
+                                isSelected ? 'bg-indigo-950/30' : ''
+                              }`}
+                            >
+                              {/* Line 1: Checkbox, Icon, Title, Badges, Effort, Status, Sprint, Actions */}
+                              <div className="flex items-center justify-between gap-2 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setSelectedBacklogTaskIds(prev => [...prev, task.id]);
+                                      } else {
+                                        setSelectedBacklogTaskIds(prev => prev.filter(id => id !== task.id));
+                                      }
+                                    }}
+                                    className="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0 cursor-pointer shrink-0"
+                                  />
+                                  <div className="p-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                                    {task.type === 'bug' ? <Bug className="w-3.5 h-3.5 text-rose-400" /> : <CheckSquare className="w-3.5 h-3.5 text-amber-400" />}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenTaskModal(task)}
+                                    className="font-bold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer"
+                                    title={task.title}
                                   >
                                     {task.title}
                                   </button>
                                   {task.type === 'bug' && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 shrink-0">
                                       Bug
                                     </span>
                                   )}
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border shrink-0 ${
                                     task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' :
                                     task.priority === 'high' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' :
                                     task.priority === 'normal' ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' :
@@ -3272,100 +3475,94 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   </span>
                                 </div>
 
-                                {/* Hierarchy breadcrumbs */}
-                                <div className="flex items-center gap-1 text-[11px] text-slate-500 flex-wrap">
-                                  {parentMilestone && (
-                                    <span className="inline-flex items-center gap-1 text-amber-400/80 max-w-[200px] truncate" title={`Milestone: ${parentMilestone.title}`}>
-                                      <Flag className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{parentMilestone.title}</span>
+                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                  {task.estimatedHours ? (
+                                    <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                                      {task.estimatedHours}h
                                     </span>
-                                  )}
-                                  {parentEpic && (
-                                    <span className="inline-flex items-center gap-1 text-purple-400/80 max-w-[200px] truncate" title={`Epic: ${parentEpic.title}`}>
-                                      <span className="text-slate-600 mr-0.5">/</span>
-                                      <Box className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{parentEpic.title}</span>
-                                    </span>
-                                  )}
-                                  {parentFeat && (
-                                    <span className="inline-flex items-center gap-1 text-blue-400/80 max-w-[200px] truncate" title={`Feature: ${parentFeat.title}`}>
-                                      <span className="text-slate-600 mr-0.5">/</span>
-                                      <FolderGit2 className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{parentFeat.title}</span>
-                                    </span>
-                                  )}
-                                  {parentStory && (
-                                    <span className="inline-flex items-center gap-1 text-emerald-400/80 max-w-[200px] truncate" title={`Story: ${parentStory.title}`}>
-                                      <span className="text-slate-600 mr-0.5">/</span>
-                                      <BookOpen className="w-3 h-3 shrink-0" />
-                                      <span className="truncate">{parentStory.title}</span>
-                                    </span>
-                                  )}
-                                  {!parentMilestone && !parentEpic && !parentFeat && !parentStory && (
-                                    <span className="text-slate-500 italic">Standalone Work Item</span>
-                                  )}
+                                  ) : null}
+
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
+                                    {task.status.replace('_', ' ')}
+                                  </span>
+
+                                  <select
+                                    value=""
+                                    onChange={async (e) => {
+                                      const targetSprintId = e.target.value;
+                                      if (targetSprintId) {
+                                        await assignTaskToSprint(task.id, targetSprintId);
+                                        const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
+                                        showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
+                                      }
+                                    }}
+                                    className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs"
+                                    title="Assign this backlog item to a sprint"
+                                  >
+                                    <option value="" disabled>⚡ Sprint ▾</option>
+                                    {(projectData.sprints || []).map(sp => (
+                                      <option key={sp.id} value={sp.id}>
+                                        {sp.name} {sp.status === 'active' ? '(Active)' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenTaskModal(task)}
+                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                    title="Edit Work Item Details"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteTask(task.id)}
+                                    className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
+                                    title="Delete Work Item"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
                                 </div>
                               </div>
-                            </div>
 
-                            {/* Right side controls: Assign to Sprint dropdown, effort, status & actions */}
-                            <div className="flex items-center gap-2 sm:gap-3 shrink-0 flex-wrap justify-between sm:justify-end mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800/40">
-                              <div className="flex items-center gap-2 text-xs">
-                                {task.estimatedHours && (
-                                  <span className="font-mono text-[11px] text-slate-400 bg-slate-950 px-2 py-1 rounded-md border border-slate-800 shrink-0">
-                                    {task.estimatedHours}h
+                              {/* Line 2: Unified Hierarchy Path */}
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1 pl-7 min-w-0 max-w-full truncate overflow-hidden">
+                                {parentMilestone && (
+                                  <span className="inline-flex items-center gap-1 text-amber-400/80 max-w-[150px] truncate" title={`Milestone: ${parentMilestone.title}`}>
+                                    <Flag className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{parentMilestone.title}</span>
                                   </span>
                                 )}
-                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
-                                  {task.status.replace('_', ' ')}
-                                </span>
-                              </div>
-
-                              {/* Interactive Sprint Assignment Dropdown */}
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <select
-                                  value=""
-                                  onChange={async (e) => {
-                                    const targetSprintId = e.target.value;
-                                    if (targetSprintId) {
-                                      await assignTaskToSprint(task.id, targetSprintId);
-                                      const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
-                                      showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
-                                    }
-                                  }}
-                                  className="bg-purple-950/40 hover:bg-purple-950/70 border border-purple-500/30 hover:border-purple-400 text-purple-300 text-xs font-semibold px-2.5 py-1 rounded-lg outline-none cursor-pointer transition-all shadow-xs max-w-[150px] sm:max-w-none truncate"
-                                  title="Assign this backlog item to a sprint"
-                                >
-                                  <option value="" disabled>⚡ Move to Sprint ▾</option>
-                                  {(projectData.sprints || []).map(sp => (
-                                    <option key={sp.id} value={sp.id}>
-                                      {sp.name} {sp.status === 'active' ? '(Active)' : ''}
-                                    </option>
-                                  ))}
-                                </select>
-
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenTaskModal(task)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                                  title="Edit Work Item Details"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => deleteTask(task.id)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
-                                  title="Delete Work Item"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {parentEpic && (
+                                  <span className="inline-flex items-center gap-1 text-purple-400/80 max-w-[140px] truncate" title={`Epic: ${parentEpic.title}`}>
+                                    <span className="text-slate-600">›</span>
+                                    <Box className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{parentEpic.title}</span>
+                                  </span>
+                                )}
+                                {parentFeat && (
+                                  <span className="inline-flex items-center gap-1 text-blue-400/80 max-w-[150px] truncate" title={`Feature: ${parentFeat.title}`}>
+                                    <span className="text-slate-600">›</span>
+                                    <FolderGit2 className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{parentFeat.title}</span>
+                                  </span>
+                                )}
+                                {parentStory && (
+                                  <span className="inline-flex items-center gap-1 text-emerald-400/80 max-w-[140px] truncate" title={`Story: ${parentStory.title}`}>
+                                    <span className="text-slate-600">›</span>
+                                    <BookOpen className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{parentStory.title}</span>
+                                  </span>
+                                )}
+                                {!parentMilestone && !parentEpic && !parentFeat && !parentStory && (
+                                  <span className="text-slate-500 italic text-[10px]">Standalone Work Item</span>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })
+                          );
+                        })
                     )}
                   </div>
                 )}

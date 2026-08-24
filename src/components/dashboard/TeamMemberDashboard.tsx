@@ -721,10 +721,22 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     Tasks: m.assignedTaskCount
   }));
 
+  // Helper to format short display name properly (e.g. "Dr. Elena" or "Marcus", avoiding "Dr.")
+  const formatMemberShortName = (fullName: string) => {
+    if (!fullName) return 'Member';
+    const parts = fullName.trim().split(/\s+/);
+    const titlePrefixes = ['dr.', 'dr', 'mr.', 'mr', 'ms.', 'ms', 'mrs.', 'mrs', 'prof.', 'prof', 'eng.', 'eng'];
+    if (parts.length > 1 && titlePrefixes.includes(parts[0].toLowerCase())) {
+      return `${parts[0]} ${parts[1]}`;
+    }
+    return parts[0];
+  };
+
   return (
     <div id="team-member-dashboard" className="space-y-6 min-w-0">
       {/* Top Banner & Team Member Switcher Toolbar */}
-      <div className="bg-slate-900 border border-slate-800 p-3.5 sm:p-4 md:p-5 rounded-2xl shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4 min-w-0">
+      <div className="bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm flex flex-col xl:flex-row xl:items-center justify-between gap-4 min-w-0">
+        {/* Title & Context Header */}
         <div className="flex items-start sm:items-center gap-3 min-w-0">
           <div className="p-2 sm:p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0 mt-0.5 sm:mt-0">
             <UserCheck className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -742,7 +754,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                 Real-Time Work Analytics
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1 line-clamp-2 sm:line-clamp-none">
+            <p className="text-xs text-slate-400 mt-1 line-clamp-2 sm:line-clamp-none max-w-2xl">
               {isSelectedMemberPM 
                 ? "Aggregated project deliverables, schedule (SPI), cost efficiency (CPI), milestones, and overall delivery execution."
                 : "Personalized task queue, SPI/CPI graphs, hours logged vs earned, capacity utilization, and milestone tracking."}
@@ -750,93 +762,99 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
           </div>
         </div>
 
-        {/* Member & Project Scope Selectors & Role Switcher */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto min-w-0 flex-wrap">
-          {/* Project Scope Filter */}
-          <ResponsiveSelect
-            value={selectedProjectId}
-            onChange={setSelectedProjectId}
-            icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
-            label="Scope:"
-            options={[
-              {
-                value: 'all',
-                label: `All Assigned (${memberProjects.length} Project${memberProjects.length !== 1 ? 's' : ''})`,
-                icon: <span className="text-sm">🌐</span>
-              },
-              ...memberProjects.map(p => ({
-                value: p.id,
-                label: `[${p.projectCode}] ${p.projectName}`,
-                sublabel: p.description,
-                icon: <span className="text-sm">📁</span>
-              }))
-            ]}
-            align="auto"
-            className="border-slate-800 hover:border-slate-700 text-emerald-300"
-          />
+        {/* Cohesive Responsive Control Toolbar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full xl:w-auto min-w-0 flex-wrap">
+          {/* Unified Selectors Segment */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:flex items-center gap-1.5 p-1 bg-slate-950/70 rounded-xl border border-slate-800/80 min-w-0 flex-1 xl:flex-initial">
+            {/* Project Scope Filter */}
+            <ResponsiveSelect
+              value={selectedProjectId}
+              onChange={setSelectedProjectId}
+              icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+              label="Scope:"
+              options={[
+                {
+                  value: 'all',
+                  label: `All Assigned (${memberProjects.length} Project${memberProjects.length !== 1 ? 's' : ''})`,
+                  icon: <span className="text-sm">🌐</span>
+                },
+                ...memberProjects.map(p => ({
+                  value: p.id,
+                  label: `[${p.projectCode}] ${p.projectName}`,
+                  sublabel: p.description,
+                  icon: <span className="text-sm">📁</span>
+                }))
+              ]}
+              align="auto"
+              className="bg-transparent border-transparent hover:bg-slate-900 text-emerald-300 shadow-none min-h-[36px] sm:min-h-0"
+            />
 
-          {/* Member Selector (Target Selection) */}
-          <ResponsiveSelect
-            value={selectedMemberId}
-            onChange={setSelectedMemberId}
-            icon={<User className="w-3.5 h-3.5 text-indigo-400" />}
-            label="Member:"
-            options={selectableStakeholders.map(s => {
-              const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
-              const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
-              const roleBadge = isProjectManager ? 'PM' : 'Team';
-              return {
-                value: s.id,
-                label: `${isAdmin ? `[${roleBadge}] ` : ''}${s.name}`,
-                sublabel: `${s.role} • ${s.email}`,
-                badge: isAdmin ? roleBadge : undefined,
-                badgeColor: isProjectManager ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800 text-slate-300 border-slate-700'
-              };
-            })}
-            align="auto"
-            className="border-slate-800 hover:border-slate-700 text-slate-100"
-          />
+            {/* Member Selector (Target Selection) */}
+            <ResponsiveSelect
+              value={selectedMemberId}
+              onChange={setSelectedMemberId}
+              icon={<User className="w-3.5 h-3.5 text-indigo-400" />}
+              label="Member:"
+              options={selectableStakeholders.map(s => {
+                const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+                const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
+                const roleBadge = isProjectManager ? 'PM' : 'Team';
+                return {
+                  value: s.id,
+                  label: `${isAdmin ? `[${roleBadge}] ` : ''}${s.name}`,
+                  sublabel: `${s.role} • ${s.email}`,
+                  badge: isAdmin ? roleBadge : undefined,
+                  badgeColor: isProjectManager ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800 text-slate-300 border-slate-700'
+                };
+              })}
+              align="auto"
+              className="bg-transparent border-transparent hover:bg-slate-900 text-slate-100 shadow-none min-h-[36px] sm:min-h-0"
+            />
+          </div>
 
-          {/* Member Report Card & Availability Calendar Action */}
-          <button
-            onClick={() => {
-              const el = document.getElementById('member-report-card-section');
-              if (el) {
-                el.scrollIntoView({ behavior: 'smooth' });
-              } else {
-                setShowReportCardModal(true);
-              }
-            }}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto cursor-pointer min-h-[40px] sm:min-h-0"
-            title="Jump to comprehensive 360 Report Card & Availability Calendar card below"
-          >
-            <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="whitespace-nowrap">Report Card &amp; Calendar ↓</span>
-          </button>
-
-          {/* Quick Apply for Leave / Hours Off - Only for Non-Admin */}
-          {!isAdmin && (
+          {/* Action Buttons Row */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
+            {/* Jump to Report Card & Calendar */}
             <button
-              onClick={() => setShowLeaveModal(true)}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-indigo-200 border border-indigo-500/40 text-xs font-bold transition-all shrink-0 shadow-sm w-full sm:w-auto min-h-[40px] sm:min-h-0"
-              title="Apply for Day(s) Leave or a couple of Hours Off"
+              onClick={() => {
+                const el = document.getElementById('member-report-card-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                  setShowReportCardModal(true);
+                }
+              }}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[36px] sm:min-h-0"
+              title="Jump to comprehensive 360 Report Card & Availability Calendar card below"
             >
-              <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              <span className="whitespace-nowrap">Request Time Off / Leave</span>
+              <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span className="whitespace-nowrap">Report Card ↓</span>
             </button>
-          )}
 
-          {/* Role Switcher Action for PM */}
-          {isPM && !isViewingSelf && (
-            <button
-              onClick={() => handleSwitchToMemberRole(selectedStakeholder)}
-              className="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all shadow-md shadow-indigo-600/20 shrink-0 min-h-[40px] sm:min-h-0 w-full sm:w-auto"
-              title={`Switch session role to act as ${selectedStakeholder.name}`}
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-              <span className="whitespace-nowrap">Act as {selectedStakeholder.name.split(' ')[0]}</span>
-            </button>
-          )}
+            {/* Quick Apply for Leave / Hours Off - Only for Non-Admin */}
+            {!isAdmin && (
+              <button
+                onClick={() => setShowLeaveModal(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[36px] sm:min-h-0"
+                title="Apply for Day(s) Leave or a couple of Hours Off"
+              >
+                <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="whitespace-nowrap">Request Leave</span>
+              </button>
+            )}
+
+            {/* Role Switcher Action for PM */}
+            {isPM && !isViewingSelf && (
+              <button
+                onClick={() => handleSwitchToMemberRole(selectedStakeholder)}
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20 shrink-0 min-h-[36px] sm:min-h-0 cursor-pointer"
+                title={`Switch session role to act as ${selectedStakeholder.name}`}
+              >
+                <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                <span className="whitespace-nowrap">Act as {formatMemberShortName(selectedStakeholder.name)}</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

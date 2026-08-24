@@ -19,7 +19,9 @@ import {
   ChevronRight,
   FileSpreadsheet,
   CalendarOff,
-  UserX
+  UserX,
+  Columns,
+  List
 } from 'lucide-react';
 import { CsvImportModal } from '../modals/CsvImportModal';
 import {
@@ -35,13 +37,14 @@ interface GanttViewProps {
 
 export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
   const { projectData, leaves } = useProject();
+  const [viewLayout, setViewLayout] = useState<'split' | 'list' | 'timeline'>('split');
   const [timeScale, setTimeScale] = useState<'days' | 'weeks' | 'months'>('weeks');
   const [filterFeatureId, setFilterFeatureId] = useState<string>('all');
   const [filterMilestoneId, setFilterMilestoneId] = useState<string>('all');
   const [highlightCriticalPath, setHighlightCriticalPath] = useState<boolean>(true);
   const [showDependencies, setShowDependencies] = useState<boolean>(true);
   const [showLeaveOverlays, setShowLeaveOverlays] = useState<boolean>(true);
-  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(270);
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(280);
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
 
   // Mouse drag handler for column resizing
@@ -381,211 +384,275 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
 
           {/* Scale & Feature Toggles */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            {/* Title Column Width Selector */}
-            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
-              <span className="text-[10px] text-slate-400 font-medium px-1.5 uppercase font-mono hidden sm:inline">Title Width</span>
+            {/* View Layout Mode (Split / List / Timeline) */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
               <button
-                onClick={() => setLeftPanelWidth(210)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
-                  leftPanelWidth <= 220 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                type="button"
+                onClick={() => setViewLayout('split')}
+                className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
+                  viewLayout === 'split'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Compact width (210px)"
+                title="Split View (Stacked on mobile/tablet, Side-by-side on desktop)"
               >
-                Compact
+                <Columns className="w-3.5 h-3.5" />
+                <span>Split</span>
               </button>
               <button
-                onClick={() => setLeftPanelWidth(260)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
-                  leftPanelWidth > 220 && leftPanelWidth <= 300 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                type="button"
+                onClick={() => setViewLayout('list')}
+                className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
+                  viewLayout === 'list'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Default balanced width (260px)"
+                title="List View Only (Full Width)"
               >
-                Default
+                <List className="w-3.5 h-3.5" />
+                <span>List</span>
               </button>
               <button
-                onClick={() => setLeftPanelWidth(360)}
-                className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
-                  leftPanelWidth > 300 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                type="button"
+                onClick={() => setViewLayout('timeline')}
+                className={`px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium transition-all ${
+                  viewLayout === 'timeline'
+                    ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
-                title="Expanded width (360px)"
+                title="Timeline Chart Only (Full Width)"
               >
-                Wide
+                <GanttChart className="w-3.5 h-3.5" />
+                <span>Timeline</span>
               </button>
             </div>
+
+            {/* Title Column Width Selector (Desktop Split View) */}
+            {viewLayout === 'split' && (
+              <div className="hidden lg:flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
+                <span className="text-[10px] text-slate-400 font-medium px-1.5 uppercase font-mono">Title Width</span>
+                <button
+                  onClick={() => setLeftPanelWidth(220)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
+                    leftPanelWidth <= 230 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Compact width (220px)"
+                >
+                  Compact
+                </button>
+                <button
+                  onClick={() => setLeftPanelWidth(280)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
+                    leftPanelWidth > 230 && leftPanelWidth <= 320 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Default balanced width (280px)"
+                >
+                  Default
+                </button>
+                <button
+                  onClick={() => setLeftPanelWidth(380)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
+                    leftPanelWidth > 320 ? 'bg-indigo-600 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  title="Expanded width (380px)"
+                >
+                  Wide
+                </button>
+              </div>
+            )}
 
             {/* Time Scale Switcher */}
-            <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
-              {(['days', 'weeks', 'months'] as const).map(scale => (
-                <button
-                  key={scale}
-                  onClick={() => setTimeScale(scale)}
-                  className={`px-3 py-1 rounded-lg capitalize font-medium transition-all ${
-                    timeScale === scale
-                      ? 'bg-indigo-600 text-white font-bold shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  {scale}
-                </button>
-              ))}
-            </div>
+            {viewLayout !== 'list' && (
+              <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs shrink-0">
+                {(['days', 'weeks', 'months'] as const).map(scale => (
+                  <button
+                    key={scale}
+                    onClick={() => setTimeScale(scale)}
+                    className={`px-3 py-1 rounded-lg capitalize font-medium transition-all ${
+                      timeScale === scale
+                        ? 'bg-indigo-600 text-white font-bold shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {scale}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Show Dependencies Toggle */}
-            <button
-              onClick={() => setShowDependencies(!showDependencies)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
-                showDependencies
-                  ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
-              }`}
-              title="Toggle Visual Dependency Links"
-            >
-              <Link2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Links</span>
-            </button>
+            {viewLayout !== 'list' && (
+              <button
+                onClick={() => setShowDependencies(!showDependencies)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
+                  showDependencies
+                    ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Toggle Visual Dependency Links"
+              >
+                <Link2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Links</span>
+              </button>
+            )}
 
             {/* Leave Availability Overlay Toggle */}
-            <button
-              onClick={() => setShowLeaveOverlays(!showLeaveOverlays)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
-                showLeaveOverlays
-                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
-              }`}
-              title="Toggle Team Member Leave Availability Overlays & Warnings"
-            >
-              <CalendarOff className="w-3.5 h-3.5 shrink-0" />
-              <span>Leaves ({leaves.filter(l => l.status === 'approved').length})</span>
-            </button>
+            {viewLayout !== 'list' && (
+              <button
+                onClick={() => setShowLeaveOverlays(!showLeaveOverlays)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
+                  showLeaveOverlays
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+                title="Toggle Team Member Leave Availability Overlays & Warnings"
+              >
+                <CalendarOff className="w-3.5 h-3.5 shrink-0" />
+                <span>Leaves ({leaves.filter(l => l.status === 'approved').length})</span>
+              </button>
+            )}
 
             {/* Critical Path Toggle */}
-            <button
-              onClick={() => setHighlightCriticalPath(!highlightCriticalPath)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
-                highlightCriticalPath
-                  ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5 shrink-0" />
-              <span>Critical Path</span>
-            </button>
+            {viewLayout !== 'list' && (
+              <button
+                onClick={() => setHighlightCriticalPath(!highlightCriticalPath)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-colors flex items-center gap-1.5 shrink-0 ${
+                  highlightCriticalPath
+                    ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span>Critical Path</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* Synchronized Two-Pane Gantt Area */}
-      <div className="bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row min-w-0">
+      <div className="bg-slate-900 border border-slate-800/80 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row min-w-0">
         {/* LEFT PANEL: Work Item Metadata List */}
-        <div
-          className="w-full shrink-0 border-b md:border-b-0 border-slate-800 bg-slate-950/40 min-w-0 transition-all duration-150"
-          style={{ width: `${leftPanelWidth}px` }}
-        >
-          {/* Left Table Header */}
-          <div className="h-12 border-b border-slate-800 px-3.5 flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-950/80">
-            <span className="truncate">Work Item Title</span>
-            <span className="text-[10px] text-slate-500 font-mono shrink-0">Dates & Links</span>
-          </div>
+        {(viewLayout === 'split' || viewLayout === 'list') && (
+          <div
+            className={`w-full ${
+              viewLayout === 'split' ? 'lg:w-[var(--left-panel-width)] lg:shrink-0 border-b lg:border-b-0 border-slate-800' : ''
+            } bg-slate-950/40 min-w-0 transition-all duration-150`}
+            style={
+              viewLayout === 'split'
+                ? ({ '--left-panel-width': `${leftPanelWidth}px` } as React.CSSProperties)
+                : undefined
+            }
+          >
+            {/* Left Table Header */}
+            <div className="h-12 border-b border-slate-800 px-3.5 flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-950/80">
+              <span className="truncate">Work Item Title</span>
+              <span className="text-[10px] text-slate-500 font-mono shrink-0">Dates & Links</span>
+            </div>
 
-          {/* Left Task Meta Rows */}
-          <div className="divide-y divide-slate-800/60">
-            {filteredTasks.map((task) => {
-              const predecessors = getTaskPredecessors(task, projectData.tasks);
-              const hasDepConflict = predecessors.some(p => p.hasConflict);
-              const leaveConflict = taskLeaveConflictsMap.get(task.id);
-              const hasLeaveConflict = leaveConflict?.hasConflict;
+            {/* Left Task Meta Rows */}
+            <div className="divide-y divide-slate-800/60">
+              {filteredTasks.map((task) => {
+                const predecessors = getTaskPredecessors(task, projectData.tasks);
+                const hasDepConflict = predecessors.some(p => p.hasConflict);
+                const leaveConflict = taskLeaveConflictsMap.get(task.id);
+                const hasLeaveConflict = leaveConflict?.hasConflict;
 
-              return (
-                <div
-                  key={task.id}
-                  className="px-3.5 flex items-center justify-between gap-2 hover:bg-slate-800/40 transition-colors group"
-                  style={{ height: `${ROW_HEIGHT}px` }}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    {/* Status Dot */}
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                        task.status === 'done' ? 'bg-emerald-400 ring-2 ring-emerald-400/20' :
-                        task.status === 'in_progress' ? 'bg-indigo-400 ring-2 ring-indigo-400/20' :
-                        task.status === 'demoable' ? 'bg-teal-400 ring-2 ring-teal-400/20' :
-                        task.status === 'review' ? 'bg-purple-400 ring-2 ring-purple-400/20' :
-                        task.status === 'on_hold' ? 'bg-amber-400 ring-2 ring-amber-400/20' :
-                        task.status === 'blocked' ? 'bg-rose-500 ring-2 ring-rose-500/20' : 'bg-slate-500'
-                      }`}
-                      title={`Status: ${task.status.replace('_', ' ')}`}
-                    />
+                return (
+                  <div
+                    key={task.id}
+                    className="px-3.5 flex items-center justify-between gap-2.5 hover:bg-slate-800/40 transition-colors group"
+                    style={{ height: `${ROW_HEIGHT}px` }}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {/* Status Dot */}
+                      <div
+                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                          task.status === 'done' ? 'bg-emerald-400 ring-2 ring-emerald-400/20' :
+                          task.status === 'in_progress' ? 'bg-indigo-400 ring-2 ring-indigo-400/20' :
+                          task.status === 'demoable' ? 'bg-teal-400 ring-2 ring-teal-400/20' :
+                          task.status === 'review' ? 'bg-purple-400 ring-2 ring-purple-400/20' :
+                          task.status === 'on_hold' ? 'bg-amber-400 ring-2 ring-amber-400/20' :
+                          task.status === 'blocked' ? 'bg-rose-500 ring-2 ring-rose-500/20' : 'bg-slate-500'
+                        }`}
+                        title={`Status: ${task.status.replace('_', ' ')}`}
+                      />
 
-                    {/* Title & Dates */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="font-semibold text-xs text-slate-200 group-hover:text-indigo-300 transition-colors truncate" title={task.title}>
-                          {task.title}
-                        </span>
-                        {hasDepConflict && (
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" title="Schedule Dependency Conflict!" />
-                        )}
-                        {hasLeaveConflict && (
-                          <span
-                            className="inline-flex items-center px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0"
-                            title={`Member on Leave: ${leaveConflict?.conflicts.map(c => `${c.memberName} (${c.leave.startDate} to ${c.leave.endDate})`).join(', ')}`}
-                          >
-                            🏖️ Leave
+                      {/* Title & Dates */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-semibold text-xs text-slate-200 group-hover:text-indigo-300 transition-colors truncate" title={task.title}>
+                            {task.title}
                           </span>
-                        )}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
-                        <span>{task.startDate || 'TBD'} → {task.dueDate || 'TBD'}</span>
+                          {hasDepConflict && (
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" title="Schedule Dependency Conflict!" />
+                          )}
+                          {hasLeaveConflict && (
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0"
+                              title={`Member on Leave: ${leaveConflict?.conflicts.map(c => `${c.memberName} (${c.leave.startDate} to ${c.leave.endDate})`).join(', ')}`}
+                            >
+                              🏖️ Leave
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-2 mt-0.5">
+                          <span>{task.startDate || 'TBD'} → {task.dueDate || 'TBD'}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Predecessors Badge & Edit Action */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {predecessors.length > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-0.5 ${
-                          hasDepConflict
-                            ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                            : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
-                        }`}
-                        title={`${predecessors.length} Predecessor Link(s)`}
+                    {/* Predecessors Badge & Edit Action */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {predecessors.length > 0 && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-0.5 ${
+                            hasDepConflict
+                              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                              : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+                          }`}
+                          title={`${predecessors.length} Predecessor Link(s)`}
+                        >
+                          <Link2 className="w-2.5 h-2.5" />
+                          <span>{predecessors.length}</span>
+                        </span>
+                      )}
+
+                      <button
+                        onClick={() => onOpenTaskModal(task)}
+                        className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+                        title="Edit Task & Dependencies"
                       >
-                        <Link2 className="w-2.5 h-2.5" />
-                        <span>{predecessors.length}</span>
-                      </span>
-                    )}
-
-                    <button
-                      onClick={() => onOpenTaskModal(task)}
-                      className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
-                      title="Edit Task & Dependencies"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
+                );
+              })}
+
+              {filteredTasks.length === 0 && (
+                <div className="p-8 text-center text-xs text-slate-500 italic">
+                  No items match the selected filter.
                 </div>
-              );
-            })}
-
-            {filteredTasks.length === 0 && (
-              <div className="p-8 text-center text-xs text-slate-500 italic">
-                No items match the selected filter.
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Interactive Resizer Handle (Desktop) */}
-        <div
-          onMouseDown={handleMouseDown}
-          className="hidden md:flex w-2 bg-slate-950 hover:bg-indigo-600 cursor-col-resize items-center justify-center transition-colors group shrink-0 relative z-30 select-none border-x border-slate-800/80"
-          title="Drag to resize Work Item Title column width"
-        >
-          <div className="w-0.5 h-7 bg-slate-600 group-hover:bg-white rounded-full transition-colors" />
-        </div>
+        {/* Interactive Resizer Handle (Desktop Split View) */}
+        {viewLayout === 'split' && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="hidden lg:flex w-2 bg-slate-950 hover:bg-indigo-600 cursor-col-resize items-center justify-center transition-colors group shrink-0 relative z-30 select-none border-x border-slate-800/80"
+            title="Drag to resize Work Item Title column width"
+          >
+            <div className="w-0.5 h-7 bg-slate-600 group-hover:bg-white rounded-full transition-colors" />
+          </div>
+        )}
 
         {/* RIGHT PANEL: Horizontal Scrollable Timeline Canvas */}
-        <div className="flex-1 overflow-x-auto relative min-w-0 bg-slate-900/50">
+        {(viewLayout === 'split' || viewLayout === 'timeline') && (
+          <div className="flex-1 overflow-x-auto relative min-w-0 bg-slate-900/50">
           <div style={{ width: `${timelineWidth}px` }} className="relative min-h-full">
             {/* Timeline Column Headers */}
             <div className="h-12 border-b border-slate-800 bg-slate-950/80 flex items-center text-slate-400 font-mono text-xs font-semibold sticky top-0 z-20">
@@ -782,6 +849,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ onOpenTaskModal }) => {
             </div>
           </div>
         </div>
+      )}
       </div>
 
       {/* Legend & Summary Footer */}

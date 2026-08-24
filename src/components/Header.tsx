@@ -44,6 +44,7 @@ interface HeaderProps {
   onOpenAiSettingsModal?: () => void;
   onOpenSupabaseModal?: () => void;
   onSelectView?: (view: ViewMode) => void;
+  onOpenCommandPalette?: (initialQuery?: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -54,7 +55,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAiReportModal,
   onOpenAiSettingsModal,
   onOpenSupabaseModal,
-  onSelectView
+  onSelectView,
+  onOpenCommandPalette
 }) => {
   const { projectData, projectsList, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
   const isAdmin = currentUser?.role === 'admin';
@@ -84,10 +86,20 @@ export const Header: React.FC<HeaderProps> = ({
   const updateSearchPosition = () => {
     if (searchContainerRef.current) {
       const rect = searchContainerRef.current.getBoundingClientRect();
-      const dropdownWidth = Math.max(340, rect.width);
-      const leftPos = Math.max(12, Math.min(rect.left, window.innerWidth - dropdownWidth - 12));
+      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+      const isMobile = viewportWidth < 640;
+      
+      // Calculate responsive width and boundary constraints for mobile/desktop
+      const dropdownWidth = isMobile
+        ? Math.max(280, viewportWidth - 24)
+        : Math.min(Math.max(360, rect.width), viewportWidth - 24);
+
+      const leftPos = isMobile
+        ? 12
+        : Math.max(12, Math.min(rect.left, viewportWidth - dropdownWidth - 12));
+
       setSearchDropdownPos({
-        top: rect.bottom + 8,
+        top: Math.max(48, rect.bottom + 8),
         left: leftPos,
         width: dropdownWidth
       });
@@ -109,11 +121,15 @@ export const Header: React.FC<HeaderProps> = ({
   // Global Keyboard Shortcut (Cmd/Ctrl + K or /)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
-        updateSearchPosition();
-        setIsSearchFocused(true);
+        if (onOpenCommandPalette) {
+          onOpenCommandPalette();
+        } else {
+          searchInputRef.current?.focus();
+          updateSearchPosition();
+          setIsSearchFocused(true);
+        }
       } else if (e.key === 'Escape') {
         setIsSearchFocused(false);
         setIsMobileMenuOpen(false);
@@ -123,35 +139,40 @@ export const Header: React.FC<HeaderProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onOpenCommandPalette]);
 
-  // Click Outside to Close Search, Mobile & Project Dropdowns
+  // Click & Touch Outside to Close Search, Mobile & Project Dropdowns
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
       if (
         searchContainerRef.current && 
-        !searchContainerRef.current.contains(e.target as Node) &&
-        (!searchDropdownRef.current || !searchDropdownRef.current.contains(e.target as Node))
+        !searchContainerRef.current.contains(target) &&
+        (!searchDropdownRef.current || !searchDropdownRef.current.contains(target))
       ) {
         setIsSearchFocused(false);
       }
       if (
         projectSelectorContainerRef.current &&
-        !projectSelectorContainerRef.current.contains(e.target as Node) &&
-        (!projectDropdownRef.current || !projectDropdownRef.current.contains(e.target as Node))
+        !projectSelectorContainerRef.current.contains(target) &&
+        (!projectDropdownRef.current || !projectDropdownRef.current.contains(target))
       ) {
         setIsProjectDropdownOpen(false);
       }
       if (
         mobileMenuRef.current && 
-        !mobileMenuRef.current.contains(e.target as Node) &&
-        (!mobilePortalRef.current || !mobilePortalRef.current.contains(e.target as Node))
+        !mobileMenuRef.current.contains(target) &&
+        (!mobilePortalRef.current || !mobilePortalRef.current.contains(target))
       ) {
         setIsMobileMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   // Safe Filter Data
@@ -191,7 +212,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header id="app-header" className="w-full max-w-full bg-slate-900/90 dark:bg-slate-950/90 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-3 md:px-4 py-2 text-slate-100 flex items-center justify-between gap-2 transition-colors min-w-0">
+      <header id="app-header" className="w-full max-w-full bg-slate-900/95 dark:bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-3 md:px-4 py-2 text-slate-100 flex items-center justify-between gap-1.5 sm:gap-2 transition-colors min-w-0">
         {/* App Branding & Multi-Project Switcher */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
           <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
@@ -203,7 +224,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-project-selector"
               onClick={() => setIsProjectDropdownOpen(prev => !prev)}
-              className="group text-left px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center gap-1 shrink min-w-0 max-w-[110px] xs:max-w-[130px] sm:max-w-[160px] md:max-w-[190px] lg:max-w-[210px]"
+              className="group text-left px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center gap-1 shrink min-w-0 max-w-[95px] xs:max-w-[125px] sm:max-w-[165px] md:max-w-[195px] lg:max-w-[220px]"
               title="Click to Switch Project or Manage Portfolio"
             >
               <div className="min-w-0 flex-1">
@@ -297,31 +318,47 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Global Search Bar (Expanded width) */}
+        {/* Global Search Bar (Responsive Width & Instant Palette Opener) */}
         <div
           ref={searchContainerRef}
-          onClick={() => searchInputRef.current?.focus()}
-          className="relative flex-1 min-w-[160px] xs:min-w-[200px] sm:min-w-[300px] md:min-w-[380px] max-w-3xl mx-2 cursor-text"
+          onClick={() => {
+            if (onOpenCommandPalette) {
+              onOpenCommandPalette(searchQuery);
+            } else {
+              searchInputRef.current?.focus();
+            }
+          }}
+          className="relative flex-1 min-w-0 max-w-xl mx-1 sm:mx-2 cursor-pointer group"
         >
           <div className={`relative flex items-center min-w-0 rounded-xl transition-all ${
             isSearchFocused
               ? 'ring-2 ring-indigo-500/80 bg-slate-950 shadow-lg shadow-indigo-500/10'
-              : 'bg-slate-950/80 hover:bg-slate-950 border border-slate-800/80'
+              : 'bg-slate-950/80 hover:bg-slate-950 border border-slate-800/80 group-hover:border-slate-700'
           }`}>
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 pointer-events-none shrink-0" />
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400/80 group-hover:text-indigo-400 absolute left-2.5 pointer-events-none shrink-0 transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
+              readOnly={!!onOpenCommandPalette}
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onFocus={() => {
-                setIsSearchFocused(true);
-                updateSearchPosition();
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                if (onOpenCommandPalette) {
+                  onOpenCommandPalette(e.target.value);
+                }
               }}
-              placeholder="Search tasks, risks, team members..."
-              className="w-full bg-transparent pl-8 sm:pl-9 pr-8 sm:pr-14 py-1.5 text-xs text-slate-200 placeholder-slate-400 outline-none shadow-inner truncate cursor-text"
+              onFocus={() => {
+                if (onOpenCommandPalette) {
+                  onOpenCommandPalette(searchQuery);
+                } else {
+                  setIsSearchFocused(true);
+                  updateSearchPosition();
+                }
+              }}
+              placeholder="Search tasks, RAID, team (⌘K)..."
+              className="w-full bg-transparent pl-8 sm:pl-9 pr-10 sm:pr-14 py-1.5 text-base sm:text-xs text-slate-200 placeholder-slate-400 outline-none shadow-inner truncate cursor-pointer"
             />
-            {searchQuery ? (
+            {searchQuery && !onOpenCommandPalette ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -334,7 +371,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 absolute right-2 text-[10px] text-slate-400 bg-slate-900 border border-slate-700/80 px-1.5 py-0.5 rounded font-mono shrink-0 pointer-events-none">
+              <kbd className="hidden sm:inline-flex items-center gap-0.5 absolute right-2 text-[10px] text-slate-400 bg-slate-900 border border-slate-700/80 px-1.5 py-0.5 rounded font-mono shrink-0 pointer-events-none group-hover:text-indigo-300 group-hover:border-indigo-500/40 transition-colors">
                 ⌘K
               </kbd>
             )}
@@ -342,17 +379,24 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Global Search Overlay Dropdown (Portal) */}
           {showResultsDropdown && createPortal(
-            <div
-              ref={searchDropdownRef}
-              className="fixed z-[9999] bg-slate-900/98 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-100"
-              style={{
-                top: `${searchDropdownPos.top}px`,
-                left: `${searchDropdownPos.left}px`,
-                width: `${searchDropdownPos.width}px`,
-                maxHeight: 'calc(100vh - 120px)'
-              }}
-              onMouseDown={e => e.preventDefault()} // Keep focus on input when clicking inside dropdown
-            >
+            <>
+              {/* Mobile backdrop overlay for seamless touch dismissal */}
+              <div
+                className="fixed inset-0 z-[9998] bg-black/40 backdrop-blur-[2px] sm:hidden"
+                onClick={() => setIsSearchFocused(false)}
+              />
+              <div
+                ref={searchDropdownRef}
+                className="fixed z-[9999] bg-slate-900/98 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 duration-100 max-w-[calc(100vw-24px)] box-border"
+                style={{
+                  top: `${searchDropdownPos.top}px`,
+                  left: `${searchDropdownPos.left}px`,
+                  width: `${searchDropdownPos.width}px`,
+                  maxHeight: 'calc(100vh - 100px)'
+                }}
+                onMouseDown={e => e.preventDefault()} // Keep focus on input when clicking inside dropdown
+                onTouchStart={e => e.stopPropagation()}
+              >
               <div className="p-3 bg-slate-950/80 border-b border-slate-800 text-xs text-slate-400 flex items-center justify-between">
                 {query ? (
                   <span>
@@ -599,9 +643,10 @@ export const Header: React.FC<HeaderProps> = ({
                   </>
                 )}
               </div>
-            </div>,
-            document.body
-          )}
+            </div>
+          </>,
+          document.body
+        )}
         </div>
 
         {/* Sync Status, Quick Sign Out & Action Bar */}
@@ -746,11 +791,11 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Quick Actions Overflow Menu Trigger (Three Dots) */}
-          <div ref={mobileMenuRef} className="relative flex items-center shrink-0 z-20 ml-0.5">
+          <div ref={mobileMenuRef} className="relative flex items-center shrink-0 z-20">
             <button
               id="btn-mobile-overflow-menu"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 text-slate-200 hover:text-white transition-all shrink-0 flex items-center justify-center shadow-md cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 border border-slate-700 hover:border-indigo-500/50 text-slate-200 hover:text-white transition-all shrink-0 flex items-center justify-center shadow-md cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
               title="More Options & Quick Actions"
             >
               <MoreVertical className="w-4 h-4 text-slate-200" />
@@ -788,6 +833,21 @@ export const Header: React.FC<HeaderProps> = ({
 
                   {/* Actions List */}
                   <div className="space-y-1">
+                    {/* Command Palette / Search Trigger */}
+                    <button
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        onOpenCommandPalette?.();
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-100 bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Search className="w-4 h-4 text-indigo-400 shrink-0" />
+                        <span>Search & Command Palette</span>
+                      </div>
+                      <kbd className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-indigo-300 border border-slate-700">⌘K</kbd>
+                    </button>
+
                     <button
                       onClick={() => {
                         onOpenTaskModal();

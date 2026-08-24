@@ -622,6 +622,23 @@ h1, h2, h3, h4, h5, h6, p {
    ========================================================= */
 
 @media (pointer: coarse), (max-width: 768px) {
+  /* Prevent iOS Safari auto-zoom on input focus (requires font-size >= 16px) */
+  input,
+  select,
+  textarea,
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="email"],
+  input[type="search"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  .ios-no-zoom {
+    font-size: 16px !important;
+  }
+
   /* Standard form controls, dropdowns, and buttons receive 44px minimum touch height */
   button:not(.no-touch-target):not(.badge-magenta):not([tabindex="-1"]),
   select:not(.no-touch-target),
