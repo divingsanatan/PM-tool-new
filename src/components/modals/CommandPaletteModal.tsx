@@ -1139,12 +1139,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
               filteredItems.map((item, index) => {
                 const isSelected = index === selectedIndex;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={item.id}
                     data-index={index}
                     onClick={item.onSelect}
                     onMouseEnter={() => setSelectedIndex(index)}
-                    className={`group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border text-xs sm:text-sm ${
+                    className={`w-full text-left group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border text-xs sm:text-sm focus-visible:ring-2 ${
                       isSelected
                         ? 'bg-indigo-600/15 border-indigo-500/40 text-white shadow-sm'
                         : 'border-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white'
@@ -1196,7 +1197,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                         }`}
                       />
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}

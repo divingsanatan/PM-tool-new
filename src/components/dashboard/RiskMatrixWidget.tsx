@@ -197,15 +197,18 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                     const cellBg = getCellBgClass(prob, impact, isSelected);
 
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={`${prob}-${impact}`}
                         onClick={() => {
                           if (isSelected) setSelectedCell(null);
                           else setSelectedCell({ prob, impact });
                         }}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer min-h-[72px] flex flex-col justify-between ${cellBg}`}
+                        className={`text-left p-2.5 rounded-xl border transition-all cursor-pointer min-h-[72px] flex flex-col justify-between focus-visible:ring-2 ${cellBg}`}
+                        aria-pressed={isSelected}
+                        aria-label={`${prob} probability, ${impact} impact. ${cellItems.length} risks.`}
                       >
-                        <div className="flex items-center justify-between text-[10px] font-semibold opacity-90">
+                        <div className="w-full flex items-center justify-between text-[10px] font-semibold opacity-90">
                           <span className="capitalize">{prob[0].toUpperCase() + prob.slice(1)} Prob</span>
                           <span className="font-mono font-bold">{cellItems.length}</span>
                         </div>
@@ -227,10 +230,10 @@ export const RiskMatrixWidget: React.FC<{ onNavigate?: (view: any) => void }> = 
                           )}
                         </div>
 
-                        <div className="text-[9px] font-medium opacity-80 text-right capitalize">
+                        <div className="w-full text-[9px] font-medium opacity-80 text-right capitalize">
                           {impact} Imp
                         </div>
-                      </div>
+                      </button>
                     );
                   })
                 )}

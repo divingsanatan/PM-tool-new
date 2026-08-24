@@ -529,14 +529,15 @@ export const Header: React.FC<HeaderProps> = ({
                           )}
                         </div>
                         {matchingTasks.map(task => (
-                          <div
+                          <button
+                            type="button"
                             key={task.id}
                             onClick={() => {
                               onOpenTaskModal(task);
                               if (onSelectView) onSelectView(isAdmin ? 'project_board' : 'wbs');
                               setIsSearchFocused(false);
                             }}
-                            className="p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
+                            className="w-full text-left p-2 rounded-xl hover:bg-slate-800 focus-visible:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-200 truncate">{task.title}</p>
@@ -550,7 +551,7 @@ export const Header: React.FC<HeaderProps> = ({
                                 {task.status}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -576,14 +577,15 @@ export const Header: React.FC<HeaderProps> = ({
                           )}
                         </div>
                         {matchingRaid.map(item => (
-                          <div
+                          <button
+                            type="button"
                             key={item.id}
                             onClick={() => {
                               onOpenRaidModal(item);
                               if (onSelectView) onSelectView('raid');
                               setIsSearchFocused(false);
                             }}
-                            className="p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
+                            className="w-full text-left p-2 rounded-xl hover:bg-slate-800 focus-visible:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-200 truncate">{item.title}</p>
@@ -602,7 +604,7 @@ export const Header: React.FC<HeaderProps> = ({
                                 {item.status}
                               </span>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -628,14 +630,15 @@ export const Header: React.FC<HeaderProps> = ({
                           )}
                         </div>
                         {matchingStakeholders.map(stakeholder => (
-                          <div
+                          <button
+                            type="button"
                             key={stakeholder.id}
                             onClick={() => {
                               onOpenStakeholderModal(stakeholder);
                               if (onSelectView) onSelectView('stakeholders');
                               setIsSearchFocused(false);
                             }}
-                            className="p-2 rounded-xl hover:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
+                            className="w-full text-left p-2 rounded-xl hover:bg-slate-800 focus-visible:bg-slate-800 cursor-pointer transition-colors flex items-center justify-between gap-3 text-xs"
                           >
                             <div className="min-w-0 flex-1">
                               <p className="font-medium text-slate-200 truncate">{stakeholder.name}</p>
@@ -644,7 +647,7 @@ export const Header: React.FC<HeaderProps> = ({
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono shrink-0">
                               {stakeholder.email}
                             </span>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}

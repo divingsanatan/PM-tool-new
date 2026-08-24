@@ -303,50 +303,54 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
 
         {/* Type selector tabs if creating new */}
         {!itemToEdit && (
-          <div className="flex border-b border-slate-800 bg-slate-950/40 p-1.5 gap-1">
+          <div className="flex items-center border-b border-slate-800 bg-slate-950/60 p-1.5 gap-1.5 overflow-x-auto scrollbar-none">
             <button
               type="button"
               onClick={() => { setItemType('milestone'); setColor('#f59e0b'); }}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`flex-1 min-w-[100px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 sm:shrink ${
                 itemType === 'milestone'
-                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/40 shadow-xs'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
-              <Flag className="w-3.5 h-3.5" /> Milestone
+              <Flag className="w-3.5 h-3.5 shrink-0 text-amber-400" />
+              <span>Milestone</span>
             </button>
             <button
               type="button"
               onClick={() => { setItemType('epic'); setColor('#8b5cf6'); }}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 sm:shrink ${
                 itemType === 'epic'
-                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                  ? 'bg-purple-500/15 text-purple-300 border border-purple-500/40 shadow-xs'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
-              <Bookmark className="w-3.5 h-3.5" /> Epic
+              <Bookmark className="w-3.5 h-3.5 shrink-0 text-purple-400" />
+              <span>Epic</span>
             </button>
             <button
               type="button"
               onClick={() => { setItemType('feature'); setColor('#3b82f6'); }}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`flex-1 min-w-[95px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 sm:shrink ${
                 itemType === 'feature'
-                  ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                  ? 'bg-blue-500/15 text-blue-300 border border-blue-500/40 shadow-xs'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
-              <Layers className="w-3.5 h-3.5" /> Feature
+              <Layers className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+              <span>Feature</span>
             </button>
             <button
               type="button"
               onClick={() => { setItemType('userStory'); setColor('#10b981'); }}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+              className={`flex-1 min-w-[115px] py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer whitespace-nowrap shrink-0 sm:shrink ${
                 itemType === 'userStory'
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-xs'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" /> User Story
+              <FileText className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+              <span>User Story</span>
             </button>
           </div>
         )}
@@ -817,23 +821,23 @@ export const HierarchyItemModal: React.FC<HierarchyItemModalProps> = ({
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-t border-slate-800 bg-slate-900 shrink-0 gap-3">
           <div className="text-xs text-slate-400 hidden sm:flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            <span>{itemToEdit ? `Editing ${itemType === 'userStory' ? 'User Story' : itemType}` : `Ready to create ${itemType === 'userStory' ? 'User Story' : itemType}`}</span>
+            <span className="whitespace-nowrap">{itemToEdit ? `Editing ${itemType === 'userStory' ? 'User Story' : itemType}` : `Ready to create ${itemType === 'userStory' ? 'User Story' : itemType}`}</span>
           </div>
-          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center justify-end gap-2.5 w-full sm:w-auto shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white text-sm font-medium transition cursor-pointer"
+              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white text-xs sm:text-sm font-medium transition cursor-pointer whitespace-nowrap shrink-0"
             >
               Cancel
             </button>
             <button
               type="submit"
               form="hierarchy-item-form"
-              className="flex-1 sm:flex-initial px-5 py-2.5 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+              className="flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 sm:py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-blue-500/20 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 whitespace-nowrap shrink-0 min-w-fit"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{itemToEdit ? `Save Changes` : `Create ${itemType === 'userStory' ? 'User Story' : itemType.charAt(0).toUpperCase() + itemType.slice(1)}`}</span>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{itemToEdit ? `Save Changes` : `Create ${itemType === 'userStory' ? 'User Story' : itemType.charAt(0).toUpperCase() + itemType.slice(1)}`}</span>
             </button>
           </div>
         </div>

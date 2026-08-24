@@ -57,8 +57,11 @@ import {
   Check,
   Inbox,
   X,
-  BookOpen
+  BookOpen,
+  Ban,
+  AlertOctagon
 } from 'lucide-react';
+import { validateWbsDrop, WbsHierarchyType, DraggedWbsItem } from '../../utils/wbsHierarchy';
 import { HierarchyItemModal, HierarchyType } from '../modals/HierarchyItemModal';
 import { CsvImportModal } from '../modals/CsvImportModal';
 import { SprintFilter } from '../common/SprintFilter';
@@ -310,13 +313,12 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const sprints = projectData.sprints || [];
   const isSprintFiltered = selectedSprintIds.length > 0 && selectedSprintIds.length < sprints.length;
 
-  // Drag & Drop State
-  const [draggedItem, setDraggedItem] = useState<{
-    type: 'task' | 'feature' | 'epic' | 'subtask';
-    id: string;
-    parentId?: string;
-  } | null>(null);
+  // Drag & Drop State with Hierarchy Validation
+  const [draggedItem, setDraggedItem] = useState<DraggedWbsItem | null>(null);
   const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
+  const [dragOverTargetType, setDragOverTargetType] = useState<WbsHierarchyType | null>(null);
+  const [isDragOverValid, setIsDragOverValid] = useState<boolean | null>(null);
+  const [invalidDropReason, setInvalidDropReason] = useState<string | null>(null);
   const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
   const [dragNotice, setDragNotice] = useState<string | null>(null);
 
@@ -330,6 +332,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
   const handleDragEnd = () => {
     setDraggedItem(null);
     setDragOverTargetId(null);
+    setDragOverTargetType(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
   };
 
   const showNotice = (msg: string) => {
@@ -349,19 +354,36 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     triggerHaptic('light');
-    const payload = { type, id, parentId };
+    const payload: DraggedWbsItem = { type, id, parentId };
     setDraggedItem(payload);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
     e.dataTransfer.setData('text/plain', JSON.stringify(payload));
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent, targetId: string) => {
+  const handleDragOver = (e: React.DragEvent, targetId: string, targetType: WbsHierarchyType) => {
     e.preventDefault();
     e.stopPropagation();
-    e.dataTransfer.dropEffect = 'move';
-    if (dragOverTargetId !== targetId) {
+
+    const validation = validateWbsDrop(draggedItem, targetType, targetId);
+
+    if (validation.valid) {
+      e.dataTransfer.dropEffect = 'move';
+    } else {
+      e.dataTransfer.dropEffect = 'none';
+    }
+
+    if (dragOverTargetId !== targetId || isDragOverValid !== validation.valid) {
       setDragOverTargetId(targetId);
-      triggerHaptic('threshold');
+      setDragOverTargetType(targetType);
+      setIsDragOverValid(validation.valid);
+      setInvalidDropReason(validation.reason || null);
+      if (validation.valid) {
+        triggerHaptic('threshold');
+      } else {
+        triggerHaptic('warning');
+      }
     }
   };
 
@@ -369,12 +391,17 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setDragOverTargetType(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
   };
 
   const handleDropOnFeature = async (targetFeatureId: string, e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
 
     let item = draggedItem;
     if (!item) {
@@ -386,6 +413,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     if (!item) return;
+
+    const validation = validateWbsDrop(item, 'feature', targetFeatureId);
+    if (!validation.valid) {
+      showNotice(`🚫 Invalid drop: ${validation.reason || 'Cannot drop item onto Feature'}`);
+      triggerHaptic('error');
+      setDraggedItem(null);
+      return;
+    }
 
     const targetFeature = projectData.features.find(f => f.id === targetFeatureId);
     if (!targetFeature) return;
@@ -432,6 +467,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
 
     let item = draggedItem;
     if (!item) {
@@ -443,6 +480,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     if (!item) return;
+
+    const validation = validateWbsDrop(item, 'epic', targetEpicId);
+    if (!validation.valid) {
+      showNotice(`🚫 Invalid drop: ${validation.reason || 'Tasks cannot be dropped directly into Epics'}`);
+      triggerHaptic('error');
+      setDraggedItem(null);
+      return;
+    }
 
     const targetEpic = (projectData.epics || []).find(ep => ep.id === targetEpicId);
     if (!targetEpic) return;
@@ -460,20 +505,6 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         triggerDropSuccess(targetEpic.id);
         showNotice(`Moved Feature "${feat.title}" under Epic "${targetEpic.title}"`);
       }
-    } else if (item.type === 'task') {
-      const task = projectData.tasks.find(t => t.id === item.id);
-      if (task) {
-        await saveTask({
-          ...task,
-          epicId: targetEpic.id,
-          milestoneId: targetEpic.milestoneId || task.milestoneId,
-          featureId: undefined
-        });
-        triggerHaptic('success');
-        triggerDropSuccess(task.id);
-        triggerDropSuccess(targetEpic.id);
-        showNotice(`Moved Task "${task.title}" directly under Epic "${targetEpic.title}"`);
-      }
     }
     setDraggedItem(null);
   };
@@ -482,6 +513,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
 
     let item = draggedItem;
     if (!item) {
@@ -493,6 +526,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     if (!item) return;
+
+    const validation = validateWbsDrop(item, 'milestone', targetMilestoneId);
+    if (!validation.valid) {
+      showNotice(`🚫 Invalid drop: ${validation.reason || 'Tasks cannot be dropped directly into Milestones'}`);
+      triggerHaptic('error');
+      setDraggedItem(null);
+      return;
+    }
 
     const targetMilestone = projectData.milestones.find(m => m.id === targetMilestoneId);
     if (!targetMilestone) return;
@@ -515,15 +556,6 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         triggerDropSuccess(targetMilestone.id);
         showNotice(`Moved Feature "${feat.title}" under Milestone "${targetMilestone.title}"`);
       }
-    } else if (item.type === 'task') {
-      const task = projectData.tasks.find(t => t.id === item.id);
-      if (task) {
-        await saveTask({ ...task, milestoneId: targetMilestone.id, featureId: undefined, epicId: undefined });
-        triggerHaptic('success');
-        triggerDropSuccess(task.id);
-        triggerDropSuccess(targetMilestone.id);
-        showNotice(`Moved Task "${task.title}" directly under Milestone "${targetMilestone.title}"`);
-      }
     }
     setDraggedItem(null);
   };
@@ -532,6 +564,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
 
     let item = draggedItem;
     if (!item) {
@@ -543,6 +577,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     if (!item) return;
+
+    const validation = validateWbsDrop(item, 'status', targetStatus);
+    if (!validation.valid) {
+      showNotice(`🚫 Invalid drop: ${validation.reason || 'Cannot drop item into status column'}`);
+      triggerHaptic('error');
+      setDraggedItem(null);
+      return;
+    }
 
     if (item.type === 'task') {
       const task = projectData.tasks.find(t => t.id === item.id);
@@ -564,6 +606,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     e.preventDefault();
     e.stopPropagation();
     setDragOverTargetId(null);
+    setIsDragOverValid(null);
+    setInvalidDropReason(null);
 
     let item = draggedItem;
     if (!item) {
@@ -575,6 +619,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       }
     }
     if (!item || item.id === targetTaskId) return;
+
+    const validation = validateWbsDrop(item, 'task', targetTaskId);
+    if (!validation.valid) {
+      showNotice(`🚫 Invalid drop: ${validation.reason || 'Cannot drop item onto Task'}`);
+      triggerHaptic('error');
+      setDraggedItem(null);
+      return;
+    }
 
     const targetTask = projectData.tasks.find(t => t.id === targetTaskId);
     if (!targetTask) return;
@@ -881,6 +933,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     if (statusFilter !== 'all' && nextStatus !== statusFilter) {
       setStatusFilter('all');
     }
+    triggerHaptic(nextStatus === 'done' ? 'success' : 'medium');
     await saveTask({
       ...task,
       status: nextStatus,
@@ -974,6 +1027,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     });
 
     setInlineTaskTitle('');
+    triggerHaptic('light');
   };
 
   // Hierarchy creation/editing modal state
@@ -1317,6 +1371,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     });
 
     setQuickTitle('');
+    triggerHaptic('light');
   };
 
   // Kanban Quick Add Handler
@@ -1344,6 +1399,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     });
 
     setKanbanNewTitle(prev => ({ ...prev, [status]: '' }));
+    triggerHaptic('light');
   };
 
   return (
@@ -1474,27 +1530,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           {/* Quick Create Hierarchy Items */}
           <div className="flex flex-wrap items-center gap-1.5 py-0.5 min-w-0">
             <button
+              id="wbs-add-hierarchy-btn"
               onClick={() => openCreateModal('milestone')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 text-xs font-semibold transition-colors shrink-0 whitespace-nowrap cursor-pointer active:scale-95"
+              title="Add a Milestone, Epic, Feature, or User Story container"
             >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>Milestone</span>
-            </button>
-
-            <button
-              onClick={() => openCreateModal('epic')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>Epic</span>
-            </button>
-
-            <button
-              onClick={() => openCreateModal('feature')}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 text-xs font-medium transition-colors shrink-0 whitespace-nowrap cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5 shrink-0" />
-              <span>Feature</span>
+              <Layers className="w-3.5 h-3.5 shrink-0 text-indigo-400" />
+              <span>Hierarchy Item</span>
             </button>
 
             <button
@@ -1535,11 +1577,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         {/* Bottom Row: Search & Filters */}
         <div className="flex items-center gap-2 flex-wrap min-w-0 w-full pt-2 border-t border-slate-800/60">
           {/* Sprint Scope Filter: All | Sprints | Backlog */}
-          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 max-w-full overflow-x-auto scrollbar-none">
             <button
               type="button"
               onClick={() => setSprintScopeFilter('all')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 whitespace-nowrap ${
                 sprintScopeFilter === 'all'
                   ? 'bg-slate-800 text-white shadow-xs'
                   : 'text-slate-400 hover:text-slate-200'
@@ -1550,34 +1592,34 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             <button
               type="button"
               onClick={() => setSprintScopeFilter('active_sprints')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 whitespace-nowrap flex items-center gap-1 ${
                 sprintScopeFilter === 'active_sprints'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'text-purple-300/80 hover:text-purple-200'
               }`}
             >
-              <Layers className="w-3 h-3" />
+              <Layers className="w-3 h-3 shrink-0" />
               <span>In Sprints ({projectData.tasks.filter(t => !!t.sprintId).length})</span>
             </button>
             <button
               type="button"
               onClick={() => setSprintScopeFilter('backlog')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 flex items-center gap-1 ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 whitespace-nowrap flex items-center gap-1 ${
                 sprintScopeFilter === 'backlog'
                   ? 'bg-amber-600 text-white shadow-xs'
                   : 'text-amber-300/80 hover:text-amber-200'
               }`}
             >
-              <Inbox className="w-3 h-3" />
+              <Inbox className="w-3 h-3 shrink-0" />
               <span>Backlog ({projectData.tasks.filter(t => !t.sprintId).length})</span>
             </button>
           </div>
 
           {/* Sprint Filter Selector (Visible when NOT on Backlog) */}
           {sprintScopeFilter !== 'backlog' && (
-            <div className="flex items-center gap-1.5 bg-slate-950 border border-purple-500/40 text-purple-300 px-2.5 py-1.5 rounded-xl text-xs shrink-0 shadow-xs">
+            <div className="flex items-center gap-1.5 bg-slate-950 border border-purple-500/40 text-purple-300 px-2.5 py-1.5 rounded-xl text-xs shrink-0 shadow-xs max-w-full">
               <Layers className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-              <span className="text-[11px] font-semibold text-purple-400 hidden sm:inline">Sprint:</span>
+              <span className="text-[11px] font-semibold text-purple-400 hidden sm:inline shrink-0">Sprint:</span>
               <select
                 id="wbs-sprint-filter-select"
                 value={selectedSprintIds.length === 1 ? selectedSprintIds[0] : 'all'}
@@ -1589,7 +1631,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     setSelectedSprintIds([val]);
                   }
                 }}
-                className="bg-transparent text-purple-200 font-semibold outline-none cursor-pointer text-xs pr-1 border-none"
+                className="bg-transparent text-purple-200 font-semibold outline-none cursor-pointer text-xs pr-1 border-none max-w-[140px] sm:max-w-[200px] truncate"
                 title="Filter WBS hierarchy items by selected sprint or all sprints"
               >
                 <option value="all" className="bg-slate-900 text-slate-200">
@@ -1600,7 +1642,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   const statusTag = sp.status === 'active' ? 'Active' : sp.status === 'completed' ? 'Done' : 'Planning';
                   return (
                     <option key={sp.id} value={sp.id} className="bg-slate-900 text-purple-200">
-                      {sp.name} [{statusTag}] ({count} {count === 1 ? 'task' : 'tasks'})
+                      {sp.name} [{statusTag}] ({count})
                     </option>
                   );
                 })}
@@ -1609,7 +1651,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 <button
                   type="button"
                   onClick={() => setSelectedSprintIds([])}
-                  className="ml-1 text-purple-400 hover:text-purple-100 hover:bg-purple-900/50 rounded p-0.5"
+                  className="ml-1 text-purple-400 hover:text-purple-100 hover:bg-purple-900/50 rounded p-0.5 shrink-0"
                   title="Reset to All Sprints"
                 >
                   <X className="w-3 h-3" />
@@ -1617,7 +1659,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               )}
             </div>
           )}
-          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800/80 text-slate-300 flex-1 sm:flex-none sm:w-56 min-w-[140px]">
+          <div className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-800/80 text-slate-300 flex-1 sm:flex-none sm:w-56 min-w-[130px]">
             <Search className="w-3.5 h-3.5 text-slate-400 shrink-0 pointer-events-none" />
             <input
               type="text"
@@ -1631,7 +1673,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[110px]"
+            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[100px]"
           >
             <option value="all">All Statuses</option>
             <option value="todo">To Do</option>
@@ -1658,7 +1700,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <select
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[110px]"
+            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[100px]"
           >
             <option value="all">All Priorities</option>
             <option value="urgent">Urgent</option>
@@ -1670,7 +1712,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value as 'all' | 'task' | 'bug')}
-            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[120px]"
+            className="bg-slate-950 border border-slate-800/80 text-slate-300 px-3 py-1.5 rounded-xl outline-none cursor-pointer text-xs flex-1 sm:flex-none min-w-[110px]"
           >
             <option value="all">All Work Types</option>
             <option value="task">Tasks Only</option>
@@ -1817,30 +1859,31 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
       {/* ==================== VIEW 3: INTERACTIVE CALENDAR VIEW ==================== */}
       {viewType === 'calendar' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 sm:p-5 shadow-sm space-y-4">
           {/* Calendar Controls & Navigation Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950 p-3 sm:p-4 rounded-xl border border-slate-800">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
                 <Calendar className="w-5 h-5 shrink-0" />
               </div>
-              <div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-slate-100 flex items-center gap-2 truncate">
                   <span>
                     {calendarDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
                   </span>
                 </h3>
-                <p className="text-[11px] text-slate-400">Task Timeline & Schedule Calendar</p>
+                <p className="text-[11px] text-slate-400 truncate">Task Timeline & Schedule Calendar</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
               {/* Navigation buttons: Prev, Today, Next */}
               <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
                 <button
                   onClick={handlePrevCalendar}
                   className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
                   title="Previous"
+                  aria-label="Previous Period"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1854,6 +1897,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   onClick={handleNextCalendar}
                   className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-md transition-colors"
                   title="Next"
+                  aria-label="Next Period"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1881,157 +1925,163 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             </div>
           </div>
 
-          {/* Month Grid View */}
+          {/* Month Grid View with Responsive Horizontal Scroll for Smaller Screens */}
           {calendarMode === 'month' && (
-            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950 shadow-inner">
-              {/* Days of week header */}
-              <div className="grid grid-cols-7 bg-slate-900/90 border-b border-slate-800 text-center text-xs font-bold text-slate-400 py-2.5">
-                <div>Sun</div>
-                <div>Mon</div>
-                <div>Tue</div>
-                <div>Wed</div>
-                <div>Thu</div>
-                <div>Fri</div>
-                <div>Sat</div>
-              </div>
+            <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950 shadow-inner scrollbar-thin">
+              <div className="min-w-[640px] md:min-w-0">
+                {/* Days of week header */}
+                <div className="grid grid-cols-7 bg-slate-900/90 border-b border-slate-800 text-center text-xs font-bold text-slate-400 py-2.5">
+                  <div>Sun</div>
+                  <div>Mon</div>
+                  <div>Tue</div>
+                  <div>Wed</div>
+                  <div>Thu</div>
+                  <div>Fri</div>
+                  <div>Sat</div>
+                </div>
 
-              {/* Grid Cells */}
-              <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-800/60 bg-slate-950">
-                {calendarGridDays.map((cell, idx) => {
-                  const dayTasks = getTasksForDate(cell.dateStr);
-                  const displayTasks = dayTasks.slice(0, 3);
-                  const extraCount = dayTasks.length - 3;
+                {/* Grid Cells */}
+                <div className="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-800/60 bg-slate-950">
+                  {calendarGridDays.map((cell, idx) => {
+                    const dayTasks = getTasksForDate(cell.dateStr);
+                    const displayTasks = dayTasks.slice(0, 3);
+                    const extraCount = dayTasks.length - 3;
 
-                  return (
-                    <div
-                      key={idx}
-                      className={`min-h-[110px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors ${
-                        !cell.isCurrentMonth ? 'bg-slate-950/40 text-slate-600' : 'bg-slate-900/40 hover:bg-slate-900/80'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-1 mb-1">
-                        <span
-                          className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded-md ${
-                            cell.isToday
-                              ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
-                              : cell.isCurrentMonth
-                              ? 'text-slate-300'
-                              : 'text-slate-600'
-                          }`}
-                        >
-                          {cell.date.getDate()}
-                        </span>
-                        <button
-                          onClick={() => onOpenTaskModal({ dueDate: cell.dateStr } as any)}
-                          className="p-1 opacity-60 hover:opacity-100 text-slate-500 hover:text-indigo-400 hover:bg-slate-800 rounded transition-all text-[10px]"
-                          title={`Add task for ${cell.dateStr}`}
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                      </div>
-
-                      {/* Day Task List */}
-                      <div className="flex-1 space-y-1 overflow-hidden">
-                        {displayTasks.map(task => {
-                          const statusBg =
-                            task.status === 'done' ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' :
-                            task.status === 'in_progress' ? 'bg-indigo-950/80 border-indigo-500/40 text-indigo-300' :
-                            task.status === 'demoable' ? 'bg-teal-950/80 border-teal-500/40 text-teal-300' :
-                            task.status === 'review' ? 'bg-purple-950/80 border-purple-500/40 text-purple-300' :
-                            task.status === 'on_hold' ? 'bg-amber-950/80 border-amber-500/40 text-amber-300' :
-                            task.status === 'blocked' ? 'bg-rose-950/80 border-rose-500/40 text-rose-300' :
-                            'bg-slate-900 border-slate-700 text-slate-300';
-
-                          return (
-                            <div
-                              key={task.id}
-                              onClick={() => onOpenTaskModal(task)}
-                              className={`p-1.5 rounded-lg border text-[11px] leading-tight flex items-center justify-between gap-1 cursor-pointer hover:scale-[1.01] transition-all group ${statusBg}`}
-                              title={`${task.title} (${task.status.replace('_', ' ')})`}
-                            >
-                              <div className="flex items-center gap-1 min-w-0 flex-1">
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                  task.priority === 'urgent' ? 'bg-rose-500' :
-                                  task.priority === 'high' ? 'bg-amber-500' : 'bg-indigo-400'
-                                }`} />
-                                <span className="font-medium truncate">{task.title}</span>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {extraCount > 0 && (
-                          <button
-                            onClick={() => setSelectedDayModal({ dateStr: cell.dateStr, tasks: dayTasks })}
-                            className="w-full text-left font-mono text-[10px] text-indigo-400 hover:text-indigo-300 font-bold px-1 hover:underline"
+                    return (
+                      <div
+                        key={idx}
+                        className={`min-h-[90px] sm:min-h-[110px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors ${
+                          !cell.isCurrentMonth ? 'bg-slate-950/40 text-slate-600' : 'bg-slate-900/40 hover:bg-slate-900/80'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span
+                            className={`text-[11px] sm:text-xs font-bold font-mono px-1.5 py-0.5 rounded-md ${
+                              cell.isToday
+                                ? 'bg-indigo-600 text-white ring-2 ring-indigo-400'
+                                : cell.isCurrentMonth
+                                ? 'text-slate-300'
+                                : 'text-slate-600'
+                            }`}
                           >
-                            + {extraCount} more task{extraCount > 1 ? 's' : ''}...
+                            {cell.date.getDate()}
+                          </span>
+                          <button
+                            onClick={() => onOpenTaskModal({ dueDate: cell.dateStr } as any)}
+                            className="p-1 opacity-70 hover:opacity-100 text-slate-500 hover:text-indigo-400 hover:bg-slate-800 rounded transition-all text-[10px]"
+                            title={`Add task for ${cell.dateStr}`}
+                            aria-label={`Add task for ${cell.dateStr}`}
+                          >
+                            <Plus className="w-3 h-3" />
                           </button>
-                        )}
+                        </div>
+
+                        {/* Day Task List */}
+                        <div className="flex-1 space-y-1 overflow-hidden">
+                          {displayTasks.map(task => {
+                            const statusBg =
+                              task.status === 'done' ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-300' :
+                              task.status === 'in_progress' ? 'bg-indigo-950/80 border-indigo-500/40 text-indigo-300' :
+                              task.status === 'demoable' ? 'bg-teal-950/80 border-teal-500/40 text-teal-300' :
+                              task.status === 'review' ? 'bg-purple-950/80 border-purple-500/40 text-purple-300' :
+                              task.status === 'on_hold' ? 'bg-amber-950/80 border-amber-500/40 text-amber-300' :
+                              task.status === 'blocked' ? 'bg-rose-950/80 border-rose-500/40 text-rose-300' :
+                              'bg-slate-900 border-slate-700 text-slate-300';
+
+                            return (
+                              <div
+                                key={task.id}
+                                onClick={() => onOpenTaskModal(task)}
+                                className={`p-1 sm:p-1.5 rounded-md sm:rounded-lg border text-[10px] sm:text-[11px] leading-tight flex items-center justify-between gap-1 cursor-pointer hover:scale-[1.01] transition-all group ${statusBg}`}
+                                title={`${task.title} (${task.status.replace('_', ' ')})`}
+                              >
+                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    task.priority === 'urgent' ? 'bg-rose-500' :
+                                    task.priority === 'high' ? 'bg-amber-500' : 'bg-indigo-400'
+                                  }`} />
+                                  <span className="font-medium truncate">{task.title}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {extraCount > 0 && (
+                            <button
+                              onClick={() => setSelectedDayModal({ dateStr: cell.dateStr, tasks: dayTasks })}
+                              className="w-full text-left font-mono text-[10px] text-indigo-400 hover:text-indigo-300 font-bold px-1 hover:underline truncate"
+                            >
+                              + {extraCount} more task{extraCount > 1 ? 's' : ''}...
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
 
-          {/* Week Grid View */}
+          {/* Week Grid View with Responsive Horizontal Scroll for Smaller Screens */}
           {calendarMode === 'week' && (
-            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
-              <div className="grid grid-cols-7 divide-x divide-slate-800">
-                {calendarWeekDays.map((cell, idx) => {
-                  const dayTasks = getTasksForDate(cell.dateStr);
+            <div className="border border-slate-800 rounded-xl overflow-x-auto bg-slate-950 scrollbar-thin">
+              <div className="min-w-[680px] md:min-w-0">
+                <div className="grid grid-cols-7 divide-x divide-slate-800">
+                  {calendarWeekDays.map((cell, idx) => {
+                    const dayTasks = getTasksForDate(cell.dateStr);
 
-                  return (
-                    <div key={idx} className="min-h-[350px] p-2 sm:p-3 flex flex-col bg-slate-900/30">
-                      <div className="text-center border-b border-slate-800 pb-2 mb-3">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold block">
-                          {cell.date.toLocaleDateString('default', { weekday: 'short' })}
-                        </span>
-                        <span className={`text-sm font-bold font-mono px-2 py-0.5 rounded-full inline-block mt-0.5 ${
-                          cell.isToday ? 'bg-indigo-600 text-white' : 'text-slate-200'
-                        }`}>
-                          {cell.date.getDate()}
-                        </span>
-                      </div>
+                    return (
+                      <div key={idx} className="min-h-[300px] sm:min-h-[350px] p-2 sm:p-3 flex flex-col bg-slate-900/30">
+                        <div className="text-center border-b border-slate-800 pb-2 mb-3">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block">
+                            {cell.date.toLocaleDateString('default', { weekday: 'short' })}
+                          </span>
+                          <span className={`text-xs sm:text-sm font-bold font-mono px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                            cell.isToday ? 'bg-indigo-600 text-white' : 'text-slate-200'
+                          }`}>
+                            {cell.date.getDate()}
+                          </span>
+                        </div>
 
-                      <div className="flex-1 space-y-2 overflow-y-auto">
-                        {dayTasks.map(task => (
-                          <div
-                            key={task.id}
-                            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 space-y-2 text-xs transition-all shadow-xs"
-                          >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                                task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300' :
-                                task.priority === 'high' ? 'bg-amber-500/20 text-amber-300' : 'bg-indigo-500/20 text-indigo-300'
-                              }`}>
-                                {task.priority}
-                              </span>
+                        <div className="flex-1 space-y-2 overflow-y-auto">
+                          {dayTasks.map(task => (
+                            <div
+                              key={task.id}
+                              onClick={() => onOpenTaskModal(task)}
+                              className="p-2 sm:p-2.5 rounded-xl bg-slate-900 border border-slate-800 hover:border-indigo-500/50 space-y-1.5 text-xs transition-all shadow-xs cursor-pointer group"
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300' :
+                                  task.priority === 'high' ? 'bg-amber-500/20 text-amber-300' : 'bg-indigo-500/20 text-indigo-300'
+                                }`}>
+                                  {task.priority}
+                                </span>
+                              </div>
+
+                              <p className="font-bold text-slate-100 text-xs group-hover:text-indigo-300 transition-colors truncate">{task.title}</p>
+                              {task.description && (
+                                <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
+                              )}
+
+                              <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
+                                <span className="capitalize text-indigo-300">{task.status.replace('_', ' ')}</span>
+                                <span>${task.plannedCost?.toLocaleString()}</span>
+                              </div>
                             </div>
+                          ))}
 
-                            <p className="font-bold text-slate-100 text-xs">{task.title}</p>
-                            {task.description && (
-                              <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
-                            )}
-
-                            <div className="flex items-center justify-between pt-1 border-t border-slate-800 text-[10px] text-slate-400 font-mono">
-                              <span className="capitalize text-indigo-300">{task.status.replace('_', ' ')}</span>
-                              <span>${task.plannedCost?.toLocaleString()}</span>
+                          {dayTasks.length === 0 && (
+                            <div className="p-3 text-center text-slate-600 text-[11px] border border-dashed border-slate-800/80 rounded-xl">
+                              No tasks
                             </div>
-                          </div>
-                        ))}
-
-                        {dayTasks.length === 0 && (
-                          <div className="p-4 text-center text-slate-600 text-[11px] border border-dashed border-slate-800/80 rounded-xl">
-                            No tasks
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -2067,6 +2117,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           const completionPercent = fEff.completionPercent;
           const featureCost = fEff.plannedCost;
           const isFDragTarget = dragOverTargetId === feature.id;
+          const isFDropValid = isFDragTarget && isDragOverValid === true;
+          const isFDropInvalid = isFDragTarget && isDragOverValid === false;
           const isFJustDropped = justDroppedId === feature.id;
           const isFDragging = draggedItem?.id === feature.id;
 
@@ -2079,14 +2131,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 animate={{
                   scale: isFDragging ? 0.985 : isFDragTarget ? 1.015 : isFJustDropped ? [1.025, 0.99, 1] : 1,
                   opacity: isFDragging ? 0.6 : 1,
-                  boxShadow: isFDragTarget ? '0 4px 16px -2px rgba(99, 102, 241, 0.2)' : 'none'
+                  boxShadow: isFDropValid ? '0 4px 16px -2px rgba(16, 185, 129, 0.3)' : isFDropInvalid ? '0 4px 16px -2px rgba(244, 63, 94, 0.35)' : isFDragTarget ? '0 4px 16px -2px rgba(99, 102, 241, 0.2)' : 'none'
                 }}
                 transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
-                onDragOver={(e) => handleDragOver(e, feature.id)}
+                onDragOver={(e) => handleDragOver(e, feature.id, 'feature')}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDropOnFeature(feature.id, e)}
                 onDragEnd={handleDragEnd}
                 className={`flex items-center justify-between py-2.5 px-4 bg-blue-500/10 hover:bg-blue-500/15 dark:bg-slate-900/60 dark:hover:bg-slate-800/50 transition-colors border-b border-blue-500/15 dark:border-slate-800/60 group min-w-0 ${
+                  isFDropValid ? 'ring-2 ring-emerald-500/80 bg-emerald-950/40 border-emerald-500/50' :
+                  isFDropInvalid ? 'ring-2 ring-rose-500/90 bg-rose-950/50 border-rose-500 cursor-not-allowed' :
                   isFDragTarget ? 'ring-2 ring-indigo-500/60 bg-indigo-950/40' : ''
                 }`}
               >
@@ -2101,9 +2155,24 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   <PieChart className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
                   <span className="font-mono text-[10px] bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">{fCode}</span>
 
-                  <span
+                  {/* Drop Status Indicator */}
+                  {isFDropInvalid && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                      <Ban className="w-3 h-3 text-rose-400" />
+                      {invalidDropReason || 'Invalid Target'}
+                    </span>
+                  )}
+                  {isFDropValid && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                      <Check className="w-3 h-3 text-emerald-400" />
+                      Valid Parent
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
                     onClick={() => openEditModal(feature)}
-                    className="font-bold text-xs text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer truncate"
+                    className="font-bold text-xs text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer truncate text-left focus-visible:ring-2 rounded-sm"
                     title="Click to view/edit Feature screen"
                   >
                     {feature.title}
@@ -2112,7 +2181,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         ({completionPercent}%)
                       </span>
                     )}
-                  </span>
+                  </button>
 
                   {/* ClickUp-style Hover Quick Actions inline */}
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -2519,6 +2588,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       const mCost = mEff.plannedCost;
 
                       const isMDragTarget = dragOverTargetId === milestone.id;
+                      const isMDropValid = isMDragTarget && isDragOverValid === true;
+                      const isMDropInvalid = isMDragTarget && isDragOverValid === false;
                       const isMJustDropped = justDroppedId === milestone.id;
                       const isMDragging = draggedItem?.id === milestone.id;
 
@@ -2531,14 +2602,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           animate={{
                             scale: isMDragging ? 0.985 : isMDragTarget ? 1.015 : isMJustDropped ? [1.025, 0.99, 1] : 1,
                             opacity: isMDragging ? 0.6 : 1,
-                            boxShadow: isMDragTarget ? '0 4px 16px -2px rgba(245, 158, 11, 0.25)' : 'none'
+                            boxShadow: isMDropValid ? '0 4px 16px -2px rgba(16, 185, 129, 0.3)' : isMDropInvalid ? '0 4px 16px -2px rgba(244, 63, 94, 0.35)' : isMDragTarget ? '0 4px 16px -2px rgba(245, 158, 11, 0.25)' : 'none'
                           }}
                           transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
-                          onDragOver={(e) => handleDragOver(e, milestone.id)}
+                          onDragOver={(e) => handleDragOver(e, milestone.id, 'milestone')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnMilestone(milestone.id, e)}
                           onDragEnd={handleDragEnd}
                           className={`flex items-center justify-between py-2.5 px-4 bg-amber-500/10 hover:bg-amber-500/15 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 transition-colors border-b border-amber-500/20 group min-w-0 ${
+                            isMDropValid ? 'ring-2 ring-emerald-500/80 bg-emerald-950/40 border-emerald-500/50' :
+                            isMDropInvalid ? 'ring-2 ring-rose-500/90 bg-rose-950/50 border-rose-500 cursor-not-allowed' :
                             isMDragTarget ? 'ring-2 ring-amber-500/60 bg-amber-950/40' : ''
                           }`}
                         >
@@ -2553,13 +2626,28 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                             <Flag className="w-4 h-4 text-amber-500 shrink-0" />
                             <span className="font-mono text-[10px] bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}</span>
 
-                            <span
+                            {/* Drop Status Indicator */}
+                            {isMDropInvalid && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                <Ban className="w-3 h-3 text-rose-400" />
+                                {invalidDropReason || 'Tasks cannot be dropped into Milestones'}
+                              </span>
+                            )}
+                            {isMDropValid && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                Drop to place under Milestone
+                              </span>
+                            )}
+
+                            <button
+                              type="button"
                               onClick={() => openEditModal(milestone)}
-                              className="font-bold text-xs text-slate-900 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 cursor-pointer truncate"
+                              className="font-bold text-xs text-slate-900 dark:text-amber-200 hover:text-amber-600 dark:hover:text-amber-100 cursor-pointer truncate text-left focus-visible:ring-2 rounded-sm"
                               title="Click to view/edit Milestone screen"
                             >
                               {milestone.title}
-                            </span>
+                            </button>
 
                             {/* Hover Quick Actions */}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -2668,6 +2756,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                 .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id));
                               const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
                               const isEDragTarget = dragOverTargetId === epic.id;
+                              const isEDropValid = isEDragTarget && isDragOverValid === true;
+                              const isEDropInvalid = isEDragTarget && isDragOverValid === false;
                               const isEJustDropped = justDroppedId === epic.id;
                               const isEDragging = draggedItem?.id === epic.id;
 
@@ -2680,14 +2770,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                     animate={{
                                       scale: isEDragging ? 0.985 : isEDragTarget ? 1.015 : isEJustDropped ? [1.025, 0.99, 1] : 1,
                                       opacity: isEDragging ? 0.6 : 1,
-                                      boxShadow: isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
+                                      boxShadow: isEDropValid ? '0 4px 16px -2px rgba(16, 185, 129, 0.3)' : isEDropInvalid ? '0 4px 16px -2px rgba(244, 63, 94, 0.35)' : isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
                                     }}
                                     transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
-                                    onDragOver={(e) => handleDragOver(e, epic.id)}
+                                    onDragOver={(e) => handleDragOver(e, epic.id, 'epic')}
                                     onDragLeave={handleDragLeave}
                                     onDrop={(e) => handleDropOnEpic(epic.id, e)}
                                     onDragEnd={handleDragEnd}
                                     className={`flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0 ${
+                                      isEDropValid ? 'ring-2 ring-emerald-500/80 bg-emerald-950/40 border-emerald-500/50' :
+                                      isEDropInvalid ? 'ring-2 ring-rose-500/90 bg-rose-950/50 border-rose-500 cursor-not-allowed' :
                                       isEDragTarget ? 'ring-2 ring-purple-500/60 bg-purple-950/40' : ''
                                     }`}
                                   >
@@ -2702,13 +2794,28 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                       <Layers className="w-4 h-4 text-purple-500 shrink-0" />
                                       <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">M{mIdx + 1}.E{eIdx + 1}</span>
 
-                                      <span
+                                      {/* Drop Status Indicator */}
+                                      {isEDropInvalid && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                          <Ban className="w-3 h-3 text-rose-400" />
+                                          {invalidDropReason || 'Tasks cannot be dropped into Epics'}
+                                        </span>
+                                      )}
+                                      {isEDropValid && (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                          <Check className="w-3 h-3 text-emerald-400" />
+                                          Drop to place under Epic
+                                        </span>
+                                      )}
+
+                                      <button
+                                        type="button"
                                         onClick={() => openEditModal(epic)}
-                                        className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                                        className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate text-left focus-visible:ring-2 rounded-sm"
                                         title="Click to view/edit Epic screen"
                                       >
                                         {epic.title}
-                                      </span>
+                                      </button>
 
                                       {/* Hover Quick Actions */}
                                       <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -2845,6 +2952,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       .filter(feat => (sprintScopeFilter === 'all' && !isSprintFiltered) || getFeatureHasMatchingTasks(feat.id));
                     const epicDirectTasks = filteredTasks.filter(t => t.epicId === epic.id && !t.featureId);
                     const isEDragTarget = dragOverTargetId === epic.id;
+                    const isEDropValid = isEDragTarget && isDragOverValid === true;
+                    const isEDropInvalid = isEDragTarget && isDragOverValid === false;
                     const isEJustDropped = justDroppedId === epic.id;
                     const isEDragging = draggedItem?.id === epic.id;
 
@@ -2856,14 +2965,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           animate={{
                             scale: isEDragging ? 0.985 : isEDragTarget ? 1.015 : isEJustDropped ? [1.025, 0.99, 1] : 1,
                             opacity: isEDragging ? 0.6 : 1,
-                            boxShadow: isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
+                            boxShadow: isEDropValid ? '0 4px 16px -2px rgba(16, 185, 129, 0.3)' : isEDropInvalid ? '0 4px 16px -2px rgba(244, 63, 94, 0.35)' : isEDragTarget ? '0 4px 16px -2px rgba(168, 85, 247, 0.25)' : 'none'
                           }}
                           transition={{ type: 'spring', stiffness: 450, damping: 28, mass: 0.8 }}
-                          onDragOver={(e) => handleDragOver(e, epic.id)}
+                          onDragOver={(e) => handleDragOver(e, epic.id, 'epic')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnEpic(epic.id, e)}
                           onDragEnd={handleDragEnd}
                           className={`flex items-center justify-between py-2 px-4 bg-purple-500/10 hover:bg-purple-500/15 dark:bg-purple-950/30 dark:hover:bg-purple-900/40 transition-colors border-b border-purple-500/20 group min-w-0 ${
+                            isEDropValid ? 'ring-2 ring-emerald-500/80 bg-emerald-950/40 border-emerald-500/50' :
+                            isEDropInvalid ? 'ring-2 ring-rose-500/90 bg-rose-950/50 border-rose-500 cursor-not-allowed' :
                             isEDragTarget ? 'ring-2 ring-purple-500/60 bg-purple-950/40' : ''
                           }`}
                         >
@@ -2873,13 +2984,29 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                             </button>
                             <Layers className="w-4 h-4 text-purple-500 shrink-0" />
                             <span className="font-mono text-[10px] bg-purple-500/15 text-purple-800 dark:text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded font-bold shrink-0">E{eIdx + 1}</span>
-                            <span
+
+                            {/* Drop Status Indicator */}
+                            {isEDropInvalid && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                <Ban className="w-3 h-3 text-rose-400" />
+                                {invalidDropReason || 'Tasks cannot be dropped into Epics'}
+                              </span>
+                            )}
+                            {isEDropValid && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                                <Check className="w-3 h-3 text-emerald-400" />
+                                Drop to place under Epic
+                              </span>
+                            )}
+
+                            <button
+                              type="button"
                               onClick={() => openEditModal(epic)}
-                              className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate"
+                              className="font-bold text-xs text-slate-900 dark:text-purple-200 hover:text-purple-600 dark:hover:text-purple-100 cursor-pointer truncate text-left focus-visible:ring-2 rounded-sm"
                               title="Click to view/edit Epic screen"
                             >
                               {epic.title}
-                            </span>
+                            </button>
 
                             {/* Hover Quick Actions */}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -3119,46 +3246,48 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             const isAllSelected = visibleBacklogTasks.length > 0 && visibleBacklogTasks.every(t => selectedBacklogTaskIds.includes(t.id));
 
             return (
-              <div id="wbs-product-backlog-section" className="border border-amber-500/30 dark:border-amber-500/20 bg-slate-900/90 rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-200">
+              <div id="wbs-product-backlog-section" className="border border-amber-500/30 dark:border-amber-500/20 bg-slate-900/90 rounded-2xl overflow-hidden shadow-lg animate-in fade-in duration-200 w-full min-w-0">
                 {/* Backlog Header */}
-                <div className="bg-amber-950/40 border-b border-amber-500/20 p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => setIsBacklogExpanded(!isBacklogExpanded)}
-                      className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer"
-                      title={isBacklogExpanded ? "Collapse Backlog" : "Expand Backlog"}
-                    >
-                      {isBacklogExpanded ? <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}
-                    </button>
-                    <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
-                      <Inbox className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-xs sm:text-sm text-slate-100">Product Backlog</h3>
-                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.2 rounded-full text-[11px] font-bold">
-                          {allBacklogTasks.length} {allBacklogTasks.length === 1 ? 'item' : 'items'}
-                        </span>
+                <div className="bg-amber-950/40 border-b border-amber-500/20 p-2.5 sm:p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0 justify-between sm:justify-start">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsBacklogExpanded(!isBacklogExpanded)}
+                        className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors cursor-pointer shrink-0"
+                        title={isBacklogExpanded ? "Collapse Backlog" : "Expand Backlog"}
+                      >
+                        {isBacklogExpanded ? <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" /> : <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      </button>
+                      <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                        <Inbox className="w-4 h-4 sm:w-5 sm:h-5" />
                       </div>
-                      <p className="text-[11px] text-slate-400 hidden md:block truncate max-w-md mt-0.5">
-                        Work items ready to be scheduled into active sprints.
-                      </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-xs sm:text-sm text-slate-100">Product Backlog</h3>
+                          <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.2 rounded-full text-[11px] font-bold shrink-0">
+                            {allBacklogTasks.length} {allBacklogTasks.length === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 hidden lg:block truncate max-w-md mt-0.5">
+                          Work items ready to be scheduled into active sprints.
+                        </p>
+                      </div>
                     </div>
                   </div>
 
                   {/* Header Right Actions: Search, Density Toggle, Metrics & Add */}
-                  <div className="flex items-center gap-2 flex-wrap ml-auto">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-between md:justify-end w-full md:w-auto">
                     {/* Backlog Quick Search */}
                     {isBacklogExpanded && allBacklogTasks.length > 2 && (
-                      <div className="relative">
+                      <div className="relative flex-1 sm:flex-initial min-w-[120px]">
                         <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
                           type="text"
                           value={backlogSearchQuery}
                           onChange={(e) => setBacklogSearchQuery(e.target.value)}
                           placeholder="Filter backlog..."
-                          className="w-28 sm:w-36 md:w-44 pl-8 pr-6 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                          className="w-full sm:w-36 md:w-44 pl-8 pr-6 py-1 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
                         />
                         {backlogSearchQuery && (
                           <button
@@ -3173,11 +3302,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     )}
 
                     {/* Density Toggle (Compact vs Spacious) */}
-                    <div className="inline-flex rounded-lg bg-slate-950/80 border border-slate-800 p-0.5 text-xs">
+                    <div className="inline-flex rounded-lg bg-slate-950/80 border border-slate-800 p-0.5 text-xs shrink-0">
                       <button
                         type="button"
                         onClick={() => setBacklogDensity('compact')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                        className={`px-2 py-1 sm:py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                           backlogDensity === 'compact'
                             ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
                             : 'text-slate-400 hover:text-slate-200'
@@ -3189,7 +3318,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       <button
                         type="button"
                         onClick={() => setBacklogDensity('comfortable')}
-                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                        className={`px-2 py-1 sm:py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                           backlogDensity === 'comfortable'
                             ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30'
                             : 'text-slate-400 hover:text-slate-200'
@@ -3201,7 +3330,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     </div>
 
                     {/* Effort & Planned Cost pills */}
-                    <div className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950/70 border border-slate-800/80 text-[11px]">
+                    <div className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-950/70 border border-slate-800/80 text-[11px] shrink-0">
                       <span className="text-slate-400">Effort: <strong className="text-amber-300 font-mono">{totalBacklogHours}h</strong></span>
                       <span className="text-slate-700">•</span>
                       <span className="text-slate-400">Budget: <strong className="text-emerald-400 font-mono">${totalBacklogBudget.toLocaleString()}</strong></span>
@@ -3210,10 +3339,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     <button
                       type="button"
                       onClick={() => onOpenTaskModal({ sprintId: '' } as any)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+                      className="flex items-center justify-center gap-1 px-3 py-1.5 sm:py-1 rounded-lg bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold text-xs shadow-sm transition-all shrink-0 cursor-pointer"
+                      title="Add Backlog Item"
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Add Item</span>
+                      <span className="inline">Add Item</span>
                     </button>
                   </div>
                 </div>
@@ -3222,7 +3352,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 {isBacklogExpanded && selectedBacklogTaskIds.length > 0 && (
                   <div className="bg-indigo-950/90 border-b border-indigo-500/30 px-3 sm:px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 text-xs animate-in fade-in duration-150">
                     <div className="flex items-center gap-2 text-indigo-200">
-                      <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+                      <CheckCircle2 className="w-4 h-4 text-indigo-400 shrink-0" />
                       <span><strong>{selectedBacklogTaskIds.length}</strong> item(s) selected</span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -3248,7 +3378,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       <button
                         type="button"
                         onClick={() => setSelectedBacklogTaskIds([])}
-                        className="text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition-colors text-xs"
+                        className="text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-slate-800 transition-colors text-xs cursor-pointer"
                       >
                         Deselect All
                       </button>
@@ -3289,7 +3419,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                             return (
                               <div
                                 key={task.id}
-                                className={`px-3 py-2 sm:py-2.5 flex items-center justify-between gap-2.5 hover:bg-slate-800/40 transition-colors ${
+                                className={`p-2.5 sm:px-3.5 sm:py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2 hover:bg-slate-800/40 transition-colors ${
                                   isSelected ? 'bg-indigo-950/30' : ''
                                 }`}
                               >
@@ -3315,7 +3445,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                     <button
                                       type="button"
                                       onClick={() => onOpenTaskModal(task)}
-                                      className="font-semibold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer shrink-0 max-w-[180px] sm:max-w-[260px] md:max-w-[340px]"
+                                      className="font-semibold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer flex-1 min-w-0"
                                       title={task.title}
                                     >
                                       {task.title}
@@ -3335,8 +3465,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                       {task.priority}
                                     </span>
 
-                                    {/* Unified Single-Line Compact Breadcrumb trail */}
-                                    <div className="hidden lg:flex items-center gap-1 text-[10px] text-slate-500 min-w-0 truncate max-w-full pl-1.5 border-l border-slate-800/80">
+                                    {/* Unified Single-Line Compact Breadcrumb trail on wide screens */}
+                                    <div className="hidden xl:flex items-center gap-1 text-[10px] text-slate-500 min-w-0 truncate max-w-full pl-1.5 border-l border-slate-800/80">
                                       {parentMilestone && (
                                         <span className="inline-flex items-center gap-0.5 text-amber-400/80 max-w-[110px] truncate" title={`Milestone: ${parentMilestone.title}`}>
                                           <Flag className="w-2.5 h-2.5 shrink-0" />
@@ -3369,64 +3499,68 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                 </div>
 
                                 {/* Right: Effort + Status + Move Sprint Selector + Action buttons */}
-                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                  {task.estimatedHours ? (
-                                    <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
-                                      {task.estimatedHours}h
+                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 justify-between md:justify-end w-full md:w-auto pt-1 md:pt-0 border-t md:border-t-0 border-slate-800/40 md:border-transparent">
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {task.estimatedHours ? (
+                                      <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                                        {task.estimatedHours}h
+                                      </span>
+                                    ) : null}
+
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
+                                      {task.status.replace('_', ' ')}
                                     </span>
-                                  ) : null}
-
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0 hidden sm:inline-block">
-                                    {task.status.replace('_', ' ')}
-                                  </span>
-
-                                  {/* Compact Sprint Assignment */}
-                                  <div className="relative shrink-0">
-                                    <select
-                                      value=""
-                                      onChange={async (e) => {
-                                        const targetSprintId = e.target.value;
-                                        if (targetSprintId) {
-                                          await assignTaskToSprint(task.id, targetSprintId);
-                                          const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
-                                          showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
-                                        }
-                                      }}
-                                      className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs"
-                                      title="Assign this backlog item to a sprint"
-                                    >
-                                      <option value="" disabled>⚡ Sprint ▾</option>
-                                      {(projectData.sprints || []).map(sp => (
-                                        <option key={sp.id} value={sp.id}>
-                                          {sp.name} {sp.status === 'active' ? '(Active)' : ''}
-                                        </option>
-                                      ))}
-                                    </select>
                                   </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenTaskModal(task)}
-                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                                    title="Edit Work Item Details"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {/* Compact Sprint Assignment */}
+                                    <div className="relative shrink-0">
+                                      <select
+                                        value=""
+                                        onChange={async (e) => {
+                                          const targetSprintId = e.target.value;
+                                          if (targetSprintId) {
+                                            await assignTaskToSprint(task.id, targetSprintId);
+                                            const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
+                                            showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
+                                          }
+                                        }}
+                                        className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs max-w-[130px]"
+                                        title="Assign this backlog item to a sprint"
+                                      >
+                                        <option value="" disabled>⚡ Sprint ▾</option>
+                                        {(projectData.sprints || []).map(sp => (
+                                          <option key={sp.id} value={sp.id}>
+                                            {sp.name} {sp.status === 'active' ? '(Active)' : ''}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteTask(task.id)}
-                                    className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
-                                    title="Delete Work Item"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenTaskModal(task)}
+                                      className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                      title="Edit Work Item Details"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteTask(task.id)}
+                                      className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
+                                      title="Delete Work Item"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             );
                           }
 
-                          // Spacious / Comfortable View Mode (2-Line layout, ~46px height)
+                          // Spacious / Comfortable View Mode (2-Line layout, fully responsive)
                           return (
                             <div
                               key={task.id}
@@ -3435,7 +3569,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                               }`}
                             >
                               {/* Line 1: Checkbox, Icon, Title, Badges, Effort, Status, Sprint, Actions */}
-                              <div className="flex items-center justify-between gap-2 min-w-0">
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 min-w-0">
                                 <div className="flex items-center gap-2 min-w-0 flex-1">
                                   <input
                                     type="checkbox"
@@ -3455,7 +3589,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   <button
                                     type="button"
                                     onClick={() => onOpenTaskModal(task)}
-                                    className="font-bold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer"
+                                    className="font-bold text-xs sm:text-sm text-slate-200 hover:text-amber-400 transition-colors text-left truncate cursor-pointer flex-1 min-w-0"
                                     title={task.title}
                                   >
                                     {task.title}
@@ -3475,60 +3609,64 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                                   </span>
                                 </div>
 
-                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                                  {task.estimatedHours ? (
-                                    <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
-                                      {task.estimatedHours}h
+                                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 justify-between md:justify-end w-full md:w-auto pt-1 md:pt-0 border-t md:border-t-0 border-slate-800/40 md:border-transparent">
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {task.estimatedHours ? (
+                                      <span className="font-mono text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800 shrink-0">
+                                        {task.estimatedHours}h
+                                      </span>
+                                    ) : null}
+
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
+                                      {task.status.replace('_', ' ')}
                                     </span>
-                                  ) : null}
+                                  </div>
 
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-300 capitalize shrink-0">
-                                    {task.status.replace('_', ' ')}
-                                  </span>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <select
+                                      value=""
+                                      onChange={async (e) => {
+                                        const targetSprintId = e.target.value;
+                                        if (targetSprintId) {
+                                          await assignTaskToSprint(task.id, targetSprintId);
+                                          const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
+                                          showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
+                                        }
+                                      }}
+                                      className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs max-w-[130px]"
+                                      title="Assign this backlog item to a sprint"
+                                    >
+                                      <option value="" disabled>⚡ Sprint ▾</option>
+                                      {(projectData.sprints || []).map(sp => (
+                                        <option key={sp.id} value={sp.id}>
+                                          {sp.name} {sp.status === 'active' ? '(Active)' : ''}
+                                        </option>
+                                      ))}
+                                    </select>
 
-                                  <select
-                                    value=""
-                                    onChange={async (e) => {
-                                      const targetSprintId = e.target.value;
-                                      if (targetSprintId) {
-                                        await assignTaskToSprint(task.id, targetSprintId);
-                                        const sp = (projectData.sprints || []).find(s => s.id === targetSprintId);
-                                        showNotice(`Assigned "${task.title}" to ${sp?.name || 'Sprint'}`);
-                                      }
-                                    }}
-                                    className="bg-purple-950/50 hover:bg-purple-900/70 border border-purple-500/30 hover:border-purple-400 text-purple-200 text-[11px] font-medium px-2 py-0.5 rounded-md outline-none cursor-pointer transition-all shadow-xs"
-                                    title="Assign this backlog item to a sprint"
-                                  >
-                                    <option value="" disabled>⚡ Sprint ▾</option>
-                                    {(projectData.sprints || []).map(sp => (
-                                      <option key={sp.id} value={sp.id}>
-                                        {sp.name} {sp.status === 'active' ? '(Active)' : ''}
-                                      </option>
-                                    ))}
-                                  </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenTaskModal(task)}
+                                      className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                                      title="Edit Work Item Details"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
 
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenTaskModal(task)}
-                                    className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
-                                    title="Edit Work Item Details"
-                                  >
-                                    <Edit2 className="w-3 h-3" />
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteTask(task.id)}
-                                    className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
-                                    title="Delete Work Item"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => deleteTask(task.id)}
+                                      className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors cursor-pointer shrink-0"
+                                      title="Delete Work Item"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
                               {/* Line 2: Unified Hierarchy Path */}
-                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1 pl-7 min-w-0 max-w-full truncate overflow-hidden">
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 mt-1.5 pl-6 sm:pl-7 min-w-0 max-w-full flex-wrap">
                                 {parentMilestone && (
                                   <span className="inline-flex items-center gap-1 text-amber-400/80 max-w-[150px] truncate" title={`Milestone: ${parentMilestone.title}`}>
                                     <Flag className="w-2.5 h-2.5 shrink-0" />
@@ -3575,7 +3713,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
 
       {/* ==================== VIEW 3: KANBAN BOARD VIEW ==================== */}
       {viewType === 'board' && (
-        <div className="flex gap-4 overflow-x-auto pb-4 pt-1">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 pt-1 snap-x snap-mandatory sm:snap-none scrollbar-thin">
           {(['todo', 'in_progress', 'demoable', 'review', 'on_hold', 'blocked', 'done'] as TaskStatus[]).map((colStatus) => {
             const colTasks = filteredTasks.filter(t => t.status === colStatus);
             const colTitle = colStatus === 'todo' ? 'To Do' :
@@ -3593,15 +3731,16 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                              colStatus === 'blocked' ? 'bg-rose-500/20 text-rose-300' :
                              'bg-slate-800 text-slate-300';
 
+            const totalColHours = colTasks.reduce((acc, t) => acc + (t.estimatedHours || 0), 0);
             const isColTarget = dragOverTargetId === colStatus;
 
             return (
               <div
                 key={colStatus}
-                onDragOver={(e) => handleDragOver(e, colStatus)}
+                onDragOver={(e) => handleDragOver(e, colStatus, 'status')}
                 onDragLeave={handleDragLeave}
                 onDrop={(e) => handleDropOnStatus(colStatus, e)}
-                className={`w-72 sm:w-80 shrink-0 bg-slate-900 border rounded-2xl p-3 flex flex-col space-y-3 shadow-sm min-h-[500px] transition-all ${
+                className={`w-[82vw] max-w-[320px] sm:w-80 shrink-0 snap-start bg-slate-900 border rounded-2xl p-3 sm:p-3.5 flex flex-col space-y-3 shadow-sm min-h-[480px] sm:min-h-[520px] transition-all ${
                   isColTarget ? 'border-indigo-400 ring-2 ring-indigo-500/50 bg-indigo-950/40 scale-[1.01]' : 'border-slate-800/80'
                 }`}
               >
@@ -3613,6 +3752,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     </span>
                     <span className="text-xs font-mono text-slate-400">({colTasks.length})</span>
                   </div>
+                  {totalColHours > 0 && (
+                    <span className="text-[10px] font-mono text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800">
+                      {totalColHours}h
+                    </span>
+                  )}
                 </div>
 
                 {/* Quick Add Form in Column */}
@@ -3623,11 +3767,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                     value={kanbanNewTitle[colStatus] || ''}
                     onChange={e => setKanbanNewTitle(prev => ({ ...prev, [colStatus]: e.target.value }))}
                     onKeyDown={e => e.key === 'Enter' && handleKanbanQuickAdd(colStatus)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1 text-xs text-slate-200 outline-none focus:border-indigo-500 placeholder-slate-600"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 outline-none focus:border-indigo-500 placeholder-slate-600 transition-colors"
                   />
                   <button
                     onClick={() => handleKanbanQuickAdd(colStatus)}
-                    className="p-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs shrink-0"
+                    className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs shrink-0 flex items-center justify-center min-w-[28px] min-h-[28px] transition-colors"
+                    title={`Add task to ${colTitle}`}
+                    aria-label={`Add task to ${colTitle}`}
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>
@@ -3671,7 +3817,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                           draggable={true}
                           onDragStart={(e) => handleDragStart(e, 'task', task.id)}
                           onDragEnd={handleDragEnd}
-                          onDragOver={(e) => handleDragOver(e, task.id)}
+                          onDragOver={(e) => handleDragOver(e, task.id, 'task')}
                           onDragLeave={handleDragLeave}
                           onDrop={(e) => handleDropOnTask(task.id, e)}
                           className={`p-3 rounded-xl bg-slate-950 border space-y-2 transition-all shadow-sm ${
@@ -4057,6 +4203,94 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           </div>
         </div>
       )}
+
+      {/* Selected Day Tasks Modal */}
+      {selectedDayModal && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setSelectedDayModal(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-5 shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-slate-100">Tasks for {selectedDayModal.dateStr}</h3>
+                  <p className="text-xs text-slate-400">{selectedDayModal.tasks.length} task{selectedDayModal.tasks.length === 1 ? '' : 's'} scheduled</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDayModal(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+              {selectedDayModal.tasks.map(task => (
+                <div
+                  key={task.id}
+                  onClick={() => {
+                    setSelectedDayModal(null);
+                    onOpenTaskModal(task);
+                  }}
+                  className="p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 cursor-pointer transition-all space-y-1.5 group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs text-slate-100 group-hover:text-indigo-300 transition-colors truncate">
+                      {task.title}
+                    </span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                      task.priority === 'urgent' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
+                      task.priority === 'high' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                      'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                    }`}>
+                      {task.priority}
+                    </span>
+                  </div>
+                  {task.description && (
+                    <p className="text-[11px] text-slate-400 line-clamp-2">{task.description}</p>
+                  )}
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono pt-1 border-t border-slate-900">
+                    <span className="capitalize text-indigo-400">{task.status.replace('_', ' ')}</span>
+                    <span>Cost: ${task.plannedCost?.toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const dateStr = selectedDayModal.dateStr;
+                  setSelectedDayModal(null);
+                  onOpenTaskModal({ dueDate: dateStr } as any);
+                }}
+                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-indigo-500/10 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Task for this Date</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedDayModal(null)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -4066,6 +4300,8 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
     const subtasks = getSubtasksForTask(task.id);
     const predecessors = getTaskPredecessors(task, projectData.tasks);
     const isDragTarget = dragOverTargetId === task.id;
+    const isDropValid = isDragTarget && isDragOverValid === true;
+    const isDropInvalid = isDragTarget && isDragOverValid === false;
     const isDraggingThis = draggedItem?.id === task.id;
     const isJustDropped = justDroppedId === task.id;
     const taskEff = getTaskEffectiveValues(task, subtasks, projectData.stakeholders, projectData.statusPercentages);
@@ -4074,7 +4310,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
       <div
         key={task.id}
         className="group relative"
-        onDragOver={(e) => handleDragOver(e, task.id)}
+        onDragOver={(e) => handleDragOver(e, task.id, 'task')}
         onDragLeave={handleDragLeave}
         onDrop={(e) => handleDropOnTask(task.id, e)}
       >
@@ -4085,7 +4321,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
             scale: isDraggingThis ? 0.985 : isDragTarget ? 1.015 : isJustDropped ? [1.035, 0.99, 1] : 1,
             y: isDragTarget ? 2 : 0,
             opacity: isDraggingThis ? 0.55 : 1,
-            boxShadow: isDragTarget
+            boxShadow: isDropValid
+              ? '0 6px 20px -2px rgba(16, 185, 129, 0.3)'
+              : isDropInvalid
+              ? '0 6px 20px -2px rgba(244, 63, 94, 0.35)'
+              : isDragTarget
               ? '0 6px 20px -2px rgba(99, 102, 241, 0.25)'
               : isJustDropped
               ? '0 0 0 2px rgba(99, 102, 241, 0.5)'
@@ -4101,7 +4341,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           onDragStart={(e) => handleDragStart(e, 'task', task.id)}
           onDragEnd={handleDragEnd}
           className={`flex items-center justify-between py-2 px-4 border-b border-slate-200/80 dark:border-slate-800/40 hover:bg-slate-100/70 dark:hover:bg-slate-800/40 transition-colors group ${
-            isDragTarget ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-400' : ''
+            isDropValid ? 'bg-emerald-500/10 dark:bg-emerald-950/40 border-emerald-500/50 ring-2 ring-emerald-500/60' :
+            isDropInvalid ? 'bg-rose-500/10 dark:bg-rose-950/50 border-rose-500 ring-2 ring-rose-500/80 cursor-not-allowed' :
+            isDragTarget ? 'bg-indigo-100 dark:bg-indigo-950/80 border-indigo-400 ring-2 ring-indigo-500/50' : ''
           }`}
         >
           <div style={{ width: columnWidths.name }} className="flex items-center gap-2 shrink-0 pr-4 pl-8 min-w-0 overflow-hidden">
@@ -4142,15 +4384,31 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 <span className="font-mono text-[10px] text-slate-500 dark:text-slate-400 shrink-0 font-semibold">
                   {code}
                 </span>
-                <span
+
+                {/* Drop Status Indicator */}
+                {isDropInvalid && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                    <Ban className="w-3 h-3 text-rose-400" />
+                    {invalidDropReason || 'Invalid Target'}
+                  </span>
+                )}
+                {isDropValid && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.5 rounded animate-pulse shrink-0">
+                    <Check className="w-3 h-3 text-emerald-400" />
+                    Drop to add as subtask
+                  </span>
+                )}
+
+                <button
+                  type="button"
                   onClick={() => onOpenTaskModal(task)}
-                  className={`text-xs font-semibold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer min-w-0 flex-1 truncate ${
+                  className={`text-xs font-semibold text-slate-800 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer min-w-0 flex-1 truncate text-left focus-visible:ring-2 rounded-sm ${
                     task.status === 'done' ? 'line-through text-slate-400 dark:text-slate-500' : ''
                   }`}
                   title={`${task.title} (Click to open details)`}
                 >
                   {task.title}
-                </span>
+                </button>
               </div>
 
               {/* Badges & Actions group */}
@@ -4166,8 +4424,9 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   const sp = (projectData.sprints || []).find(s => s.id === task.sprintId);
                   const spName = sp?.name || 'Sprint';
                   return (
-                    <span
-                      className="bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 hover:border-purple-400 font-medium px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1.5 shrink-0 max-w-[130px] cursor-pointer hover:bg-purple-500/25 active:scale-95 transition-all shadow-2xs group/sprint"
+                    <button
+                      type="button"
+                      className="bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30 hover:border-purple-400 font-medium px-2 py-0.5 rounded-md text-[10px] flex items-center gap-1.5 shrink-0 max-w-[130px] cursor-pointer hover:bg-purple-500/25 active:scale-95 transition-all shadow-2xs group/sprint focus-visible:ring-2"
                       title={`Sprint: ${spName} (Click to change sprint)`}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -4177,13 +4436,14 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                       <Layers className="w-3 h-3 text-purple-400 shrink-0 group-hover/sprint:scale-110 transition-transform" />
                       <span className="truncate">{spName}</span>
                       <ArrowLeftRight className="w-2.5 h-2.5 text-purple-400/70 shrink-0 ml-0.5 group-hover/sprint:text-purple-200 transition-colors" />
-                    </span>
+                    </button>
                   );
                 })()}
 
                 {task.linkedBugIds && task.linkedBugIds.length > 0 && (
-                  <span
-                    className="bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 font-medium px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20 transition-colors"
+                  <button
+                    type="button"
+                    className="bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/30 font-medium px-1.5 py-0.5 rounded text-[10px] flex items-center gap-1 shrink-0 cursor-pointer hover:bg-purple-500/20 transition-colors focus-visible:ring-2"
                     title={`${task.linkedBugIds.length} linked bug(s)`}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -4192,7 +4452,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   >
                     <Bug className="w-3 h-3 text-purple-400 shrink-0" />
                     <span>{task.linkedBugIds.length}</span>
-                  </span>
+                  </button>
                 )}
 
                 {subtasks.length > 0 && (

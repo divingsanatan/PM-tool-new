@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Task, Priority, TaskStatus, WorkItemType, AcceptanceCriterion, TaskComment, TaskActivity } from '../../types';
+import { triggerHaptic } from '../../utils/haptics';
 import {
   X,
   Circle,
@@ -94,21 +95,23 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     );
   }, [projectData.stakeholders, currentUser]);
 
+  const isEditing = Boolean(taskToEdit && taskToEdit.id);
+
   const isTaskEditable = useMemo(() => {
     if (isPM) return true;
-    if (!taskToEdit) return true; // New task creation
+    if (!isEditing || !taskToEdit) return true; // New task creation
     if (currentStakeholder) {
       if (taskToEdit.assigneeIds && taskToEdit.assigneeIds.includes(currentStakeholder.id)) return true;
     }
     if (taskToEdit.assigneeIds && taskToEdit.assigneeIds.includes(currentUser?.id)) return true;
     return false;
-  }, [isPM, taskToEdit, currentStakeholder, currentUser]);
+  }, [isPM, isEditing, taskToEdit, currentStakeholder, currentUser]);
 
   const assignedName = useMemo(() => {
-    if (!taskToEdit) return '';
+    if (!isEditing || !taskToEdit) return '';
     const match = projectData.stakeholders.find(s => (taskToEdit.assigneeIds && taskToEdit.assigneeIds.includes(s.id)));
     return match ? match.name : 'another team member';
-  }, [taskToEdit, projectData.stakeholders]);
+  }, [isEditing, taskToEdit, projectData.stakeholders]);
 
   const [type, setType] = useState<WorkItemType>('task');
   const [linkedBugIds, setLinkedBugIds] = useState<string[]>([]);
@@ -223,14 +226,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   }, [startDate, dueDate, assigneeIds, leaves, projectData.stakeholders]);
 
   useEffect(() => {
-    if (taskToEdit) {
+    if (taskToEdit && taskToEdit.id) {
       setType(taskToEdit.type || 'task');
       setLinkedBugIds(taskToEdit.linkedBugIds || []);
       setAcceptanceCriteria(taskToEdit.acceptanceCriteria || []);
-      setTitle(taskToEdit.title);
+      setTitle(taskToEdit.title || '');
       setDescription(taskToEdit.description || '');
-      setStatus(taskToEdit.status);
-      setPriority(taskToEdit.priority);
+      setStatus(taskToEdit.status || 'todo');
+      setPriority(taskToEdit.priority || 'normal');
       setStoryId(taskToEdit.storyId || taskToEdit.userStoryId || '');
       setEpicId(taskToEdit.epicId || '');
       setFeatureId(taskToEdit.featureId || '');
@@ -245,10 +248,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setConsultedIds(taskToEdit.raci?.consulted || []);
       setInformedIds(taskToEdit.raci?.informed || []);
 
-      setStartDate(taskToEdit.startDate);
-      setDueDate(taskToEdit.dueDate);
-      setEstimatedHours(taskToEdit.estimatedHours);
-      setActualHours(taskToEdit.actualHours);
+      setStartDate(taskToEdit.startDate || new Date().toISOString().split('T')[0]);
+      setDueDate(taskToEdit.dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0]);
+      setEstimatedHours(taskToEdit.estimatedHours ?? 20);
+      setActualHours(taskToEdit.actualHours ?? 0);
       setDependencies(taskToEdit.dependencies || []);
 
       // Load existing subtasks for this task
@@ -265,54 +268,61 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           timestamp: 'Jul 7 at 8:59 pm'
         }
       ]);
+      const safeStatusLabel = (taskToEdit.status || 'todo').toUpperCase().replace('_', ' ');
       setActivities(taskToEdit.activityLogs || [
         { id: 'a1', authorName: currentUser.name, action: 'created this task', timestamp: 'Jul 6 at 5:26 pm' },
-        { id: 'a2', authorName: 'Laxmi kumari', action: `changed status from Backlog to ${taskToEdit.status.toUpperCase().replace('_', ' ')}`, timestamp: 'Jul 7 at 8:59 pm' }
+        { id: 'a2', authorName: 'Laxmi kumari', action: `changed status from Backlog to ${safeStatusLabel}`, timestamp: 'Jul 7 at 8:59 pm' }
       ]);
     } else {
-      setType('task');
-      setLinkedBugIds([]);
-      setAcceptanceCriteria([]);
-      setTitle('');
-      if (defaultStatus) setStatus(defaultStatus);
-      setDescription('');
-      setStatus(defaultStatus || 'todo');
-      setPriority('normal');
-      setChangeRequestId('');
-      const targetStoryId = initialParentStoryId || '';
+      // Creating a new task (optionally with presets from taskToEdit like sprintId or dueDate)
+      setType(taskToEdit?.type || 'task');
+      setLinkedBugIds(taskToEdit?.linkedBugIds || []);
+      setAcceptanceCriteria(taskToEdit?.acceptanceCriteria || []);
+      setTitle(taskToEdit?.title || '');
+      setDescription(taskToEdit?.description || '');
+      setStatus(taskToEdit?.status || defaultStatus || 'todo');
+      setPriority(taskToEdit?.priority || 'normal');
+      setChangeRequestId(taskToEdit?.changeRequestId || '');
+      
+      const targetStoryId = taskToEdit?.storyId || taskToEdit?.userStoryId || initialParentStoryId || '';
       setStoryId(targetStoryId);
       if (targetStoryId) {
         const targetStory = (projectData.userStories || []).find(s => s.id === targetStoryId);
         if (targetStory) {
-          setFeatureId(targetStory.featureId || initialParentFeatureId || '');
-          setEpicId(targetStory.epicId || initialParentEpicId || '');
-          setMilestoneId(targetStory.milestoneId || initialParentMilestoneId || '');
-          if (targetStory.sprintId && !initialSprintId) setSprintId(targetStory.sprintId);
+          setFeatureId(taskToEdit?.featureId || targetStory.featureId || initialParentFeatureId || '');
+          setEpicId(taskToEdit?.epicId || targetStory.epicId || initialParentEpicId || '');
+          setMilestoneId(taskToEdit?.milestoneId || targetStory.milestoneId || initialParentMilestoneId || '');
+          if (targetStory.sprintId && !initialSprintId && taskToEdit?.sprintId === undefined) {
+            setSprintId(targetStory.sprintId);
+          } else {
+            setSprintId(taskToEdit?.sprintId !== undefined ? taskToEdit.sprintId : (initialSprintId || ''));
+          }
         }
       } else {
-        const targetFeatId = initialParentFeatureId || '';
+        const targetFeatId = taskToEdit?.featureId || initialParentFeatureId || '';
         setFeatureId(targetFeatId);
         if (targetFeatId) {
           const targetFeat = projectData.features.find(f => f.id === targetFeatId);
           const parentEp = targetFeat?.epicId ? (projectData.epics || []).find(e => e.id === targetFeat.epicId) : undefined;
-          setEpicId(targetFeat?.epicId || initialParentEpicId || '');
-          setMilestoneId(targetFeat?.milestoneId || parentEp?.milestoneId || initialParentMilestoneId || '');
+          setEpicId(taskToEdit?.epicId || targetFeat?.epicId || initialParentEpicId || '');
+          setMilestoneId(taskToEdit?.milestoneId || targetFeat?.milestoneId || parentEp?.milestoneId || initialParentMilestoneId || '');
         } else {
-          setEpicId(initialParentEpicId || '');
-          setMilestoneId(initialParentMilestoneId || '');
+          setEpicId(taskToEdit?.epicId || initialParentEpicId || '');
+          setMilestoneId(taskToEdit?.milestoneId || initialParentMilestoneId || '');
         }
+        setSprintId(taskToEdit?.sprintId !== undefined ? taskToEdit.sprintId : (initialSprintId || ''));
       }
-      setSprintId(initialSprintId || '');
-      setAssigneeIds([projectData.stakeholders[0]?.id || '']);
+
+      setAssigneeIds(taskToEdit?.assigneeIds && taskToEdit.assigneeIds.length > 0 ? taskToEdit.assigneeIds : [projectData.stakeholders[0]?.id || '']);
       setResponsibleIds([]);
       setAccountableIds([]);
       setConsultedIds([]);
       setInformedIds([]);
-      setStartDate(new Date().toISOString().split('T')[0]);
-      setDueDate(new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0]);
-      setEstimatedHours(20);
-      setActualHours(0);
-      setDependencies([]);
+      setStartDate(taskToEdit?.startDate || new Date().toISOString().split('T')[0]);
+      setDueDate(taskToEdit?.dueDate || new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0]);
+      setEstimatedHours(taskToEdit?.estimatedHours ?? 20);
+      setActualHours(taskToEdit?.actualHours ?? 0);
+      setDependencies(taskToEdit?.dependencies || []);
       setSubtasksList([]);
       setComments([]);
       setActivities([
@@ -464,11 +474,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       }
     }
 
+    triggerHaptic(status === 'done' ? 'success' : 'light');
     onClose();
   };
 
   const handleSendComment = () => {
     if (!newComment.trim()) return;
+    triggerHaptic('light');
     const commentObj: TaskComment = {
       id: 'c-' + Date.now(),
       authorName: currentUser.name,
@@ -624,7 +636,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               title="Save work item (⌘+Enter)"
             >
               <Check className="w-3.5 h-3.5" />
-              <span>{taskToEdit ? 'Save' : 'Create'}</span>
+              <span>{isEditing ? 'Save' : 'Create'}</span>
             </button>
 
             <button
@@ -1584,7 +1596,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         <div className="px-3.5 sm:px-6 py-3 border-t border-slate-800/90 bg-[#151620] shrink-0 flex items-center justify-between gap-3 shadow-2xl z-20">
           {/* Left actions: Delete / Keyboard shortcuts info */}
           <div className="flex items-center gap-2">
-            {taskToEdit && (
+            {isEditing && (
               <>
                 {showDeleteConfirm ? (
                   <div className="flex items-center gap-1.5 animate-in fade-in duration-150">
@@ -1634,11 +1646,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           </div>
 
           {/* Right actions: Cancel & Primary Save/Create Button */}
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition cursor-pointer hover:bg-slate-800/60 text-center"
+              className="flex-1 sm:flex-initial px-4 py-2.5 sm:py-2 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white text-xs sm:text-sm font-semibold transition cursor-pointer hover:bg-slate-800/60 text-center whitespace-nowrap shrink-0"
             >
               Cancel
             </button>
@@ -1646,10 +1658,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <button
               type="button"
               onClick={() => handleSubmit()}
-              className="flex-1 sm:flex-initial px-5 py-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-center"
+              className="flex-1 sm:flex-initial px-4 sm:px-5 py-2.5 sm:py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white text-xs sm:text-sm font-bold shadow-lg shadow-indigo-600/30 transition flex items-center justify-center gap-2 cursor-pointer active:scale-95 text-center whitespace-nowrap shrink-0 min-w-fit"
             >
-              <Check className="w-4 h-4" />
-              <span>{taskToEdit ? 'Save Changes' : 'Create Work Item'}</span>
+              <Check className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{isEditing ? 'Save Changes' : 'Create Work Item'}</span>
             </button>
           </div>
         </div>

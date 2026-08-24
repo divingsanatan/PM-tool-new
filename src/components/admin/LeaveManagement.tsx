@@ -879,10 +879,11 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                       const isPending = l.status === 'pending';
 
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={l.id}
                           onClick={() => setInspectingLeave(l)}
-                          className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold border flex items-center justify-between gap-1 cursor-pointer transition-transform hover:scale-[1.02] ${
+                          className={`w-full text-left px-1.5 py-1 rounded-lg text-[10px] font-semibold border flex items-center justify-between gap-1 cursor-pointer transition-transform hover:scale-[1.02] focus-visible:ring-2 ${
                             isPending
                               ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                               : `${cfg.bg} ${cfg.border} ${cfg.text}`
@@ -898,7 +899,7 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                               Pending
                             </span>
                           )}
-                        </div>
+                        </button>
                       );
                     })}
                   </div>
@@ -1002,9 +1003,10 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                               }`}
                             >
                               {activeLeaveOnDay && (
-                                <div
+                                <button
+                                  type="button"
                                   onClick={() => setInspectingLeave(activeLeaveOnDay)}
-                                  className={`w-full h-7 rounded-md cursor-pointer transition-all hover:scale-105 flex items-center justify-center text-[10px] font-bold ${
+                                  className={`w-full h-7 rounded-md cursor-pointer transition-all hover:scale-105 flex items-center justify-center text-[10px] font-bold focus-visible:ring-2 ${
                                     activeLeaveOnDay.status === 'pending'
                                       ? 'bg-amber-500/30 border border-amber-500/60 text-amber-300'
                                       : `${cfg?.bg} border ${cfg?.border} ${cfg?.text}`
@@ -1016,7 +1018,7 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
                                       {activeLeaveOnDay.leaveType.slice(0, 3)}
                                     </span>
                                   )}
-                                </div>
+                                </button>
                               )}
                             </div>
                           );

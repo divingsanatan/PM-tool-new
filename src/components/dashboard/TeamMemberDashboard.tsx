@@ -5,6 +5,7 @@ import { calculateMemberMetrics } from '../../utils/memberMetrics';
 import { getStatusProgress } from '../../utils/taskCalculations';
 import { ResponsiveSelect } from '../common/ResponsiveSelect';
 import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
+import { triggerHaptic } from '../../utils/haptics';
 import {
   User,
   CheckCircle2,
@@ -490,6 +491,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
   // Quick Status Handler
   const handleQuickStatusChange = async (task: Task, newStatus: Task['status']) => {
+    triggerHaptic(newStatus === 'done' ? 'success' : 'medium');
     const newCompletion = getStatusProgress(newStatus, projectData.statusPercentages);
     await saveTask({
       ...task,
@@ -501,6 +503,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
   // Quick Hours Logging Handler
   const handleSaveLoggedHours = async (task: Task) => {
     if (logHoursInput < 0) return;
+    triggerHaptic('light');
     await saveTask({
       ...task,
       actualHours: logHoursInput
@@ -510,6 +513,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
 
   // Quick Subtask Toggle
   const handleToggleSubtask = async (subtaskId: string, currentCompleted: boolean) => {
+    triggerHaptic(!currentCompleted ? 'success' : 'light');
     await saveSubtask({
       id: subtaskId,
       completed: !currentCompleted
@@ -1767,14 +1771,15 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                           )}
 
                           {task.linkedBugIds && task.linkedBugIds.length > 0 && (
-                            <span
-                              className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 cursor-pointer hover:bg-purple-500/30"
+                            <button
+                              type="button"
+                              className="px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 bg-purple-500/20 text-purple-300 border border-purple-500/40 flex items-center gap-1 cursor-pointer hover:bg-purple-500/30 focus-visible:ring-2"
                               onClick={() => onOpenTaskModal(task)}
                               title={`${task.linkedBugIds.length} linked bug(s)`}
                             >
                               <Bug className="w-3 h-3 text-purple-400" />
                               <span>{task.linkedBugIds.length} Linked Bug{task.linkedBugIds.length !== 1 ? 's' : ''}</span>
-                            </span>
+                            </button>
                           )}
 
                           <h3 className="font-bold text-sm sm:text-base text-slate-100 hover:text-indigo-300 transition-colors leading-snug">
@@ -1930,10 +1935,11 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {taskSubtasks.map(subtask => (
-                            <div
+                            <button
+                              type="button"
                               key={subtask.id}
                               onClick={() => handleToggleSubtask(subtask.id, subtask.completed)}
-                              className="flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 cursor-pointer hover:bg-slate-900 transition-colors text-xs"
+                              className="w-full text-left flex items-center gap-2 p-2 rounded-lg bg-slate-900/60 border border-slate-800/80 cursor-pointer hover:bg-slate-900 transition-colors text-xs focus-visible:ring-2"
                             >
                               {subtask.completed ? (
                                 <CheckSquare className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -1943,7 +1949,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                               <span className={`truncate ${subtask.completed ? 'line-through text-slate-500' : 'text-slate-200'}`}>
                                 {subtask.title}
                               </span>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       </div>

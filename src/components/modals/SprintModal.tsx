@@ -526,10 +526,12 @@ export const SprintModal: React.FC<SprintModalProps> = ({
                   const totalHours = childTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0);
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={feature.id}
                       onClick={() => toggleFeatureSelection(feature)}
-                      className={`p-3 rounded-lg text-xs cursor-pointer transition-all border ${
+                      aria-pressed={isSelected}
+                      className={`w-full text-left p-3 rounded-lg text-xs cursor-pointer transition-all border focus-visible:ring-2 ${
                         isSelected
                           ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
                           : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-900'
@@ -567,7 +569,7 @@ export const SprintModal: React.FC<SprintModalProps> = ({
                           </div>
                         </div>
                       </div>
-                    </div>
+                    </button>
                   );
                 })
               )}
@@ -591,10 +593,12 @@ export const SprintModal: React.FC<SprintModalProps> = ({
                 {availableStandaloneTasks.map(task => {
                   const isSelected = selectedStandaloneTaskIds.includes(task.id);
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={task.id}
                       onClick={() => toggleStandaloneTaskSelection(task.id)}
-                      className={`p-2 rounded-lg text-xs cursor-pointer transition-all flex items-center justify-between border ${
+                      aria-pressed={isSelected}
+                      className={`w-full text-left p-2 rounded-lg text-xs cursor-pointer transition-all flex items-center justify-between border focus-visible:ring-2 ${
                         isSelected
                           ? 'bg-purple-600/20 border-purple-500/40 text-purple-100'
                           : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-900'
@@ -609,7 +613,7 @@ export const SprintModal: React.FC<SprintModalProps> = ({
                         <span className="font-medium">{task.title}</span>
                       </div>
                       <span className="text-[10px] text-slate-400 font-mono">{task.estimatedHours} hrs</span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -628,18 +632,18 @@ export const SprintModal: React.FC<SprintModalProps> = ({
               </button>
             ) : <div />}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                className="px-3.5 sm:px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors whitespace-nowrap shrink-0"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isExceedingTwoWeeks}
-                className={`px-5 py-2 rounded-xl font-semibold text-xs transition-all shadow-lg ${
+                className={`px-4 sm:px-5 py-2 rounded-xl font-semibold text-xs transition-all shadow-lg whitespace-nowrap shrink-0 ${
                   isExceedingTwoWeeks
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                     : 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-600/30'

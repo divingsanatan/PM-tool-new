@@ -279,12 +279,10 @@ export const SwipeGestureGuideBanner: React.FC<SwipeGestureGuideBannerProps> = (
           <div className="flex items-center gap-1.5 font-bold text-slate-200 text-xs">
             <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
             <span>{title}</span>
-            {hapticAvailable && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
-                <Vibrate className="w-2.5 h-2.5" />
-                Haptics ON
-              </span>
-            )}
+            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+              <Vibrate className="w-2.5 h-2.5" />
+              Tactile Haptics ON
+            </span>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400 mt-0.5">
             <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold">
@@ -300,17 +298,15 @@ export const SwipeGestureGuideBanner: React.FC<SwipeGestureGuideBannerProps> = (
       </div>
 
       <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-        {hapticAvailable && (
-          <button
-            type="button"
-            onClick={handleTestHaptic}
-            className="px-2 py-1 rounded-xl text-[10px] font-semibold text-slate-400 hover:text-emerald-300 bg-slate-900 border border-slate-800 hover:border-emerald-500/30 flex items-center gap-1 transition-colors"
-            title="Test haptic vibration feedback"
-          >
-            <Vibrate className="w-3 h-3 text-emerald-400" />
-            <span>Test Vibrate</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handleTestHaptic}
+          className="px-2.5 py-1 rounded-xl text-[10px] font-semibold text-slate-300 hover:text-emerald-300 bg-slate-900 border border-slate-800 hover:border-emerald-500/30 flex items-center gap-1 transition-colors active:scale-95"
+          title="Test tactile haptic feedback"
+        >
+          <Vibrate className="w-3 h-3 text-emerald-400" />
+          <span>Test Haptic</span>
+        </button>
         {onReplay && (
           <button
             type="button"

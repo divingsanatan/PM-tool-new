@@ -248,18 +248,18 @@ export const RaidModal: React.FC<RaidModalProps> = ({ isOpen, onClose, itemToEdi
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4 mt-6">
+          <div className="flex items-center justify-end gap-2 sm:gap-3 border-t border-slate-800 pt-4 mt-6 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs"
+              className="px-3.5 sm:px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs whitespace-nowrap shrink-0"
             >
               {isEditable ? 'Cancel' : 'Close'}
             </button>
             {isEditable ? (
               <button
                 type="submit"
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs shadow-md shadow-rose-600/20"
+                className="px-4 sm:px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs shadow-md shadow-rose-600/20 whitespace-nowrap shrink-0"
               >
                 Save RAID Item
               </button>
@@ -267,7 +267,7 @@ export const RaidModal: React.FC<RaidModalProps> = ({ isOpen, onClose, itemToEdi
               <button
                 type="button"
                 disabled
-                className="px-5 py-2 rounded-xl bg-slate-800 text-slate-500 font-semibold text-xs cursor-not-allowed border border-slate-700"
+                className="px-4 sm:px-5 py-2 rounded-xl bg-slate-800 text-slate-500 font-semibold text-xs cursor-not-allowed border border-slate-700 whitespace-nowrap shrink-0"
               >
                 Read-Only
               </button>

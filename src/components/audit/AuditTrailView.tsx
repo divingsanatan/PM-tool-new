@@ -294,9 +294,10 @@ export const AuditTrailView: React.FC = () => {
           </div>
         </div>
 
-        <div
+        <button
+          type="button"
           onClick={() => setTimeframe('today')}
-          className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition-all flex items-center justify-between gap-2 min-w-0 group"
+          className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition-all flex items-center justify-between gap-2 min-w-0 group text-left focus-visible:ring-2"
           title="Filter Audit Logs for Today"
         >
           <div className="min-w-0 flex-1">
@@ -307,7 +308,7 @@ export const AuditTrailView: React.FC = () => {
           <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 group-hover:scale-105 transition-transform shrink-0">
             <Clock className="w-5 h-5" />
           </div>
-        </div>
+        </button>
 
         <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between gap-2 min-w-0">
           <div className="min-w-0 flex-1">
@@ -520,8 +521,16 @@ export const AuditTrailView: React.FC = () => {
             return (
               <div
                 key={act.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setSelectedLog(act)}
-                className="relative group cursor-pointer transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedLog(act);
+                  }
+                }}
+                className="relative group cursor-pointer transition-all focus-visible:ring-2 rounded-2xl"
               >
                 {/* Timeline Dot Icon */}
                 <div className="absolute -left-8 sm:-left-10 top-3.5 w-6 h-6 rounded-full bg-slate-900 border-2 border-indigo-500 flex items-center justify-center text-indigo-400 group-hover:scale-110 group-hover:border-indigo-400 transition-all shadow-md z-10">
@@ -602,8 +611,15 @@ export const AuditTrailView: React.FC = () => {
                 {filteredActivities.map((act) => (
                   <tr
                     key={act.id}
+                    tabIndex={0}
                     onClick={() => setSelectedLog(act)}
-                    className="hover:bg-slate-800/50 cursor-pointer transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedLog(act);
+                      }
+                    }}
+                    className="hover:bg-slate-800/50 cursor-pointer transition-colors focus-visible:ring-2 focus-visible:outline-hidden"
                   >
                     <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
                       {formatTimestamp(act.timestamp)}

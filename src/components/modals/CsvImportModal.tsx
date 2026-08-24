@@ -213,11 +213,20 @@ export const CsvImportModal: React.FC<CsvImportModalProps> = ({ isOpen, onClose 
           {/* Drag & Drop Upload Zone */}
           {!parseResult && !importSuccess && (
             <div
+              tabIndex={0}
+              role="button"
+              aria-label="Click or press enter to browse CSV file or drop your CSV file here"
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
-              className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              className={`relative cursor-pointer border-2 border-dashed rounded-2xl p-8 text-center transition-all focus-visible:ring-2 focus-visible:border-indigo-500 ${
                 dragActive
                   ? 'border-indigo-500 bg-indigo-500/10 scale-[0.99]'
                   : 'border-slate-800 hover:border-slate-700 bg-slate-900/50 hover:bg-slate-800/30'

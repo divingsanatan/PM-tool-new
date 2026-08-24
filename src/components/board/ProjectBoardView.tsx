@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { ProjectBoardItem, ProjectBoardCategory, BoardItemType, BoardItemComment, ProjectChatMessage, ViewMode } from '../../types';
 import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
+import { triggerHaptic } from '../../utils/haptics';
 import {
   FolderKanban,
   Plus,
@@ -232,18 +233,21 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
   };
 
   const openCreateModal = (type: BoardItemType) => {
+    triggerHaptic('light');
     setModalItemType(type);
     setEditingItem(null);
     setIsItemModalOpen(true);
   };
 
   const openEditModal = (item: ProjectBoardItem) => {
+    triggerHaptic('light');
     setModalItemType(item.type);
     setEditingItem(item);
     setIsItemModalOpen(true);
   };
 
   const handleShareCardToChat = (item: ProjectBoardItem) => {
+    triggerHaptic('selection');
     addProjectChatMessage({
       content: `📌 Shared board item: "${item.title}". Check out this ${item.type.toUpperCase()} on the Project Board!`,
       type: 'item_reference',
