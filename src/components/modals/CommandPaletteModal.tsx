@@ -998,7 +998,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-8 sm:pt-16 px-3 sm:px-4 pb-6">
+      <div className="fixed inset-0 z-[9999] flex items-start justify-center pt-[max(1.5rem,calc(1rem+env(safe-area-inset-top,0px)))] sm:pt-16 px-3 sm:px-4 pb-6">
         {/* Backdrop Overlay with Blur */}
         <motion.div
           initial={{ opacity: 0 }}

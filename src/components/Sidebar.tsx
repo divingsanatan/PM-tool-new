@@ -397,7 +397,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* Drawer Footer User Info */}
-            <div className="p-4 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs">
+            <div className="p-4 pb-[max(1rem,calc(1rem+env(safe-area-inset-bottom,0px)))] bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2.5 min-w-0">
                 <img
                   src={currentUser.avatar}

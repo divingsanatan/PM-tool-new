@@ -813,8 +813,13 @@ export const Header: React.FC<HeaderProps> = ({
             {isMobileMenuOpen && createPortal(
               <div 
                 ref={mobilePortalRef}
-                className="fixed inset-0 z-[9999] bg-slate-950/45 backdrop-blur-md flex justify-end items-start pt-2 sm:pt-3 pr-2 sm:pr-4 animate-in fade-in duration-150"
-                style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}
+                className="fixed inset-0 z-[9999] bg-slate-950/45 backdrop-blur-md flex justify-end items-start pr-2 sm:pr-4 animate-in fade-in duration-150"
+                style={{
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  paddingTop: 'max(0.75rem, calc(0.75rem + env(safe-area-inset-top, 0px)))',
+                  paddingRight: 'max(0.75rem, calc(0.75rem + env(safe-area-inset-right, 0px)))'
+                }}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div 

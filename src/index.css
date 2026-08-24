@@ -8,6 +8,10 @@
   --bg-dark-surface: #171622;
   --bg-dark-card: #1f1e2e;
   --border-dark: #2a283d;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
 }
 
 html,
@@ -32,6 +36,13 @@ body {
   overflow-x: hidden;
   position: relative;
   background-color: #090d16;
+}
+
+/* Safe area handling for sticky top header on mobile with notch / dynamic island */
+#app-header {
+  padding-top: max(0.5rem, calc(0.5rem + env(safe-area-inset-top, 0px)));
+  padding-left: max(0.5rem, calc(0.5rem + env(safe-area-inset-left, 0px)));
+  padding-right: max(0.5rem, calc(0.5rem + env(safe-area-inset-right, 0px)));
 }
 
 html.dark,
