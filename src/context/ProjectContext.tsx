@@ -579,13 +579,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const storedProjectData = await localforage.getItem<ProjectData>(LOCAL_STORAGE_KEY);
         if (isMounted && storedProjectData && storedProjectData.id) {
           setProjectData(storedProjectData);
+          setActiveProjectId(storedProjectData.id);
         }
         const storedProjectsList = await localforage.getItem<ProjectMeta[]>(PROJECTS_LIST_KEY);
         if (isMounted && storedProjectsList && storedProjectsList.length > 0) {
           setProjectsList(storedProjectsList);
         }
         const storedActiveId = await localforage.getItem<string>(ACTIVE_PROJECT_ID_KEY);
-        if (isMounted && storedActiveId) {
+        if (isMounted && storedActiveId && (!storedProjectData || storedProjectData.id === storedActiveId)) {
           setActiveProjectId(storedActiveId);
         }
         const storedUsers = await localforage.getItem<UserProfile[]>(USERS_LIST_KEY);

@@ -286,7 +286,8 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
                   {projectsList.map(proj => {
-                    const isActive = proj.id === activeProjectId || proj.id === projectData.id;
+                    const currentActiveProjectId = projectData?.id || activeProjectId;
+                    const isActive = proj.id === currentActiveProjectId;
                     const { isMember, isPMForProject, roleBadge } = getProjectMembership(proj.id);
 
                     return (
