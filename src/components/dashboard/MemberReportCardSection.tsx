@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, ProjectData, Task, MemberLeave, LeaveType } from '../../types';
 import { calculateMemberMetrics } from '../../utils/memberMetrics';
@@ -63,6 +63,22 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 }) => {
   const { allProjectsMap, allUsers, leaves, currentUser, saveTask } = useProject();
   const [activeTab, setActiveTab] = useState<'overview' | 'projects' | 'analytics' | 'leaves' | 'reviews'>('overview');
+  const tabNavRef = useRef<HTMLDivElement>(null);
+
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabNavRef.current) {
+      tabNavRef.current.scrollBy({
+        left: direction === 'left' ? -240 : 240,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const handleTabWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0 && tabNavRef.current) {
+      tabNavRef.current.scrollLeft += e.deltaY;
+    }
+  };
   const [selectedScopeProjectId, setSelectedScopeProjectId] = useState<string>(initialProjectId || 'all');
   const [reviewText, setReviewText] = useState('');
   const [reviewRating, setReviewRating] = useState('Exceeds Expectations');
@@ -482,121 +498,149 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
       </div>
 
       {/* ========================================================================= */}
-      {/* HORIZONTAL TAB NAVIGATION (Prominent Clickable Segmented Control) */}
+      {/* HORIZONTAL TAB NAVIGATION (Prominent Clickable Segmented Control with Smooth Scroll) */}
       {/* ========================================================================= */}
-      <div className="px-3 sm:px-6 py-2.5 sm:py-3 border-b border-slate-800 bg-slate-950/90">
-        <div
-          role="tablist"
-          aria-label="Member Scorecard Views"
-          className="flex items-center gap-1 sm:gap-2 overflow-x-auto p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner no-scrollbar overscroll-x-contain"
-        >
-          {/* Tab 1: Executive Overview */}
+      <div className="px-2 sm:px-6 py-2 sm:py-3 border-b border-slate-800 bg-slate-950/90 relative">
+        <div className="flex items-center gap-1.5 w-full">
+          {/* Scroll Left Button */}
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === 'overview'}
-            onClick={() => setActiveTab('overview')}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
-              activeTab === 'overview'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
-            }`}
+            onClick={() => scrollTabs('left')}
+            className="p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all shrink-0 shadow-sm"
+            title="Scroll tabs left"
+            aria-label="Scroll tabs left"
           >
-            <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
-            <span className="whitespace-nowrap">Executive Overview</span>
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Tab 2: Projects & Tasks */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'projects'}
-            onClick={() => setActiveTab('projects')}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
-              activeTab === 'projects'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
-            }`}
+          {/* Scrollable Tabs List */}
+          <div
+            ref={tabNavRef}
+            onWheel={handleTabWheel}
+            role="tablist"
+            aria-label="Member Scorecard Views"
+            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner scroll-smooth overscroll-x-contain custom-scrollbar-horizontal"
+            tabIndex={0}
           >
-            <Layers className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
-            <span className="whitespace-nowrap">Projects &amp; Tasks</span>
-            <span
-              className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
-                activeTab === 'projects'
-                  ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
-                  : 'bg-slate-900 text-slate-300 border-slate-700'
+            {/* Tab 1: Executive Overview */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'overview'}
+              onClick={() => setActiveTab('overview')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
+                activeTab === 'overview'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
               }`}
             >
-              {metrics.totalAssignedTasks}
-            </span>
-          </button>
+              <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <span className="whitespace-nowrap">Executive Overview</span>
+            </button>
 
-          {/* Tab 3: EVM Analytics */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'analytics'}
-            onClick={() => setActiveTab('analytics')}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
-              activeTab === 'analytics'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
-            <span className="whitespace-nowrap">EVM Analytics</span>
-          </button>
-
-          {/* Tab 4: Availability & Calendar */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'leaves'}
-            onClick={() => setActiveTab('leaves')}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
-              activeTab === 'leaves'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <CalendarCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
-            <span className="whitespace-nowrap">Availability &amp; Calendar</span>
-            {approvedLeaves.length > 0 && (
+            {/* Tab 2: Projects & Tasks */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'projects'}
+              onClick={() => setActiveTab('projects')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
+                activeTab === 'projects'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <Layers className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <span className="whitespace-nowrap">Projects &amp; Tasks</span>
               <span
                 className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
-                  activeTab === 'leaves'
-                    ? 'bg-emerald-700/80 text-white border-emerald-400/40'
-                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  activeTab === 'projects'
+                    ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-700'
                 }`}
               >
-                {approvedLeaves.length}
+                {metrics.totalAssignedTasks}
               </span>
-            )}
-          </button>
+            </button>
 
-          {/* Tab 5: PMO Governance Notes */}
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'reviews'}
-            onClick={() => setActiveTab('reviews')}
-            className={`px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
-              activeTab === 'reviews'
-                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
-            }`}
-          >
-            <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
-            <span className="whitespace-nowrap">PMO Notes</span>
-            <span
-              className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
-                activeTab === 'reviews'
-                  ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
-                  : 'bg-slate-900 text-slate-300 border-slate-700'
+            {/* Tab 3: EVM Analytics */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'analytics'}
+              onClick={() => setActiveTab('analytics')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
+                activeTab === 'analytics'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
               }`}
             >
-              {reviewsList.length}
-            </span>
+              <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
+              <span className="whitespace-nowrap">EVM Analytics</span>
+            </button>
+
+            {/* Tab 4: Availability & Calendar */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'leaves'}
+              onClick={() => setActiveTab('leaves')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
+                activeTab === 'leaves'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <CalendarCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
+              <span className="whitespace-nowrap">Availability &amp; Calendar</span>
+              {approvedLeaves.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
+                    activeTab === 'leaves'
+                      ? 'bg-emerald-700/80 text-white border-emerald-400/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  {approvedLeaves.length}
+                </span>
+              )}
+            </button>
+
+            {/* Tab 5: PMO Governance Notes */}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'reviews'}
+              onClick={() => setActiveTab('reviews')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
+                activeTab === 'reviews'
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+              }`}
+            >
+              <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
+              <span className="whitespace-nowrap">PMO Notes</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
+                  activeTab === 'reviews'
+                    ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
+                    : 'bg-slate-900 text-slate-300 border-slate-700'
+                }`}
+              >
+                {reviewsList.length}
+              </span>
+            </button>
+          </div>
+
+          {/* Scroll Right Button */}
+          <button
+            type="button"
+            onClick={() => scrollTabs('right')}
+            className="p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all shrink-0 shadow-sm"
+            title="Scroll tabs right"
+            aria-label="Scroll tabs right"
+          >
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
       </div>

@@ -714,7 +714,7 @@ async function executeAiCall(
   });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.7-flash',
     contents: prompt,
     config: systemInstruction ? { systemInstruction } : undefined
   });
@@ -751,20 +751,39 @@ app.post('/api/ai/generate', async (req, res) => {
 
 app.post('/api/ai/report', async (req, res) => {
   try {
-    const { metrics, project, customAiConfig, selectedSprintNames, sprintData } = req.body;
+    const { metrics, project, customAiConfig, selectedSprintNames, sprintData, predictiveData } = req.body;
 
     const sprintContextText = selectedSprintNames && selectedSprintNames.length > 0
       ? `\nSprint Scope Filter Applied: ${selectedSprintNames.join(', ')}\nSprint Specific Highlights:\n${sprintData ? JSON.stringify(sprintData, null, 2) : 'Active Sprint Tasks filtered'}\n`
       : '\nSprint Scope: Entire Project (All Sprints)\n';
 
+    // Format comprehensive RAID items breakdown for predictive trend detection
+    const allRaidItems = project?.raidItems || [];
+    const risks = allRaidItems.filter((r: any) => r.type === 'risk');
+    const issues = allRaidItems.filter((r: any) => r.type === 'issue');
+    const assumptions = allRaidItems.filter((r: any) => r.type === 'assumption');
+    const dependencies = allRaidItems.filter((r: any) => r.type === 'dependency');
+
+    const raidBreakdownText = `
+RAID Log Inventory (${allRaidItems.length} Total Items):
+- Risks (${risks.length}): ${risks.map((r: any) => `"${r.title}" (Prob: ${r.probability || 'Med'}, Impact: ${r.impact || r.severity || 'Med'}, Status: ${r.status})`).join('; ') || 'None'}
+- Issues (${issues.length} active): ${issues.map((i: any) => `"${i.title}" (Severity: ${i.severity || i.impact || 'High'}, Status: ${i.status})`).join('; ') || 'None'}
+- Dependencies (${dependencies.length}): ${dependencies.map((d: any) => `"${d.title}" (Status: ${d.status}, Impact: ${d.impact || d.severity || 'High'})`).join('; ') || 'None'}
+- Assumptions (${assumptions.length}): ${assumptions.map((a: any) => `"${a.title}" (Status: ${a.status})`).join('; ') || 'None'}
+`;
+
+    const predictiveContext = predictiveData
+      ? `\nPre-calculated Predictive Exposure: Score ${predictiveData.exposureScore}/100, Threat Level: ${predictiveData.threatLevel}, Direction: ${predictiveData.trendDirection}.\nPredicted Blockers Identified: ${predictiveData.blockerCount}\n`
+      : '';
+
     const prompt = `
-You are an expert Chief Project Officer and EVM Project Management Advisor.
-Analyze the following project status data and generate an executive status report.
+You are an expert Chief Project Officer and EVM Risk Analytics Advisor.
+Analyze the following live project execution data and generate an executive status brief featuring an advanced PREDICTIVE RISK & BLOCKER FORECAST.
 
 Project Name: ${project?.projectName || 'Cloud Portal'}
 Budget: $${project?.budget?.toLocaleString() || '250,000'}
 ${sprintContextText}
-EVM Metrics:
+EVM Performance Indices:
 - Schedule Performance Index (SPI): ${metrics?.spi} (${metrics?.spi >= 1 ? 'On/Ahead of Schedule' : 'Behind Schedule'})
 - Cost Performance Index (CPI): ${metrics?.cpi} (${metrics?.cpi >= 1 ? 'On/Under Budget' : 'Over Budget'})
 - Planned Value (PV): $${metrics?.plannedValue?.toLocaleString()}
@@ -775,16 +794,33 @@ EVM Metrics:
 - Cost Variance (CV): $${metrics?.costVariance?.toLocaleString()}
 
 Active Tasks Count: ${project?.tasks?.length || 0}
-Active Risks & Issues Count: ${project?.raidItems?.length || 0}
-Top RAID Risks:
-${project?.raidItems?.slice(0, 4).map((r: any) => `- [${r.type.toUpperCase()}] ${r.title} (Severity: ${r.severity || r.impact || 'Medium'}, Status: ${r.status})`).join('\n') || 'None'}
+${raidBreakdownText}
+${predictiveContext}
 
-Please format the response in clean Markdown with the following sections:
-1. Executive Summary & Health Rating (Green / Amber / Red)
-2. EVM Cost & Schedule Assessment (Explain SPI/CPI in plain business terms)
-3. Key Sprint Accomplishments & Progress ${selectedSprintNames ? `(Focused on ${selectedSprintNames.join(', ')})` : ''}
-4. RAID Risk Mitigation Recommendations
-5. Strategic Action Items for Next Sprint
+Please format the response in clean, executive-ready Markdown with the following specific sections:
+# Executive Project Status & Predictive Risk Intelligence
+
+1. ## Executive Summary & Health Rating
+   - Overall Project Health: [Green / Amber / Red]
+   - Core delivery confidence summary
+
+2. ## EVM Cost & Schedule Health Assessment
+   - Plain-language analysis of SPI (${metrics?.spi}) and CPI (${metrics?.cpi})
+   - Variance breakdown (SV: $${metrics?.scheduleVariance?.toLocaleString()}, CV: $${metrics?.costVariance?.toLocaleString()})
+   - Financial forecast at completion (EAC)
+
+3. ## Predictive Risk Radar & Early Blocker Forecast (Trend Analysis)
+   - **Emerging Blocker Trends**: Analyze current RAID items to predict which items are trending toward becoming critical delivery blockers before they occur.
+   - **High-Risk Bottlenecks & Critical Dependencies**: Identify specific unmitigated dependencies or unresolved issues that threaten upcoming milestones.
+   - **Leading Risk Indicators**: Signals to watch over the next 1-2 sprint cycles (e.g. velocity degradation, dependency lag, unvalidated assumptions).
+   - **Pre-emptive Interventions**: Specific proactive actions to neutralize predicted blockers before workstream stoppage occurs.
+
+4. ## RAID Register Action Plan
+   - Immediate mitigations for top Risks, Issues, Assumptions, and Dependencies
+   - Ownership and target resolution priorities
+
+5. ## Strategic Recommendations for Next Iteration
+   - Top 3-4 concrete executive directives for the project team
 `;
 
     const reportText = await executeAiCall(prompt, customAiConfig);

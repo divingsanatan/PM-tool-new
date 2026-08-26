@@ -239,6 +239,7 @@ function MainLayout() {
                 initialTab="workload"
                 onOpenStakeholderModal={handleOpenStakeholderModal}
                 onOpenInviteModal={handleOpenInviteModal}
+                onOpenTaskModal={handleOpenTaskModal}
               />
             ) : (
               <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />
@@ -251,6 +252,7 @@ function MainLayout() {
                 initialTab="directory"
                 onOpenStakeholderModal={handleOpenStakeholderModal}
                 onOpenInviteModal={handleOpenInviteModal}
+                onOpenTaskModal={handleOpenTaskModal}
               />
             ) : (
               <TeamMemberDashboard onOpenTaskModal={handleOpenTaskModal} />

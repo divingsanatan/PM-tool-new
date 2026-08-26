@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ViewMode } from '../types';
 import { useProject } from '../context/ProjectContext';
+import { triggerHaptic } from '../utils/haptics';
 import {
   LayoutDashboard,
   Award,
@@ -260,6 +261,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const handleSelect = (view: ViewMode) => {
+    triggerHaptic('selection');
     setOptimisticView(view);
     React.startTransition(() => {
       onSelectView(view);
@@ -446,31 +448,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </button>
         </div>
-
-        {/* Quick Command Palette Button */}
-        {onOpenCommandPalette && (
-          <button
-            onClick={onOpenCommandPalette}
-            title="Command Palette & Quick Search (Ctrl+K)"
-            className={`flex items-center gap-2 px-2.5 py-2 mb-2 rounded-xl bg-slate-950/60 hover:bg-indigo-600/10 border border-slate-800/80 hover:border-indigo-500/40 text-slate-300 hover:text-white transition-all group shrink-0 ${
-              isCollapsed ? 'justify-center px-0' : 'justify-between'
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Command className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform shrink-0" />
-              {!isCollapsed && (
-                <span className="text-xs font-medium truncate text-slate-300 group-hover:text-slate-100">
-                  Command Palette
-                </span>
-              )}
-            </div>
-            {!isCollapsed && (
-              <kbd className="text-[10px] font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700/60 shrink-0">
-                ⌘K
-              </kbd>
-            )}
-          </button>
-        )}
 
         {/* Grouped Category Navigation - Smoothly Scrollable Menu List */}
         <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar min-h-0">

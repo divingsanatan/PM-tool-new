@@ -928,6 +928,29 @@ html.dark * {
   background: rgba(99, 102, 241, 0.7);
 }
 
+/* Horizontal custom scrollbar */
+.custom-scrollbar-horizontal {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.4) transparent;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar {
+  height: 4px;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.35);
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-horizontal::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.75);
+}
+
 /* Hide scrollbar for horizontal pill bars and clean carousels */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

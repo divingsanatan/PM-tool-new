@@ -67,6 +67,7 @@ import { CsvImportModal } from '../modals/CsvImportModal';
 import { SprintFilter } from '../common/SprintFilter';
 import { SprintModal } from '../modals/SprintModal';
 import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
+import { EmptyState } from '../common/EmptyState';
 import { Sprint } from '../../types';
 import { calculateEVMMetrics } from '../../utils/evm';
 import { triggerHaptic } from '../../utils/haptics';
@@ -1421,11 +1422,11 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
         </div>
 
         {/* View Switcher Tabs (List, Board, Calendar) */}
-        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 overflow-x-auto max-w-full">
+        <div className="grid grid-cols-3 sm:inline-flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0 w-full sm:w-fit self-start lg:self-auto">
           <button
             id="view-tab-list"
             onClick={() => setViewType('list')}
-            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
               viewType === 'list' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -1435,7 +1436,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <button
             id="view-tab-board"
             onClick={() => setViewType('board')}
-            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
               viewType === 'board' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -1445,7 +1446,7 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
           <button
             id="view-tab-calendar"
             onClick={() => setViewType('calendar')}
-            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
               viewType === 'calendar' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -3194,9 +3195,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                         {isStatusExpanded && (
                           <div className="divide-y divide-slate-200/60 dark:divide-slate-800/40">
                             {statusTasks.length === 0 ? (
-                              <div className="py-4 text-center text-xs text-slate-500 italic">
-                                No tasks currently in {statusLabel}
-                              </div>
+                              <EmptyState
+                                size="sm"
+                                preset="tasks"
+                                title={`No tasks in ${statusLabel}`}
+                                description="Drag and drop tasks here or create a new task with this status."
+                                className="my-2"
+                              />
                             ) : (
                               statusTasks.map((task, idx) => renderTaskNode(task, `${statusKey.toUpperCase().slice(0, 3)}.${idx + 1}`))
                             )}
@@ -3207,27 +3212,41 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   })}
                   {/* Empty state for filtered WBS hierarchy */}
                   {filteredTasks.length === 0 && (
-                    <div className="p-8 text-center space-y-3 bg-slate-900/40">
-                      <Layers className="w-8 h-8 text-slate-600 mx-auto" />
-                      <p className="text-sm font-semibold text-slate-300">
-                        {isSprintFiltered
-                          ? `No WBS hierarchy items or tasks found for selected sprint`
-                          : 'No WBS hierarchy items match current filters'}
-                      </p>
-                      <p className="text-xs text-slate-500 max-w-md mx-auto">
-                        {isSprintFiltered
-                          ? 'There are currently no work items assigned to this sprint. You can assign tasks from the Backlog or reset the filter.'
-                          : 'Try clearing your search query or status/priority filters to see work items.'}
-                      </p>
-                      {isSprintFiltered && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedSprintIds([])}
-                          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-sm"
-                        >
-                          View All Sprints
-                        </button>
-                      )}
+                    <div className="p-4 sm:p-6 bg-slate-900/40">
+                      <EmptyState
+                        preset={isSprintFiltered ? 'calendar' : 'filter'}
+                        title={
+                          isSprintFiltered
+                            ? 'No work items in selected sprint'
+                            : 'No work items match current filters'
+                        }
+                        description={
+                          isSprintFiltered
+                            ? 'There are currently no work items assigned to this sprint. You can assign tasks from the Backlog or view all sprints.'
+                            : 'Try clearing your search query or status/priority filters to reveal project work items.'
+                        }
+                        action={
+                          isSprintFiltered
+                            ? {
+                                label: 'View All Sprints',
+                                onClick: () => setSelectedSprintIds([]),
+                                variant: 'primary'
+                              }
+                            : {
+                                label: 'Clear Filters',
+                                onClick: () => {
+                                  setSearchQuery('');
+                                  setSelectedSprintIds([]);
+                                },
+                                variant: 'secondary'
+                              }
+                        }
+                        secondaryAction={{
+                          label: 'Add Work Item',
+                          onClick: () => onOpenTaskModal(),
+                          icon: Plus
+                        }}
+                      />
                     </div>
                   )}
                 </>
@@ -3390,16 +3409,30 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                 {isBacklogExpanded && (
                   <div className="divide-y divide-slate-800/60">
                     {visibleBacklogTasks.length === 0 ? (
-                      <div className="p-8 text-center space-y-2">
-                        <Inbox className="w-8 h-8 text-slate-600 mx-auto mb-1" />
-                        <p className="text-sm font-semibold text-slate-300">
-                          {allBacklogTasks.length === 0 ? 'No unassigned backlog items' : 'No backlog items match current search filters'}
-                        </p>
-                        <p className="text-xs text-slate-500 max-w-md mx-auto">
-                          {allBacklogTasks.length === 0
-                            ? 'All work items are currently scheduled into active sprints. Click "Add Item" above or unassign items from a sprint to place them here.'
-                            : 'Adjust your search query or filters above to reveal unassigned backlog items.'}
-                        </p>
+                      <div className="p-4 sm:p-6">
+                        <EmptyState
+                          preset={allBacklogTasks.length === 0 ? 'complete' : 'search'}
+                          title={allBacklogTasks.length === 0 ? 'Product Backlog is clear!' : 'No backlog items match search'}
+                          description={
+                            allBacklogTasks.length === 0
+                              ? 'All work items are currently assigned to active sprints. You can add new backlog items at any time.'
+                              : 'Adjust your search query or clear filters to reveal unassigned backlog items.'
+                          }
+                          action={
+                            allBacklogTasks.length === 0
+                              ? {
+                                  label: 'Add Backlog Item',
+                                  onClick: () => onOpenTaskModal({ sprintId: '' } as any),
+                                  icon: Plus,
+                                  variant: 'primary'
+                                }
+                              : {
+                                  label: 'Clear Search',
+                                  onClick: () => setBacklogSearchQuery(''),
+                                  variant: 'secondary'
+                                }
+                          }
+                        />
                       </div>
                     ) : (
                       visibleBacklogTasks
@@ -3906,9 +3939,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
                   })}
 
                   {colTasks.length === 0 && (
-                    <div className="p-6 text-center text-slate-600 text-xs border border-dashed border-slate-800 rounded-xl">
-                      No items
-                    </div>
+                    <EmptyState
+                      size="sm"
+                      preset="tasks"
+                      title="No cards here"
+                      description="Drag tasks here or use quick add above."
+                      className="my-1 py-5"
+                    />
                   )}
                 </div>
               </div>
@@ -4072,9 +4109,13 @@ export const WbsView: React.FC<WbsViewProps> = ({ onOpenTaskModal }) => {
               })}
 
               {(projectData.sprints || []).length === 0 && (
-                <div className="p-4 rounded-xl bg-slate-950/40 border border-dashed border-slate-800 text-center text-xs text-slate-400">
-                  No sprints defined yet. Create your first sprint below.
-                </div>
+                <EmptyState
+                  size="sm"
+                  preset="calendar"
+                  title="No sprints defined yet"
+                  description="Create sprints to organize your backlog into agile delivery iterations."
+                  className="my-1"
+                />
               )}
             </div>
 

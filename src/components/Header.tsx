@@ -58,7 +58,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   onOpenCommandPalette
 }) => {
-  const { projectData, projectsList, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
+  const { projectData, projectsList, allProjectsMap, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
   const isAdmin = currentUser?.role === 'admin';
   const isPM = currentUser?.role === 'pm';
   const isPrivileged = isAdmin || isPM;
@@ -68,6 +68,39 @@ export const Header: React.FC<HeaderProps> = ({
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Helper to determine if current logged-in user is a stakeholder / PM in a specific project
+  const getProjectMembership = (projectId: string) => {
+    const pData = (allProjectsMap && allProjectsMap[projectId]) || (projectId === projectData.id ? projectData : null);
+    if (!pData) return { isMember: false, isPMLoggedIn: false, roleBadge: null };
+
+    const currentEmail = (currentUser?.email || '').toLowerCase();
+    const currentId = currentUser?.id;
+
+    const isPMForProject = pData.projectManagerId === currentId ||
+      (pData.projectManagerEmail && pData.projectManagerEmail.toLowerCase() === currentEmail);
+
+    const isStakeholder = (pData.stakeholders || []).some(
+      s => s.id === currentId || (s.email && s.email.toLowerCase() === currentEmail)
+    );
+
+    const hasAssignedTasks = (pData.tasks || []).some(
+      t => (t.assigneeIds || []).includes(currentId)
+    );
+
+    const isMember = isPMForProject || isStakeholder || hasAssignedTasks;
+
+    let roleBadge = null;
+    if (isAdmin) {
+      roleBadge = 'Portfolio';
+    } else if (isPMForProject) {
+      roleBadge = 'Project Lead';
+    } else if (isStakeholder || hasAssignedTasks) {
+      roleBadge = 'My Project';
+    }
+
+    return { isMember, isPMForProject, roleBadge };
+  };
 
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const projectSelectorContainerRef = useRef<HTMLDivElement>(null);
@@ -248,12 +281,14 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <div className="px-2.5 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <span>Switch Project ({projectsList.length})</span>
-                  <span className="text-[10px] text-emerald-400 font-normal">Instant Sync</span>
+                  <span className="text-[10px] text-emerald-400 font-normal">Instant Multi-Project Sync</span>
                 </div>
 
-                <div className="max-h-56 overflow-y-auto space-y-1 custom-scrollbar pr-0.5">
+                <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
                   {projectsList.map(proj => {
                     const isActive = proj.id === activeProjectId || proj.id === projectData.id;
+                    const { isMember, isPMForProject, roleBadge } = getProjectMembership(proj.id);
+
                     return (
                       <button
                         key={proj.id}
@@ -263,16 +298,28 @@ export const Header: React.FC<HeaderProps> = ({
                         }}
                         className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-2 border ${
                           isActive
-                            ? 'bg-indigo-950/50 border-indigo-500/40 text-slate-100 shadow-sm'
+                            ? 'bg-indigo-950/60 border-indigo-500/50 text-slate-100 shadow-sm ring-1 ring-indigo-500/30'
                             : 'bg-slate-950/40 hover:bg-slate-800/80 border-slate-800/60 text-slate-300 hover:text-white'
                         }`}
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-xs truncate">{proj.projectName}</span>
                             <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-indigo-300 border border-slate-800 shrink-0">
                               {proj.projectCode}
                             </span>
+                            {/* User Assignment Status Badge */}
+                            {roleBadge && (
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium shrink-0 border ${
+                                isAdmin
+                                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                                  : isPMForProject
+                                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                              }`}>
+                                {isAdmin ? '👑 Portfolio' : isPMForProject ? '👔 Lead PM' : '✓ My Project'}
+                              </span>
+                            )}
                           </div>
                           {proj.description && (
                             <p className="text-[10px] text-slate-400 truncate mt-0.5">{proj.description}</p>

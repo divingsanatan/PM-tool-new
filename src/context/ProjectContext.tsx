@@ -164,7 +164,19 @@ export const DEFAULT_USERS: UserProfile[] = [
     department: 'PMO',
     hourlyRate: 110,
     weeklyCapacityHours: 40,
-    skills: ['Technical PM', 'Cloud Migrations', 'Capacity Planning']
+    skills: ['Technical PM', 'Cloud Migrations', 'Capacity Planning', 'Jira']
+  },
+  {
+    id: 'user-pm-3',
+    name: 'Aisha Al-Mansoor',
+    email: 'aisha.m@apex.io',
+    role: 'pm',
+    title: 'Agile Delivery Lead & Scrum Consultant',
+    avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=150',
+    department: 'PMO & Agile CoE',
+    hourlyRate: 115,
+    weeklyCapacityHours: 40,
+    skills: ['Agile Coaching', 'Release Management', 'Kanban', 'Stakeholder Alignment']
   },
   {
     id: 'user-sh-3',
@@ -176,43 +188,115 @@ export const DEFAULT_USERS: UserProfile[] = [
     department: 'Engineering',
     hourlyRate: 110,
     weeklyCapacityHours: 40,
-    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets']
+    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets', 'GraphQL']
   },
   {
     id: 'user-sh-2',
     name: 'Dr. Elena Rostova',
     email: 'elena.r@apex.io',
     role: 'stakeholder',
-    title: 'Principal Architect',
+    title: 'Principal Cloud Architect',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
     department: 'Architecture',
     hourlyRate: 130,
     weeklyCapacityHours: 35,
-    skills: ['Cloud Architecture', 'Distributed Systems', 'Security']
+    skills: ['Cloud Architecture', 'Distributed Systems', 'Security', 'Kubernetes']
   },
   {
     id: 'user-sh-4',
     name: 'Priya Sharma',
     email: 'priya.s@apex.io',
     role: 'stakeholder',
-    title: 'Lead UI/UX Designer',
+    title: 'Lead UI/UX & Design Systems Designer',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
     department: 'Design',
     hourlyRate: 85,
     weeklyCapacityHours: 30,
-    skills: ['Figma', 'Design Systems', 'User Research']
+    skills: ['Figma', 'Design Systems', 'User Research', 'Accessibility', 'Prototyping']
   },
   {
     id: 'user-sh-5',
     name: 'David Chen',
     email: 'david.c@apex.io',
     role: 'stakeholder',
-    title: 'DevOps & QA Specialist',
+    title: 'DevOps & Infrastructure Specialist',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
     department: 'DevOps',
     hourlyRate: 90,
     weeklyCapacityHours: 40,
-    skills: ['CI/CD', 'Kubernetes', 'Automated QA']
+    skills: ['CI/CD', 'Kubernetes', 'Terraform', 'Automated QA', 'Docker']
+  },
+  {
+    id: 'user-sh-6',
+    name: 'Rachel Adams',
+    email: 'rachel.a@apex.io',
+    role: 'stakeholder',
+    title: 'Principal Backend & Microservices Architect',
+    avatar: 'https://images.unsplash.com/photo-1534751516642-a171edd25218?auto=format&fit=crop&q=80&w=150',
+    department: 'Engineering',
+    hourlyRate: 125,
+    weeklyCapacityHours: 40,
+    skills: ['Golang', 'PostgreSQL', 'Microservices', 'Kafka', 'Redis', 'High Throughput']
+  },
+  {
+    id: 'user-sh-7',
+    name: 'Liam O\'Connor',
+    email: 'liam.o@apex.io',
+    role: 'stakeholder',
+    title: 'Senior Mobile & React Native Specialist',
+    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=150',
+    department: 'Engineering',
+    hourlyRate: 105,
+    weeklyCapacityHours: 40,
+    skills: ['React Native', 'iOS', 'Android', 'TypeScript', 'Offline Sync']
+  },
+  {
+    id: 'user-sh-8',
+    name: 'Zoe Chen',
+    email: 'zoe.c@apex.io',
+    role: 'stakeholder',
+    title: 'AI / ML & Data Analytics Specialist',
+    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
+    department: 'Data & AI',
+    hourlyRate: 120,
+    weeklyCapacityHours: 35,
+    skills: ['Gemini API', 'LLM Fine-Tuning', 'Python', 'Vector DB', 'Prompt Engineering']
+  },
+  {
+    id: 'user-sh-9',
+    name: 'Samuel Wright',
+    email: 'samuel.w@apex.io',
+    role: 'stakeholder',
+    title: 'Cybersecurity & Compliance Lead',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
+    department: 'Security',
+    hourlyRate: 135,
+    weeklyCapacityHours: 40,
+    skills: ['SOC2 Compliance', 'Zero Trust', 'Pen Testing', 'Cloud Security']
+  },
+  {
+    id: 'user-sh-10',
+    name: 'Kevin Taylor',
+    email: 'kevin.t@apex.io',
+    role: 'stakeholder',
+    title: 'Lead Automation SDET & QA Architect',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150',
+    department: 'Quality Assurance',
+    hourlyRate: 95,
+    weeklyCapacityHours: 40,
+    skills: ['Playwright', 'Cypress', 'Performance Testing', 'Load Testing', 'CI Pipelines']
+  },
+  {
+    id: 'user-sh-11',
+    name: 'Maya Lin',
+    email: 'maya.l@apex.io',
+    role: 'stakeholder',
+    title: 'Senior Product Owner & Business Analyst',
+    avatar: 'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?auto=format&fit=crop&q=80&w=150',
+    department: 'Product Management',
+    hourlyRate: 100,
+    weeklyCapacityHours: 40,
+    skills: ['Requirements Gathering', 'User Story Mapping', 'UAT', 'Data Analytics']
   }
 ];
 
@@ -421,8 +505,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge missing DEFAULT_USERS into cached users so new bench talent and PMs are always accessible
+          const existingEmails = new Set(parsed.map((u: UserProfile) => u.email?.toLowerCase()));
+          const missingDefaults = DEFAULT_USERS.filter(d => !existingEmails.has(d.email?.toLowerCase()));
+          const merged = [...parsed, ...missingDefaults];
+
           // Guarantee that at least one admin user exists and that admin@apex.io has role: 'admin'
-          let updated = parsed.map((u: UserProfile) => {
+          let updated = merged.map((u: UserProfile) => {
             if (u.email?.toLowerCase() === 'admin@apex.io' || u.id === 'user-admin-1') {
               return { ...u, role: 'admin' as UserRole };
             }
@@ -1008,8 +1097,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const switchProject = async (projectId: string) => {
     setActiveProjectId(projectId);
 
-    // Immediate optimistic local update if target exists in default map or cache
-    const targetLocal = defaultProjectsMap[projectId];
+    // Immediate optimistic local update if target exists in allProjectsMap, default map, or cache
+    const targetLocal = allProjectsMap[projectId] || defaultProjectsMap[projectId];
     if (targetLocal) {
       setProjectData(targetLocal);
       queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: projectId, data: targetLocal });
@@ -1561,10 +1650,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       createdByEmail: sh.createdByEmail || currentUser.email
     };
 
-    const existingIdx = projectData.stakeholders.findIndex(s => s.id === newSh.id);
+    const lowerEmail = newSh.email.toLowerCase();
+    const existingIdx = projectData.stakeholders.findIndex(
+      s => s.id === newSh.id || (!lowerEmail.includes('@placeholder') && s.email && s.email.toLowerCase() === lowerEmail)
+    );
     const updatedStakeholders = [...projectData.stakeholders];
     if (existingIdx >= 0) {
-      updatedStakeholders[existingIdx] = newSh;
+      updatedStakeholders[existingIdx] = { ...updatedStakeholders[existingIdx], ...newSh };
     } else {
       updatedStakeholders.push(newSh);
     }
@@ -1572,6 +1664,48 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const updated = { ...projectData, stakeholders: updatedStakeholders };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
+
+    // Keep global user registry synchronized with assigned members
+    if (!lowerEmail.includes('@placeholder')) {
+      setAllUsers(prevUsers => {
+        const userIdx = prevUsers.findIndex(u => u.id === newSh.id || u.email.toLowerCase() === lowerEmail);
+        let mappedUserRole: UserRole = 'stakeholder';
+        const rLower = (newSh.role || '').toLowerCase();
+        if (rLower.includes('admin') || rLower.includes('governance')) mappedUserRole = 'admin';
+        else if (rLower.includes('project manager') || rLower.includes('scrum master') || rLower === 'pm') mappedUserRole = 'pm';
+
+        if (userIdx >= 0) {
+          const existing = prevUsers[userIdx];
+          const updatedUser: UserProfile = {
+            ...existing,
+            name: newSh.name || existing.name,
+            title: newSh.role || existing.title,
+            hourlyRate: newSh.hourlyRate || existing.hourlyRate,
+            weeklyCapacityHours: newSh.weeklyCapacityHours || existing.weeklyCapacityHours,
+            skills: newSh.skills && newSh.skills.length > 0 ? newSh.skills : existing.skills,
+            avatar: newSh.avatar || existing.avatar,
+            role: existing.role === 'admin' ? 'admin' : (existing.role === 'pm' ? 'pm' : mappedUserRole)
+          };
+          const nextList = [...prevUsers];
+          nextList[userIdx] = updatedUser;
+          return nextList;
+        } else {
+          const newUser: UserProfile = {
+            id: newSh.id.startsWith('user-') ? newSh.id : `user-${newSh.id}`,
+            name: newSh.name,
+            email: newSh.email,
+            role: mappedUserRole,
+            title: newSh.role,
+            avatar: newSh.avatar,
+            hourlyRate: newSh.hourlyRate,
+            weeklyCapacityHours: newSh.weeklyCapacityHours,
+            skills: newSh.skills,
+            department: newSh.category === 'internal' ? 'Engineering' : 'External Partner'
+          };
+          return [...prevUsers, newUser];
+        }
+      });
+    }
 
     if (navigator.onLine) {
       try {
@@ -1587,10 +1721,46 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const deleteStakeholder = async (id: string) => {
+    const targetMember = projectData.stakeholders.find(s => s.id === id);
     const updatedStakeholders = projectData.stakeholders.filter(s => s.id !== id);
-    const updated = { ...projectData, stakeholders: updatedStakeholders };
+    const updatedTasks = projectData.tasks.map(t => ({
+      ...t,
+      assigneeIds: (t.assigneeIds || []).filter(aId => aId !== id)
+    }));
+    const updatedSubtasks = projectData.subtasks.map(st => 
+      st.assigneeId === id ? { ...st, assigneeId: undefined } : st
+    );
+
+    const updated = {
+      ...projectData,
+      stakeholders: updatedStakeholders,
+      tasks: updatedTasks,
+      subtasks: updatedSubtasks,
+      activities: [
+        {
+          id: 'act-' + Date.now(),
+          timestamp: new Date().toISOString(),
+          user: currentUser?.name || 'User',
+          action: 'Removed Team Member',
+          details: `Unassigned ${targetMember?.name || 'team member'} from project and returned to organization bench pool.`
+        },
+        ...projectData.activities
+      ]
+    };
     setProjectData(updated);
     broadcastLocalTabSync(updated);
+
+    if (navigator.onLine) {
+      try {
+        await fetch(`/api/stakeholders/${id}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senderClientId: clientIdRef.current })
+        });
+      } catch (err) {
+        console.warn('Failed to delete stakeholder on server:', err);
+      }
+    }
   };
 
   const saveEpic = async (epic: Partial<Epic>) => {

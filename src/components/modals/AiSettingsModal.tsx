@@ -16,8 +16,17 @@ import {
   RefreshCw,
   Info,
   CheckCircle2,
-  Sliders
+  Sliders,
+  Smartphone,
+  Volume2
 } from 'lucide-react';
+import {
+  triggerHaptic,
+  isHapticsGloballyEnabled,
+  setHapticsGloballyEnabled,
+  isIOSDevice,
+  isVibrateSupported
+} from '../../utils/haptics';
 
 interface AiSettingsModalProps {
   isOpen: boolean;
@@ -87,8 +96,28 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; latencyMs?: number } | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
 
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'ai' | 'haptics'>('ai');
+  const [hapticsEnabled, setHapticsEnabled] = useState(isHapticsGloballyEnabled());
+  const [lastTestedHaptic, setLastTestedHaptic] = useState<string | null>(null);
+  const [testPulseCount, setTestPulseCount] = useState(0);
+
+  const handleToggleHaptics = (val: boolean) => {
+    setHapticsEnabled(val);
+    setHapticsGloballyEnabled(val);
+    if (val) {
+      triggerHaptic('success');
+    }
+  };
+
+  const handleTestSpecificHaptic = (type: any, label: string) => {
+    triggerHaptic(type);
+    setLastTestedHaptic(label);
+    setTestPulseCount(prev => prev + 1);
+  };
+
   useEffect(() => {
     if (isOpen) {
+      setHapticsEnabled(isHapticsGloballyEnabled());
       setEnabled(customAiConfig.enabled || false);
       setProvider(customAiConfig.provider || 'gemini');
       setApiKey(customAiConfig.apiKey || '');
@@ -203,17 +232,21 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-400 border border-indigo-500/30">
-              <Key className="w-5 h-5" />
+              {activeSettingsTab === 'ai' ? <Key className="w-5 h-5" /> : <Smartphone className="w-5 h-5" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base text-slate-100">AI API Key & Model Settings</h3>
+                <h3 className="font-bold text-base text-slate-100">
+                  {activeSettingsTab === 'ai' ? 'AI Provider & Model Settings' : 'Tactile Haptics & Vibration Engine'}
+                </h3>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Custom Provider Integration
+                  {activeSettingsTab === 'ai' ? 'Custom AI' : (isIOSDevice() ? 'iOS Taptic Engine' : 'Android Vibrate')}
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Link your custom API key (Gemini, OpenAI, Claude, DeepSeek, Groq) or fall back to system defaults.
+                {activeSettingsTab === 'ai'
+                  ? 'Link your custom API key (Gemini, OpenAI, Claude, DeepSeek, Groq) or use defaults.'
+                  : 'Hardware tactile feedback, vibration motors, and micro-clicks across mobile devices.'}
               </p>
             </div>
           </div>
@@ -226,8 +259,205 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
           </button>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/90 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setActiveSettingsTab('ai')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              activeSettingsTab === 'ai'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>AI Model &amp; API Keys</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveSettingsTab('haptics');
+              triggerHaptic('light');
+            }}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              activeSettingsTab === 'haptics'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40'
+                : 'bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5 text-indigo-300" />
+            <span>Haptics &amp; Tactile Feedback</span>
+            {isIOSDevice() && (
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                iPhone
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Modal Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-slate-200 text-xs">
+        {activeSettingsTab === 'haptics' ? (
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-slate-200 text-xs">
+            {/* Master Haptics Enable Toggle */}
+            <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 font-bold text-sm text-slate-100">
+                  <Smartphone className="w-4 h-4 text-indigo-400" />
+                  <span>Enable Tactile Haptic Feedback</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Provides crisp physical vibration pulses and mechanical micro-ticks on swipe gestures, task completion, and interactive controls.
+                </p>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 self-start sm:self-auto">
+                <input
+                  type="checkbox"
+                  checked={hapticsEnabled}
+                  onChange={e => handleToggleHaptics(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {/* Device Diagnostic Banner */}
+            <div className="p-3.5 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+                  Hardware Engine Detection
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  <span>Engine Online</span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-[11px]">
+                <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                  <div className="text-slate-400 text-[10px]">Client Platform:</div>
+                  <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>{isIOSDevice() ? 'Apple iOS (iPhone / WebKit)' : 'Android / Chromium Device'}</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900/90 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                  <div className="text-slate-400 text-[10px]">Primary Tactile Driver:</div>
+                  <div className="font-semibold text-slate-200 flex items-center gap-1.5">
+                    <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{isIOSDevice() ? 'Taptic Switch + Audio Pulse' : (isVibrateSupported() ? 'Hardware Motor (Vibrate API)' : 'Audio-Tactile Pulse')}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Interactive Haptic Tester */}
+            <div className="p-4 bg-indigo-950/20 rounded-xl border border-indigo-500/30 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-indigo-400" />
+                    <span>Live Haptic Tester</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Tap any pattern below on your iPhone 17 Pro to test tactile feedback immediately.
+                  </p>
+                </div>
+                {testPulseCount > 0 && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    {testPulseCount} fired
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('light', 'Light Micro-Tap')}
+                  className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 text-slate-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">⚡</span>
+                  <span>Light Tap</span>
+                  <span className="text-[9px] text-slate-400 font-mono">35ms tick</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('selection', 'Selection Tick')}
+                  className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 text-slate-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">🎯</span>
+                  <span>Selection</span>
+                  <span className="text-[9px] text-slate-400 font-mono">28ms soft</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('medium', 'Medium Action')}
+                  className="p-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 border border-slate-800 text-slate-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">🚀</span>
+                  <span>Medium Pulse</span>
+                  <span className="text-[9px] text-slate-400 font-mono">55ms solid</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('success', 'Success Double-Tap')}
+                  className="p-3 rounded-xl bg-emerald-950/30 hover:bg-emerald-900/40 active:scale-95 border border-emerald-500/40 text-emerald-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">🏆</span>
+                  <span>Success Double</span>
+                  <span className="text-[9px] text-emerald-400 font-mono">45ms + 65ms</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('warning', 'Warning Alert')}
+                  className="p-3 rounded-xl bg-amber-950/30 hover:bg-amber-900/40 active:scale-95 border border-amber-500/40 text-amber-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">⚠️</span>
+                  <span>Warning Alert</span>
+                  <span className="text-[9px] text-amber-400 font-mono">Multi-pulse</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTestSpecificHaptic('heavy', 'Heavy Impact')}
+                  className="p-3 rounded-xl bg-indigo-950/30 hover:bg-indigo-900/40 active:scale-95 border border-indigo-500/40 text-indigo-200 font-semibold text-xs transition-all flex flex-col items-center gap-1.5 shadow-sm"
+                >
+                  <span className="text-base">💥</span>
+                  <span>Heavy Impact</span>
+                  <span className="text-[9px] text-indigo-300 font-mono">85ms pulse</span>
+                </button>
+              </div>
+
+              {lastTestedHaptic && (
+                <div className="text-center text-[11px] text-emerald-400 font-semibold animate-in fade-in">
+                  ✓ Fired {lastTestedHaptic} feedback pulse
+                </div>
+              )}
+            </div>
+
+            {/* iOS Specific Guidance */}
+            {isIOSDevice() && (
+              <div className="p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl space-y-1.5 text-blue-200 text-xs">
+                <div className="font-bold flex items-center gap-1.5 text-blue-300">
+                  <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span>iPhone &amp; iOS Safari Tips:</span>
+                </div>
+                <ul className="list-disc list-inside text-[11px] text-blue-200/90 space-y-1 pl-1">
+                  <li>Apple iOS WebKit disables direct access to <code className="text-blue-300">navigator.vibrate</code> on web pages.</li>
+                  <li>Our engine automatically triggers the physical <strong>Taptic Engine Switch</strong> and complementary low-latency audio micro-clicks.</li>
+                  <li>If your iPhone is set to <strong>Silent Mode</strong> (Action Button / Mute Switch), ensure device volume is unmuted if you also want acoustic confirmation.</li>
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 text-slate-200 text-xs">
           {/* Master Enable Toggle */}
           <div className="p-4 bg-slate-950/70 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="space-y-0.5">
@@ -414,8 +644,9 @@ export const AiSettingsModal: React.FC<AiSettingsModalProps> = ({ isOpen, onClos
             )}
           </div>
         </div>
+      )}
 
-        {/* Modal Footer */}
+      {/* Modal Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />

@@ -832,16 +832,25 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
                     Evaluates individual workload distribution across active sprints to prevent burnout or under-allocation.
                   </p>
                 </div>
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Overallocated (&gt;100%)
-                  </span>
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Optimal (70-100%)
-                  </span>
-                  <span className="flex items-center gap-1.5 text-indigo-400 font-semibold">
-                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Available (&lt;70%)
-                  </span>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1.5 text-rose-400 font-semibold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Overallocated (&gt;100%)
+                    </span>
+                    <span className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Optimal (70-100%)
+                    </span>
+                    <span className="flex items-center gap-1.5 text-indigo-400 font-semibold">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Available (&lt;70%)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => onNavigate('workload')}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/30 rounded-lg text-xs font-semibold transition-all"
+                  >
+                    <span>4-Week Heatmap & Rebalance</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
 

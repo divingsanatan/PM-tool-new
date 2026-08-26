@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { ProjectBoardItem, ProjectBoardCategory, BoardItemType, BoardItemComment, ProjectChatMessage, ViewMode } from '../../types';
 import { SwipeableCard, SwipeGestureGuideBanner } from '../common/SwipeableCard';
+import { EmptyState } from '../common/EmptyState';
 import { triggerHaptic } from '../../utils/haptics';
 import {
   FolderKanban,
@@ -523,38 +524,44 @@ export const ProjectBoardView: React.FC<ProjectBoardViewProps> = ({ onNavigate }
         />
 
         {filteredItems.length === 0 ? (
-              <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-12 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto text-indigo-400">
-                  <FolderKanban className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-semibold text-slate-200">No items found on Project Board</h3>
-                <p className="text-xs text-slate-400 max-w-md mx-auto">
-                  {searchQuery || selectedCategory !== 'all' || selectedType !== 'all' || selectedTag !== 'all'
-                    ? 'Try clearing your search filters or selecting a different category.'
-                    : 'Add your first note, link, or file to start collaborating on this project board.'}
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <button
-                    onClick={() => openCreateModal('note')}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-medium cursor-pointer"
-                  >
-                    + Create Note
-                  </button>
-                  <button
-                    onClick={() => openCreateModal('link')}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-medium cursor-pointer"
-                  >
-                    + Add Link
-                  </button>
-                  <button
-                    onClick={() => openCreateModal('file')}
-                    className="px-3 py-1.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-medium cursor-pointer"
-                  >
-                    + Upload File
-                  </button>
-                </div>
-              </div>
-            ) : (
+          <EmptyState
+            preset={searchQuery || selectedCategory !== 'all' || selectedType !== 'all' || selectedTag !== 'all' ? 'search' : 'folder'}
+            icon={FolderKanban}
+            title={
+              searchQuery || selectedCategory !== 'all' || selectedType !== 'all' || selectedTag !== 'all'
+                ? 'No matching board items'
+                : 'Project board is empty'
+            }
+            description={
+              searchQuery || selectedCategory !== 'all' || selectedType !== 'all' || selectedTag !== 'all'
+                ? 'Try clearing your search query or choosing a different category to reveal board items.'
+                : 'Add rich Markdown notes, reference links, and attached files to build your central project knowledge base.'
+            }
+            action={{
+              label: 'Create Note',
+              onClick: () => openCreateModal('note'),
+              icon: StickyNote,
+              variant: 'primary'
+            }}
+            secondaryAction={
+              searchQuery || selectedCategory !== 'all' || selectedType !== 'all' || selectedTag !== 'all'
+                ? {
+                    label: 'Clear Filters',
+                    onClick: () => {
+                      setSearchQuery('');
+                      setSelectedCategory('all');
+                      setSelectedType('all');
+                      setSelectedTag('all');
+                    }
+                  }
+                : {
+                    label: 'Add Link',
+                    onClick: () => openCreateModal('link'),
+                    icon: LinkIcon
+                  }
+            }
+          />
+        ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredItems.map((item, idx) => {
                   const canEdit = canEditItem(item);
@@ -1095,10 +1102,12 @@ const ItemCommentsSection: React.FC<ItemCommentsSectionProps> = ({
 
       {/* COMMENTS LIST */}
       {comments.length === 0 ? (
-        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800/80 text-center space-y-1">
-          <p className="text-xs text-slate-400 font-medium">No comments yet on this board card.</p>
-          <p className="text-[11px] text-slate-500">Be the first to post a question, update, or design feedback!</p>
-        </div>
+        <EmptyState
+          size="sm"
+          preset="chat"
+          title="No comments yet"
+          description="Be the first to post a question, update, or feedback on this board item!"
+        />
       ) : (
         <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
           {comments.map(comment => {
@@ -1359,11 +1368,15 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
       {/* MESSAGES STREAM LIST */}
       <div className="space-y-3 flex-1 min-h-[220px] overflow-y-auto pr-1 min-w-0 my-1">
         {filteredMessages.length === 0 ? (
-          <div className="bg-slate-950 p-8 rounded-2xl border border-slate-800 text-center space-y-2">
-            <MessageSquare className="w-8 h-8 text-slate-600 mx-auto" />
-            <p className="text-xs font-semibold text-slate-300">No chat messages found</p>
-            <p className="text-[11px] text-slate-500">Post a general message, announcement, or question to start the discussion!</p>
-          </div>
+          <EmptyState
+            preset="chat"
+            title={filterType === 'pinned' ? 'No pinned messages' : filterType === 'announcements' ? 'No announcements yet' : 'No messages found'}
+            description={
+              filterType === 'pinned'
+                ? 'Pin important messages and discussion items to keep them visible at the top.'
+                : 'Post a general message, announcement, or question below to start the conversation!'
+            }
+          />
         ) : (
           filteredMessages.map(msg => {
             const isOwner = msg.userId === currentUser.id || msg.userEmail === currentUser.email || currentUser.role === 'pm';

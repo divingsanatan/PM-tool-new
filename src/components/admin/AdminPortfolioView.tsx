@@ -495,7 +495,14 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
         </div>
 
         {/* Desktop & Tablet Pill Tabs (>= lg or horizontal scrollable) */}
-        <div className="hidden lg:flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl overflow-x-auto no-scrollbar shadow-inner">
+        <div
+          onWheel={(e) => {
+            if (e.deltaY !== 0) {
+              e.currentTarget.scrollLeft += e.deltaY;
+            }
+          }}
+          className="hidden lg:flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1.5 rounded-2xl overflow-x-auto scroll-smooth custom-scrollbar-horizontal shadow-inner"
+        >
           <button
             type="button"
             onClick={() => setActiveTab('portfolio')}

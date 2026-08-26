@@ -25,6 +25,7 @@ import {
   Building2,
   Tag
 } from 'lucide-react';
+import { EmptyState } from '../common/EmptyState';
 
 export const AuditTrailView: React.FC = () => {
   const { projectData, currentUser, addAuditNote, clearAuditLogs } = useProject();
@@ -506,13 +507,48 @@ export const AuditTrailView: React.FC = () => {
 
       {/* Main Audit Content Stream */}
       {filteredActivities.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-3xl space-y-3">
-          <History className="w-12 h-12 text-slate-600 mx-auto" />
-          <h3 className="text-base font-bold text-slate-300">No Audit Logs Found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            No system activity logs matched your search or filter parameters. Try adjusting your search query or reset filters.
-          </p>
-        </div>
+        <EmptyState
+          icon={History}
+          preset="inbox"
+          title={
+            searchTerm || selectedUser !== 'all' || selectedCategory !== 'all' || timeframe !== 'all'
+              ? 'No matching audit records'
+              : 'No activity logged yet'
+          }
+          description={
+            searchTerm || selectedUser !== 'all' || selectedCategory !== 'all' || timeframe !== 'all'
+              ? 'No audit log entries match your current search and filter settings. Try resetting your filters.'
+              : 'Project modifications, milestone completions, leave approvals, and governance events will appear here in chronological order.'
+          }
+          action={
+            searchTerm || selectedUser !== 'all' || selectedCategory !== 'all' || timeframe !== 'all'
+              ? {
+                  label: 'Reset Filters',
+                  onClick: () => {
+                    setSearchTerm('');
+                    setSelectedUser('all');
+                    setSelectedCategory('all');
+                    setTimeframe('all');
+                  },
+                  variant: 'secondary'
+                }
+              : {
+                  label: 'Log Audit Note',
+                  onClick: () => setIsNoteModalOpen(true),
+                  icon: PlusCircle,
+                  variant: 'primary'
+                }
+          }
+          secondaryAction={
+            searchTerm || selectedUser !== 'all' || selectedCategory !== 'all' || timeframe !== 'all'
+              ? {
+                  label: 'Log Audit Note',
+                  onClick: () => setIsNoteModalOpen(true),
+                  icon: PlusCircle
+                }
+              : undefined
+          }
+        />
       ) : viewMode === 'timeline' ? (
         /* TIMELINE VIEW */
         <div className="relative pl-8 sm:pl-10 space-y-6 before:absolute before:left-4 sm:before:left-5 before:top-3 before:bottom-3 before:w-0.5 before:bg-slate-800">

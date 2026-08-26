@@ -38,6 +38,7 @@ import {
   Tag,
   ShieldCheck
 } from 'lucide-react';
+import { EmptyState } from '../common/EmptyState';
 
 export const ChangeManagementView: React.FC = () => {
   const {
@@ -463,13 +464,54 @@ export const ChangeManagementView: React.FC = () => {
 
       {/* Change Requests List */}
       {filteredCRs.length === 0 ? (
-        <div className="p-12 text-center bg-slate-900 border border-slate-800 rounded-3xl space-y-3">
-          <GitPullRequest className="w-12 h-12 text-slate-600 mx-auto" />
-          <h3 className="text-base font-bold text-slate-300">No Change Requests Found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
-            No change requests match your criteria. Click "+ Submit Change Request" to initiate a formal PMBOK change control entry.
-          </p>
-        </div>
+        <EmptyState
+          icon={GitPullRequest}
+          preset="inbox"
+          title={
+            searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || impactAreaFilter !== 'all'
+              ? 'No matching change requests'
+              : 'No change requests recorded'
+          }
+          description={
+            searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || impactAreaFilter !== 'all'
+              ? 'No change control entries match your filter criteria. Try resetting your search or filter values.'
+              : 'Formal PMBOK change requests help track scope expansions, schedule delays, budget revisions, and governance approval workflows.'
+          }
+          action={
+            searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || impactAreaFilter !== 'all'
+              ? {
+                  label: 'Reset Filters',
+                  onClick: () => {
+                    setSearchTerm('');
+                    setStatusFilter('all');
+                    setPriorityFilter('all');
+                    setImpactAreaFilter('all');
+                  },
+                  variant: 'secondary'
+                }
+              : {
+                  label: 'Submit Change Request',
+                  onClick: () => {
+                    setEditingCR(null);
+                    setIsFormModalOpen(true);
+                  },
+                  icon: PlusCircle,
+                  variant: 'primary'
+                }
+          }
+          secondaryAction={
+            searchTerm || statusFilter !== 'all' || priorityFilter !== 'all' || impactAreaFilter !== 'all'
+              ? {
+                  label: 'Submit Change Request',
+                  onClick: () => {
+                    setEditingCR(null);
+                    setIsFormModalOpen(true);
+                  },
+                  icon: PlusCircle
+                }
+              : undefined
+          }
+        />
       ) : (
         <div className="space-y-4">
           {filteredCRs.map((cr) => {

@@ -15,6 +15,7 @@ import {
   Lock,
   Eye
 } from 'lucide-react';
+import { EmptyState } from '../common/EmptyState';
 
 interface RaidViewProps {
   onOpenRaidModal: (item?: RaidItem) => void;
@@ -129,8 +130,39 @@ export const RaidView: React.FC<RaidViewProps> = ({ onOpenRaidModal }) => {
 
       {/* RAID Log Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="divide-y divide-slate-800/80">
-          {filteredItems.map(item => {
+        {filteredItems.length === 0 ? (
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              preset={activeTab === 'risk' || activeTab === 'all' ? 'shield' : 'inbox'}
+              title={
+                activeTab === 'all'
+                  ? 'No RAID log items recorded'
+                  : `No ${activeTab === 'dependency' ? 'dependencies' : activeTab === 'assumption' ? 'assumptions' : `${activeTab}s`} found`
+              }
+              description={
+                activeTab === 'all'
+                  ? 'Log risks, assumptions, issues, and dependencies to track project risks and get proactive AI mitigation advice.'
+                  : `There are currently no ${activeTab} items recorded for this project.`
+              }
+              action={{
+                label: `Log ${activeTab === 'all' ? 'RAID Item' : activeTab.toUpperCase()}`,
+                onClick: () => onOpenRaidModal(activeTab !== 'all' ? { type: activeTab } as any : undefined),
+                icon: Plus,
+                variant: 'amber'
+              }}
+              secondaryAction={
+                activeTab !== 'all'
+                  ? {
+                      label: 'View All RAID Items',
+                      onClick: () => setActiveTab('all')
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800/80">
+            {filteredItems.map(item => {
             const owner = projectData.stakeholders.find(s => s.id === item.ownerId);
             const isAnalyzing = isLoadingAi === item.id;
             const hasAiResult = aiAnalysisResult?.id === item.id;
@@ -251,6 +283,7 @@ export const RaidView: React.FC<RaidViewProps> = ({ onOpenRaidModal }) => {
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );

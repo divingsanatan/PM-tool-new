@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { SprintFilter } from '../common/SprintFilter';
+import { EmptyState } from '../common/EmptyState';
 import { FileText, Sparkles, Download, Copy, Check, Printer, Layers, Calendar, CheckCircle, Clock } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
@@ -202,20 +203,18 @@ export const ReportsView: React.FC = () => {
             {reportText}
           </div>
         ) : (
-          <div className="text-center py-12 space-y-3 bg-slate-950/40 rounded-xl border border-dashed border-slate-800">
-            <Sparkles className="w-8 h-8 text-indigo-400 mx-auto animate-pulse" />
-            <h4 className="font-bold text-slate-200 text-sm">No Report Generated Yet</h4>
-            <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Click the button above to have Gemini AI analyze your current Earned Value Management metrics, active tasks, and RAID risks into an executive summary report.
-            </p>
-            <button
-              onClick={generateReport}
-              disabled={isGenerating}
-              className="mt-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/30"
-            >
-              Generate Executive Report
-            </button>
-          </div>
+          <EmptyState
+            preset="file"
+            icon={Sparkles}
+            title="No Report Generated Yet"
+            description="Click the button below to have AI synthesize your current Earned Value Management (EVM) metrics, sprint velocity, and RAID risks into an executive status brief."
+            action={{
+              label: isGenerating ? 'Analyzing project data...' : 'Generate Executive Report',
+              onClick: generateReport,
+              icon: Sparkles,
+              variant: 'primary'
+            }}
+          />
         )}
       </div>
     </div>

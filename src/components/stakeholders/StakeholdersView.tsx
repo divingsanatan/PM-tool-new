@@ -25,9 +25,14 @@ import {
   UserCheck,
   CalendarOff,
   CalendarDays,
-  Award
+  Award,
+  Flame,
+  LayoutGrid,
+  UserMinus
 } from 'lucide-react';
+import { EmptyState } from '../common/EmptyState';
 import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
+import { WorkloadHeatmap } from './WorkloadHeatmap';
 import {
   ResponsiveContainer,
   BarChart,
@@ -48,12 +53,14 @@ import {
 interface StakeholdersViewProps {
   onOpenStakeholderModal: (stakeholder?: Stakeholder) => void;
   onOpenInviteModal?: (email?: string) => void;
+  onOpenTaskModal?: (taskId: string) => void;
   initialTab?: 'directory' | 'workload';
 }
 
 export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   onOpenStakeholderModal,
   onOpenInviteModal,
+  onOpenTaskModal,
   initialTab = 'directory'
 }) => {
   const { projectData, saveStakeholder, deleteStakeholder, currentUser, leaves } = useProject();
@@ -61,10 +68,12 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   const isPM = currentUser?.role === 'pm' || isAdmin;
 
   const [activeTab, setActiveTab] = useState<'directory' | 'workload'>(initialTab);
+  const [workloadSubView, setWorkloadSubView] = useState<'heatmap' | 'chart' | 'cards'>('heatmap');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'internal' | 'external'>('all');
   const [workloadFilter, setWorkloadFilter] = useState<'all' | 'overloaded' | 'active'>('all');
   const [selectedStakeholderForReport, setSelectedStakeholderForReport] = useState<Stakeholder | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<Stakeholder | null>(null);
 
   // Quick Add State
   const [quickName, setQuickName] = useState('');
@@ -72,6 +81,15 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   const [quickCategory, setQuickCategory] = useState<StakeholderCategory>('internal');
   const [quickRate, setQuickRate] = useState(85);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleConfirmRemoveMember = async () => {
+    if (!memberToRemove) return;
+    const name = memberToRemove.name;
+    await deleteStakeholder(memberToRemove.id);
+    setMemberToRemove(null);
+    setToastMessage(`✓ ${name} removed from project and returned to organization bench.`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   // Sync tab if initialTab prop changes externally
   useEffect(() => {
@@ -604,9 +622,9 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
-                              onClick={() => deleteStakeholder(sh.id)}
+                              onClick={() => setMemberToRemove(sh)}
                               className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
-                              title="Remove"
+                              title="Remove from project & return to bench"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -706,11 +724,36 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
           </div>
 
           {filteredStakeholders.length === 0 && (
-            <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl space-y-2">
-              <Users className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm font-semibold text-slate-300">No stakeholders found matching the criteria</p>
-              <p className="text-xs text-slate-500">Try adjusting your category or search filters.</p>
-            </div>
+            <EmptyState
+              preset="users"
+              title={searchQuery || categoryFilter !== 'all' ? 'No matching team members' : 'No stakeholders added yet'}
+              description={
+                searchQuery || categoryFilter !== 'all'
+                  ? 'No project team members or stakeholders match your search and category filters.'
+                  : 'Add project stakeholders, contributors, or team members to manage workload and assign tasks.'
+              }
+              action={
+                isAdmin
+                  ? {
+                      label: 'Add Stakeholder',
+                      onClick: () => onOpenStakeholderModal(),
+                      icon: Plus,
+                      variant: 'emerald'
+                    }
+                  : undefined
+              }
+              secondaryAction={
+                searchQuery || categoryFilter !== 'all'
+                  ? {
+                      label: 'Clear Filters',
+                      onClick: () => {
+                        setSearchQuery('');
+                        setCategoryFilter('all');
+                      }
+                    }
+                  : undefined
+              }
+            />
           )}
         </div>
       )}
@@ -720,265 +763,366 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
       {/* ========================================================================= */}
       {activeTab === 'workload' && (
         <div className="space-y-5">
-          {/* Main Workload Chart */}
-          <div className="bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-              <div>
-                <h3 className="font-bold text-slate-100 text-sm sm:text-base truncate">
-                  Assigned Workload vs Weekly Capacity
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Active assigned task hours compared across team members
-                </p>
-              </div>
+          {/* Workload Sub-View Switcher Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-2.5 rounded-2xl shadow-sm">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800 self-start sm:self-auto overflow-x-auto">
+              <button
+                onClick={() => setWorkloadSubView('heatmap')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  workloadSubView === 'heatmap'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                }`}
+              >
+                <Flame className="w-3.5 h-3.5 text-rose-400" />
+                <span>4-Week Capacity Heatmap</span>
+              </button>
 
-              {/* Workload Status Filter */}
-              <div className="flex items-center gap-1.5 text-xs bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
-                <button
-                  onClick={() => setWorkloadFilter('all')}
-                  className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                    workloadFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  All ({allWorkloads.length})
-                </button>
-                <button
-                  onClick={() => setWorkloadFilter('overloaded')}
-                  className={`px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center gap-1 ${
-                    workloadFilter === 'overloaded' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <span>Over-limit ({overloadedCount})</span>
-                </button>
-                <button
-                  onClick={() => setWorkloadFilter('active')}
-                  className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                    workloadFilter === 'active' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  Active Tasks Only
-                </button>
-              </div>
+              <button
+                onClick={() => setWorkloadSubView('chart')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  workloadSubView === 'chart'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Workload Distribution Chart</span>
+              </button>
+
+              <button
+                onClick={() => setWorkloadSubView('cards')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  workloadSubView === 'cards'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Member Capacity Cards</span>
+              </button>
             </div>
 
-            <div className="h-64 sm:h-72 w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
-                  <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} interval={0} tick={{ fontSize: 11 }} />
-                  <YAxis stroke="#94a3b8" fontSize={11} unit="h" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      borderColor: '#334155',
-                      borderRadius: '12px',
-                      color: '#f8fafc',
-                      fontSize: '12px'
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
-                  <Bar dataKey="Assigned" name="Assigned Workload (Hours)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="Capacity" name="Weekly Capacity (Hours)" fill="#6366f1" opacity={0.5} radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="text-xs text-slate-400 flex items-center gap-2 px-2">
+              <span className="w-2 h-2 rounded-full bg-teal-400" />
+              <span>
+                {workloadSubView === 'heatmap' 
+                  ? 'Forecasting 4-week capacity bottlenecks & leaf conflicts'
+                  : `${allWorkloads.length} team members evaluated`}
+              </span>
             </div>
           </div>
 
-          {/* Detailed Workload Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0">
-            {filteredWorkloads.map((wl) => {
-              const sh = wl.stakeholder;
-              const assignedTasks = projectData.tasks.filter(
-                t => t.assigneeIds.includes(sh.id) && t.status !== 'done'
-              );
-              
-              // Effective capacity calculation
-              const baseCapacity = sh.weeklyCapacityHours || 40;
-              const capInfo = calculateEffectiveWeeklyCapacity(baseCapacity, sh.id, leaves || []);
-              const effectiveCapacity = capInfo.effectiveCapacity;
-              const blockedLeaveHours = capInfo.blockedHours;
-              const isOverloaded = effectiveCapacity > 0 ? wl.assignedHours > effectiveCapacity : wl.assignedHours > 0;
-              const effectiveUtilPercent = effectiveCapacity > 0 ? Math.round((wl.assignedHours / effectiveCapacity) * 100) : (wl.assignedHours > 0 ? 999 : 0);
-              const progressPct = Math.min(effectiveUtilPercent, 100);
+          {/* SUB-VIEW 1: 🔥 4-WEEK CAPACITY HEATMAP */}
+          {workloadSubView === 'heatmap' && (
+            <WorkloadHeatmap
+              onOpenTaskModal={onOpenTaskModal}
+              onOpenStakeholderModal={(shId) => {
+                const sh = projectData.stakeholders.find(s => s.id === shId);
+                if (sh) onOpenStakeholderModal(sh);
+              }}
+            />
+          )}
 
-              // Check if member is on leave or has approved leaves
-              const onLeaveNow = isUserOnLeave(sh.id, leaves || []);
-              const userLeaves = (leaves || []).filter(l => l.userId === sh.id && l.status === 'approved');
+          {/* SUB-VIEW 2: 📊 WORKLOAD DISTRIBUTION BAR CHART */}
+          {workloadSubView === 'chart' && (
+            <div className="bg-slate-900 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm min-w-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="font-bold text-slate-100 text-sm sm:text-base truncate">
+                    Assigned Workload vs Weekly Capacity
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Active assigned task hours compared across team members
+                  </p>
+                </div>
 
-              // Check for tasks with leave conflicts
-              const conflictingTasks = assignedTasks.filter(t => {
-                const conflict = checkTaskLeaveConflict(
-                  { startDate: t.startDate, dueDate: t.dueDate, assigneeIds: [sh.id] },
-                  leaves || [],
-                  projectData.stakeholders
-                );
-                return conflict.hasConflict;
-              });
+                {/* Workload Status Filter */}
+                <div className="flex items-center gap-1.5 text-xs bg-slate-950 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
+                  <button
+                    onClick={() => setWorkloadFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                      workloadFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    All ({allWorkloads.length})
+                  </button>
+                  <button
+                    onClick={() => setWorkloadFilter('overloaded')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center gap-1 ${
+                      workloadFilter === 'overloaded' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span>Over-limit ({overloadedCount})</span>
+                  </button>
+                  <button
+                    onClick={() => setWorkloadFilter('active')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                      workloadFilter === 'active' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Active Tasks Only
+                  </button>
+                </div>
+              </div>
 
-              return (
-                <div
-                  key={sh.id}
-                  className={`p-4 sm:p-5 rounded-2xl border bg-slate-900 transition-all min-w-0 overflow-hidden flex flex-col justify-between ${
-                    isOverloaded || conflictingTasks.length > 0 ? 'border-amber-500/40 shadow-sm' : 'border-slate-800'
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-2 min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="relative shrink-0">
-                          <img
-                            src={sh.avatar}
-                            alt={sh.name}
-                            className="w-10 h-10 rounded-full object-cover border border-slate-700"
-                          />
-                          {onLeaveNow && (
-                            <span className="absolute -bottom-1 -right-1 text-xs bg-slate-950 p-0.5 rounded-full" title="Currently on leave">
-                              🏖️
+              <div className="h-64 sm:h-72 w-full min-w-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
+                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} interval={0} tick={{ fontSize: 11 }} />
+                    <YAxis stroke="#94a3b8" fontSize={11} unit="h" />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0f172a',
+                        borderColor: '#334155',
+                        borderRadius: '12px',
+                        color: '#f8fafc',
+                        fontSize: '12px'
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }} />
+                    <Bar dataKey="Assigned" name="Assigned Workload (Hours)" fill="#14b8a6" radius={[6, 6, 0, 0]} />
+                    <Bar dataKey="Capacity" name="Weekly Capacity (Hours)" fill="#6366f1" opacity={0.5} radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* SUB-VIEW 3: 👥 DETAILED WORKLOAD CARDS GRID */}
+          {workloadSubView === 'cards' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-100 text-sm">Individual Member Capacity Profiles</h3>
+                <div className="flex items-center gap-1.5 text-xs bg-slate-950 p-1 rounded-xl border border-slate-800">
+                  <button
+                    onClick={() => setWorkloadFilter('all')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors ${
+                      workloadFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    All ({allWorkloads.length})
+                  </button>
+                  <button
+                    onClick={() => setWorkloadFilter('overloaded')}
+                    className={`px-2.5 py-1 rounded-lg font-semibold transition-colors flex items-center gap-1 ${
+                      workloadFilter === 'overloaded' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <span>Overloaded ({overloadedCount})</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0">
+                {filteredWorkloads.map((wl) => {
+                  const sh = wl.stakeholder;
+                  const assignedTasks = projectData.tasks.filter(
+                    t => t.assigneeIds.includes(sh.id) && t.status !== 'done'
+                  );
+                  
+                  // Effective capacity calculation
+                  const baseCapacity = sh.weeklyCapacityHours || 40;
+                  const capInfo = calculateEffectiveWeeklyCapacity(baseCapacity, sh.id, leaves || []);
+                  const effectiveCapacity = capInfo.effectiveCapacity;
+                  const blockedLeaveHours = capInfo.blockedHours;
+                  const isOverloaded = effectiveCapacity > 0 ? wl.assignedHours > effectiveCapacity : wl.assignedHours > 0;
+                  const effectiveUtilPercent = effectiveCapacity > 0 ? Math.round((wl.assignedHours / effectiveCapacity) * 100) : (wl.assignedHours > 0 ? 999 : 0);
+                  const progressPct = Math.min(effectiveUtilPercent, 100);
+
+                  // Check if member is on leave or has approved leaves
+                  const onLeaveNow = isUserOnLeave(sh.id, leaves || []);
+                  const userLeaves = (leaves || []).filter(l => l.userId === sh.id && l.status === 'approved');
+
+                  // Check for tasks with leave conflicts
+                  const conflictingTasks = assignedTasks.filter(t => {
+                    const conflict = checkTaskLeaveConflict(
+                      { startDate: t.startDate, dueDate: t.dueDate, assigneeIds: [sh.id] },
+                      leaves || [],
+                      projectData.stakeholders
+                    );
+                    return conflict.hasConflict;
+                  });
+
+                  return (
+                    <div
+                      key={sh.id}
+                      className={`p-4 sm:p-5 rounded-2xl border bg-slate-900 transition-all min-w-0 overflow-hidden flex flex-col justify-between ${
+                        isOverloaded || conflictingTasks.length > 0 ? 'border-amber-500/40 shadow-sm' : 'border-slate-800'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-start justify-between gap-2 min-w-0">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="relative shrink-0">
+                              <img
+                                src={sh.avatar}
+                                alt={sh.name}
+                                className="w-10 h-10 rounded-full object-cover border border-slate-700"
+                              />
+                              {onLeaveNow && (
+                                <span className="absolute -bottom-1 -right-1 text-xs bg-slate-950 p-0.5 rounded-full" title="Currently on leave">
+                                  🏖️
+                                </span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <h4 className="font-bold text-slate-100 text-sm truncate">{sh.name}</h4>
+                                {onLeaveNow && (
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0">
+                                    On Leave
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-400 truncate">{sh.role}</p>
+                            </div>
+                          </div>
+
+                          {canEditStakeholder(sh) ? (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                onClick={() => onOpenStakeholderModal(sh)}
+                                className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors"
+                              >
+                                Edit
+                              </button>
+                              {isPM && (
+                                <button
+                                  onClick={() => setMemberToRemove(sh)}
+                                  className="text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 px-1.5 py-0.5 rounded transition-colors flex items-center gap-1"
+                                  title={`Remove ${sh.name} & return to bench`}
+                                >
+                                  <UserMinus className="w-3.5 h-3.5" />
+                                  <span>Remove</span>
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 shrink-0" title="Read-only">
+                              <Lock className="w-3 h-3 text-slate-500" />
+                              <span>Read-Only</span>
                             </span>
                           )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <h4 className="font-bold text-slate-100 text-sm truncate">{sh.name}</h4>
-                            {onLeaveNow && (
-                              <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold border border-amber-500/40 shrink-0">
-                                On Leave
+
+                        {/* Approved Leaves Banner if any */}
+                        {userLeaves.length > 0 && (
+                          <div className="mt-3 p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-[11px] text-amber-300">
+                            <div className="flex items-center gap-1.5 truncate">
+                              <span>🏖️</span>
+                              <span className="truncate">
+                                {userLeaves[0].leaveType}: {userLeaves[0].startDate} → {userLeaves[0].endDate}
+                              </span>
+                            </div>
+                            {blockedLeaveHours > 0 && (
+                              <span className="font-mono font-bold shrink-0 bg-amber-500/20 px-1.5 py-0.2 rounded">
+                                -{blockedLeaveHours}h cap
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-400 truncate">{sh.role}</p>
-                        </div>
-                      </div>
-
-                      {canEditStakeholder(sh) ? (
-                        <button
-                          onClick={() => onOpenStakeholderModal(sh)}
-                          className="text-xs font-semibold text-teal-400 hover:text-teal-300 transition-colors shrink-0"
-                        >
-                          Edit
-                        </button>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 shrink-0" title="Read-only">
-                          <Lock className="w-3 h-3 text-slate-500" />
-                          <span>Read-Only</span>
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Approved Leaves Banner if any */}
-                    {userLeaves.length > 0 && (
-                      <div className="mt-3 p-2 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-between text-[11px] text-amber-300">
-                        <div className="flex items-center gap-1.5 truncate">
-                          <span>🏖️</span>
-                          <span className="truncate">
-                            {userLeaves[0].leaveType}: {userLeaves[0].startDate} → {userLeaves[0].endDate}
-                          </span>
-                        </div>
-                        {blockedLeaveHours > 0 && (
-                          <span className="font-mono font-bold shrink-0 bg-amber-500/20 px-1.5 py-0.2 rounded">
-                            -{blockedLeaveHours}h cap
-                          </span>
                         )}
-                      </div>
-                    )}
 
-                    {/* Workload Capacity Meter */}
-                    <div className="mt-3.5 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs gap-2">
-                        <span className="text-slate-400 shrink-0">Effective Capacity</span>
-                        <span className={`font-bold font-mono ${
-                          isOverloaded ? 'text-rose-400' : effectiveUtilPercent > 80 ? 'text-amber-400' : 'text-teal-400'
-                        }`}>
-                          {wl.assignedHours}h / {effectiveCapacity}h ({effectiveUtilPercent}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${
-                            isOverloaded
-                              ? 'bg-rose-500'
-                              : effectiveUtilPercent > 80
-                              ? 'bg-amber-500'
-                              : 'bg-teal-500'
-                          }`}
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
-                      {blockedLeaveHours > 0 && (
-                        <div className="text-[10px] text-slate-500 flex items-center justify-between font-mono">
-                          <span>Base: {baseCapacity}h/wk</span>
-                          <span className="text-amber-400/80">Blocked for leave: {blockedLeaveHours}h</span>
+                        {/* Workload Capacity Meter */}
+                        <div className="mt-3.5 space-y-1.5">
+                          <div className="flex items-center justify-between text-xs gap-2">
+                            <span className="text-slate-400 shrink-0">Effective Capacity</span>
+                            <span className={`font-bold font-mono ${
+                              isOverloaded ? 'text-rose-400' : effectiveUtilPercent > 80 ? 'text-amber-400' : 'text-teal-400'
+                            }`}>
+                              {wl.assignedHours}h / {effectiveCapacity}h ({effectiveUtilPercent}%)
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isOverloaded
+                                  ? 'bg-rose-500'
+                                  : effectiveUtilPercent > 80
+                                  ? 'bg-amber-500'
+                                  : 'bg-teal-500'
+                              }`}
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                          {blockedLeaveHours > 0 && (
+                            <div className="text-[10px] text-slate-500 flex items-center justify-between font-mono">
+                              <span>Base: {baseCapacity}h/wk</span>
+                              <span className="text-amber-400/80">Blocked for leave: {blockedLeaveHours}h</span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
 
-                    {/* Financial & Task Metadata */}
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400 border-t border-slate-800 pt-3 min-w-0">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="truncate">Rate: ${sh.hourlyRate}/h</span>
-                      </div>
-                      <div className="flex items-center gap-1 min-w-0">
-                        <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                        <span className="truncate">Active: {wl.taskCount} tasks</span>
-                      </div>
-                    </div>
-
-                    {/* Leave Availability Warning Banner */}
-                    {conflictingTasks.length > 0 && (
-                      <div className="mt-3 p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-xs text-rose-300">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span className="text-[11px] leading-tight">
-                          <strong>{conflictingTasks.length} task(s)</strong> scheduled during approved leave periods!
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Active Assigned Tasks List */}
-                    <div className="mt-3 pt-2 space-y-1.5 min-w-0">
-                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                        Assigned Work Items ({assignedTasks.length})
-                      </span>
-                      {assignedTasks.length === 0 ? (
-                        <p className="text-xs text-slate-500 italic">No active tasks assigned.</p>
-                      ) : (
-                        <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                          {assignedTasks.map(t => {
-                            const isConflict = conflictingTasks.some(ct => ct.id === t.id);
-                            return (
-                              <div
-                                key={t.id}
-                                className={`p-2 rounded-lg border text-xs flex items-center justify-between gap-2 min-w-0 ${
-                                  isConflict
-                                    ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-                                    : 'bg-slate-950/60 border-slate-800/60 text-slate-300'
-                                }`}
-                              >
-                                <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
-                                  {isConflict && <span title="Scheduled during approved leave">⚠️</span>}
-                                  <span className="truncate">{t.title}</span>
-                                </div>
-                                <span className="text-slate-400 font-mono text-[10px] shrink-0 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                                  {t.estimatedHours}h
-                                </span>
-                              </div>
-                            );
-                          })}
+                        {/* Financial & Task Metadata */}
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400 border-t border-slate-800 pt-3 min-w-0">
+                          <div className="flex items-center gap-1 min-w-0">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span className="truncate">Rate: ${sh.hourlyRate}/h</span>
+                          </div>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="truncate">Active: {wl.taskCount} tasks</span>
+                          </div>
                         </div>
-                      )}
+
+                        {/* Leave Availability Warning Banner */}
+                        {conflictingTasks.length > 0 && (
+                          <div className="mt-3 p-2 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center gap-2 text-xs text-rose-300">
+                            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                            <span className="text-[11px] leading-tight">
+                              <strong>{conflictingTasks.length} task(s)</strong> scheduled during approved leave periods!
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Active Assigned Tasks List */}
+                        <div className="mt-3 pt-2 space-y-1.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                            Assigned Work Items ({assignedTasks.length})
+                          </span>
+                          {assignedTasks.length === 0 ? (
+                            <p className="text-xs text-slate-500 italic">No active tasks assigned.</p>
+                          ) : (
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                              {assignedTasks.map(t => {
+                                const isConflict = conflictingTasks.some(ct => ct.id === t.id);
+                                return (
+                                  <div
+                                    key={t.id}
+                                    className={`p-2 rounded-lg border text-xs flex items-center justify-between gap-2 min-w-0 ${
+                                      isConflict
+                                        ? 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                                        : 'bg-slate-950/60 border-slate-800/60 text-slate-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-1.5 truncate min-w-0 flex-1">
+                                      {isConflict && <span title="Scheduled during approved leave">⚠️</span>}
+                                      <span className="truncate">{t.title}</span>
+                                    </div>
+                                    <span className="text-slate-400 font-mono text-[10px] shrink-0 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
+                                      {t.estimatedHours}h
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {filteredWorkloads.length === 0 && (
-            <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl space-y-2">
-              <BarChart3 className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm font-semibold text-slate-300">No workload records match this filter</p>
-              <p className="text-xs text-slate-500">Try changing the status or search filter.</p>
-            </div>
+            <EmptyState
+              preset="chart"
+              title="No workload records match this filter"
+              description="Try resetting your capacity status filter or search keyword to view team allocation."
+            />
           )}
         </div>
       )}
@@ -990,6 +1134,65 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
           isOpen={!!selectedStakeholderForReport}
           onClose={() => setSelectedStakeholderForReport(null)}
         />
+      )}
+
+      {/* Remove Member & Return to Bench Confirmation Modal */}
+      {memberToRemove && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <UserMinus className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-slate-100">
+                  Remove Member from Project?
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Unassign <strong className="text-slate-200">{memberToRemove.name}</strong> ({memberToRemove.role}) and return them to the organization's Bench pool.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 rounded-xl p-3.5 border border-slate-800 space-y-2 text-xs text-slate-300">
+              <div className="flex items-center gap-2 text-amber-300 font-semibold text-[11px]">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                <span>Workload & Assignment Impact:</span>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-400 pl-1">
+                <li>Active tasks will be unassigned so they can be re-allocated.</li>
+                <li>The member's profile will be removed from this project's team directory & capacity matrix.</li>
+                <li>They remain preserved on the organization Bench for future assignment.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setMemberToRemove(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemoveMember}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-md shadow-rose-950 flex items-center gap-1.5"
+              >
+                <UserMinus className="w-4 h-4" />
+                <span>Remove & Return to Bench</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 border border-emerald-500/40 text-emerald-300 text-xs font-semibold px-4 py-3 rounded-2xl shadow-xl shadow-slate-950/60 flex items-center gap-2 animate-in slide-in-from-bottom-5 duration-200">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{toastMessage}</span>
+        </div>
       )}
     </div>
   );
