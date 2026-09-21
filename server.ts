@@ -6,8 +6,9 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
-import { initialProjectData, defaultProjectsMap } from './src/data/initialData.js';
-import { ProjectData } from './src/types.js';
+import { initialProjectData, defaultProjectsMap, DEFAULT_USERS } from './src/data/initialData.js';
+import { INITIAL_LEAVES, DEFAULT_ORG_SETTINGS } from './src/utils/portfolioAndLeaveUtils.js';
+import { ProjectData, MemberLeave, OrganizationSettings, UserProfile } from './src/types.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://icvuibdumunumdztxbbq.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_Q95HY1AG_Xo4T5HU7M0UKA_oMnitXJy';
@@ -28,7 +29,11 @@ const PORT = 3000;
 
 app.use(express.json({ limit: '10mb' }));
 
+// Persistent disk stores
 const STORE_PATH = path.join(process.cwd(), 'projects_store.json');
+const LEAVES_STORE_PATH = path.join(process.cwd(), 'leaves_store.json');
+const USERS_STORE_PATH = path.join(process.cwd(), 'users_store.json');
+const SETTINGS_STORE_PATH = path.join(process.cwd(), 'settings_store.json');
 
 function loadProjectsFromDisk(): Record<string, ProjectData> {
   try {
@@ -45,8 +50,46 @@ function loadProjectsFromDisk(): Record<string, ProjectData> {
   return {};
 }
 
-let diskSaveDebounceTimer: NodeJS.Timeout | null = null;
+function loadLeavesFromDisk(): MemberLeave[] {
+  try {
+    if (fs.existsSync(LEAVES_STORE_PATH)) {
+      const raw = fs.readFileSync(LEAVES_STORE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('[Disk Store] Failed to load leaves from disk:', e);
+  }
+  return INITIAL_LEAVES;
+}
 
+function loadUsersFromDisk(): UserProfile[] {
+  try {
+    if (fs.existsSync(USERS_STORE_PATH)) {
+      const raw = fs.readFileSync(USERS_STORE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('[Disk Store] Failed to load users from disk:', e);
+  }
+  return DEFAULT_USERS;
+}
+
+function loadSettingsFromDisk(): OrganizationSettings {
+  try {
+    if (fs.existsSync(SETTINGS_STORE_PATH)) {
+      const raw = fs.readFileSync(SETTINGS_STORE_PATH, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) {
+    console.warn('[Disk Store] Failed to load settings from disk:', e);
+  }
+  return DEFAULT_ORG_SETTINGS;
+}
+
+let diskSaveDebounceTimer: NodeJS.Timeout | null = null;
 function saveProjectsToDisk(projects: Record<string, ProjectData>) {
   if (diskSaveDebounceTimer) {
     clearTimeout(diskSaveDebounceTimer);
@@ -62,8 +105,42 @@ function saveProjectsToDisk(projects: Record<string, ProjectData>) {
   }, 1000);
 }
 
+let diskLeavesSaveTimer: NodeJS.Timeout | null = null;
+function saveLeavesToDisk(leaves: MemberLeave[]) {
+  if (diskLeavesSaveTimer) clearTimeout(diskLeavesSaveTimer);
+  diskLeavesSaveTimer = setTimeout(() => {
+    try {
+      fs.writeFile(LEAVES_STORE_PATH, JSON.stringify(leaves), 'utf-8', () => {});
+    } catch (e) {}
+  }, 1000);
+}
+
+let diskUsersSaveTimer: NodeJS.Timeout | null = null;
+function saveUsersToDisk(users: UserProfile[]) {
+  if (diskUsersSaveTimer) clearTimeout(diskUsersSaveTimer);
+  diskUsersSaveTimer = setTimeout(() => {
+    try {
+      fs.writeFile(USERS_STORE_PATH, JSON.stringify(users), 'utf-8', () => {});
+    } catch (e) {}
+  }, 1000);
+}
+
+let diskSettingsSaveTimer: NodeJS.Timeout | null = null;
+function saveSettingsToDisk(settings: OrganizationSettings) {
+  if (diskSettingsSaveTimer) clearTimeout(diskSettingsSaveTimer);
+  diskSettingsSaveTimer = setTimeout(() => {
+    try {
+      fs.writeFile(SETTINGS_STORE_PATH, JSON.stringify(settings), 'utf-8', () => {});
+    } catch (e) {}
+  }, 1000);
+}
+
 const diskProjects = loadProjectsFromDisk();
 let allProjectsMap: Record<string, ProjectData> = { ...defaultProjectsMap, ...diskProjects };
+let allLeaves: MemberLeave[] = loadLeavesFromDisk();
+let allUsers: UserProfile[] = loadUsersFromDisk();
+let orgSettings: OrganizationSettings = loadSettingsFromDisk();
+
 let activeProjectId: string = Object.keys(allProjectsMap)[0] || 'proj-1';
 let isSupabaseConnected = false;
 let lastLocalStateHash = '';
@@ -74,7 +151,12 @@ let syncDebounceTimer: NodeJS.Timeout | null = null;
 // Helper to compute quick hash of current in-memory data state
 function getProjectsStateHash(): string {
   try {
-    return JSON.stringify(allProjectsMap);
+    return JSON.stringify({
+      projects: allProjectsMap,
+      leaves: allLeaves,
+      users: allUsers,
+      settings: orgSettings
+    });
   } catch {
     return '';
   }
@@ -85,42 +167,71 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
   if (isSyncInProgress) return;
   isSyncInProgress = true;
   try {
-    const { data, error } = await supabase.from('app_projects').select('*');
-    if (!error && data && data.length > 0) {
+    // 1. Projects
+    const { data: projData, error: projError } = await supabase.from('app_projects').select('*');
+    if (!projError && projData && projData.length > 0) {
       isSupabaseConnected = true;
       lastSupabaseErrorLogged = '';
       const loadedMap: Record<string, ProjectData> = {};
-      data.forEach((row: any) => {
+      projData.forEach((row: any) => {
         if (row.id && row.data) {
           loadedMap[row.id] = row.data;
         }
       });
 
       if (Object.keys(loadedMap).length > 0) {
-        // Preserve any in-memory/disk created projects so they are never lost if Supabase is missing them
-        allProjectsMap = { ...defaultProjectsMap, ...loadedMap, ...allProjectsMap };
+        // Remote Supabase projects take precedence over defaults, merging cleanly
+        allProjectsMap = { ...defaultProjectsMap, ...allProjectsMap, ...loadedMap };
         saveProjectsToDisk(allProjectsMap);
-
-        const newHash = JSON.stringify(allProjectsMap);
-        if (newHash !== lastLocalStateHash) {
-          lastLocalStateHash = newHash;
-          if (!allProjectsMap[activeProjectId]) {
-            activeProjectId = Object.keys(allProjectsMap)[0];
-          }
-          console.log(`[Supabase Auto-Sync] Hydrated & merged ${data.length} project(s) from Supabase database.`);
-          if (shouldBroadcast) {
-            broadcastDataChange(undefined, false);
-          }
-        }
       }
-    } else if (!error) {
+    } else if (!projError) {
       isSupabaseConnected = true;
       lastSupabaseErrorLogged = '';
-    } else if (error) {
+    } else if (projError) {
       isSupabaseConnected = false;
-      if (lastSupabaseErrorLogged !== error.message) {
-        lastSupabaseErrorLogged = error.message;
-        console.info(`[Supabase Notice] Local disk persistence active. Remote sync notice: ${error.message}`);
+      if (lastSupabaseErrorLogged !== projError.message) {
+        lastSupabaseErrorLogged = projError.message;
+        console.info(`[Supabase Notice] Local persistence active. Remote sync notice: ${projError.message}`);
+      }
+    }
+
+    // 2. Leaves (if table exists)
+    try {
+      const { data: leavesData, error: leavesError } = await supabase.from('app_leaves').select('*');
+      if (!leavesError && leavesData && leavesData.length > 0) {
+        const remoteLeaves = leavesData.map((r: any) => r.data).filter(Boolean);
+        if (remoteLeaves.length > 0) {
+          allLeaves = remoteLeaves;
+          saveLeavesToDisk(allLeaves);
+        }
+      }
+    } catch (_err) {}
+
+    // 3. Global State: Users & Org Settings
+    try {
+      const { data: globalData, error: globalError } = await supabase.from('app_global_state').select('*');
+      if (!globalError && globalData && globalData.length > 0) {
+        globalData.forEach((row: any) => {
+          if (row.key === 'users' && Array.isArray(row.data) && row.data.length > 0) {
+            allUsers = row.data;
+            saveUsersToDisk(allUsers);
+          }
+          if (row.key === 'org_settings' && row.data && typeof row.data === 'object') {
+            orgSettings = row.data;
+            saveSettingsToDisk(orgSettings);
+          }
+        });
+      }
+    } catch (_err) {}
+
+    const newHash = getProjectsStateHash();
+    if (newHash !== lastLocalStateHash) {
+      lastLocalStateHash = newHash;
+      if (!allProjectsMap[activeProjectId]) {
+        activeProjectId = Object.keys(allProjectsMap)[0] || 'proj-1';
+      }
+      if (shouldBroadcast) {
+        broadcastDataChange(undefined, false);
       }
     }
   } catch (err: any) {
@@ -128,7 +239,7 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
     const msg = err.message || String(err);
     if (lastSupabaseErrorLogged !== msg) {
       lastSupabaseErrorLogged = msg;
-      console.info(`[Supabase Notice] Local disk persistence active. Remote connection notice: ${msg}`);
+      console.info(`[Supabase Notice] Local persistence active. Remote connection notice: ${msg}`);
     }
   } finally {
     isSyncInProgress = false;
@@ -143,7 +254,7 @@ setInterval(() => {
   initSupabaseHydration(true).catch(() => {});
 }, 30000);
 
-// Supabase Real-Time Listener
+// Supabase Real-Time Listeners
 try {
   supabase
     .channel('public:app_projects')
@@ -155,7 +266,48 @@ try {
           const row = payload.new as any;
           allProjectsMap[row.id] = row.data;
           lastLocalStateHash = getProjectsStateHash();
-          console.log(`[Supabase Realtime] Received live update for project ${row.id}`);
+          broadcastDataChange(undefined, false);
+        }
+      }
+    )
+    .subscribe();
+
+  supabase
+    .channel('public:app_leaves')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_leaves' },
+      (payload) => {
+        if (payload.new && (payload.new as any).id && (payload.new as any).data) {
+          const row = payload.new as any;
+          const idx = allLeaves.findIndex(l => l.id === row.id);
+          if (idx >= 0) {
+            allLeaves[idx] = row.data;
+          } else {
+            allLeaves = [row.data, ...allLeaves];
+          }
+          broadcastDataChange(undefined, false);
+        }
+      }
+    )
+    .subscribe();
+
+  supabase
+    .channel('public:app_global_state')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_global_state' },
+      (payload) => {
+        if (payload.new && (payload.new as any).key && (payload.new as any).data) {
+          const row = payload.new as any;
+          if (row.key === 'users' && Array.isArray(row.data)) {
+            allUsers = row.data;
+            saveUsersToDisk(allUsers);
+          }
+          if (row.key === 'org_settings' && row.data) {
+            orgSettings = row.data;
+            saveSettingsToDisk(orgSettings);
+          }
           broadcastDataChange(undefined, false);
         }
       }
@@ -168,21 +320,42 @@ try {
 // Background sync to Supabase with debounce to batch high-frequency edits
 async function syncToSupabase() {
   try {
+    // 1. Upsert Projects
     const rows = Object.values(allProjectsMap).map(p => ({
       id: p.id || 'proj-1',
       data: p,
       updated_at: new Date().toISOString()
     }));
+    const { error: projErr } = await supabase.from('app_projects').upsert(rows, { onConflict: 'id' });
 
-    const { error } = await supabase.from('app_projects').upsert(rows, { onConflict: 'id' });
-    if (!error) {
+    // 2. Upsert Leaves
+    if (allLeaves.length > 0) {
+      const leaveRows = allLeaves.map(l => ({
+        id: l.id,
+        data: l,
+        updated_at: new Date().toISOString()
+      }));
+      try {
+        await supabase.from('app_leaves').upsert(leaveRows, { onConflict: 'id' });
+      } catch (_e) {}
+    }
+
+    // 3. Upsert Global State
+    try {
+      await supabase.from('app_global_state').upsert([
+        { key: 'users', data: allUsers, updated_at: new Date().toISOString() },
+        { key: 'org_settings', data: orgSettings, updated_at: new Date().toISOString() }
+      ], { onConflict: 'key' });
+    } catch (_e) {}
+
+    if (!projErr) {
       isSupabaseConnected = true;
       lastSupabaseErrorLogged = '';
       lastLocalStateHash = getProjectsStateHash();
     } else {
-      if (lastSupabaseErrorLogged !== error.message) {
-        lastSupabaseErrorLogged = error.message;
-        console.info('[Supabase Upsert Notice]', error.message);
+      if (lastSupabaseErrorLogged !== projErr.message) {
+        lastSupabaseErrorLogged = projErr.message;
+        console.info('[Supabase Upsert Notice]', projErr.message);
       }
     }
   } catch (err: any) {
@@ -217,6 +390,10 @@ function getActiveProject(): ProjectData {
 // Helper to broadcast state changes to all connected clients and save to Supabase
 function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true, senderClientId?: string) {
   saveProjectsToDisk(allProjectsMap);
+  saveLeavesToDisk(allLeaves);
+  saveUsersToDisk(allUsers);
+  saveSettingsToDisk(orgSettings);
+
   if (syncToRemote) {
     debouncedSyncToSupabase(600);
   }
@@ -241,6 +418,9 @@ function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true,
     activeProjectId,
     projects: projectsList,
     data: currentData,
+    leaves: allLeaves,
+    allUsers,
+    orgSettings,
     senderClientId,
     timestamp: new Date().toISOString()
   });
@@ -275,17 +455,31 @@ wss.on('connection', (ws) => {
     activeProjectId,
     projects: projectsList,
     data: currentData,
+    leaves: allLeaves,
+    allUsers,
+    orgSettings,
     timestamp: new Date().toISOString()
   }));
 
   ws.on('message', (message) => {
     try {
       const parsed = JSON.parse(message.toString());
-      if (parsed.type === 'SYNC_STATE' && parsed.data) {
-        if (parsed.data.id) {
-          allProjectsMap[parsed.data.id] = parsed.data;
-        } else {
-          allProjectsMap[activeProjectId] = parsed.data;
+      if (parsed.type === 'SYNC_STATE') {
+        if (parsed.data) {
+          if (parsed.data.id) {
+            allProjectsMap[parsed.data.id] = parsed.data;
+          } else {
+            allProjectsMap[activeProjectId] = parsed.data;
+          }
+        }
+        if (parsed.leaves && Array.isArray(parsed.leaves)) {
+          allLeaves = parsed.leaves;
+        }
+        if (parsed.allUsers && Array.isArray(parsed.allUsers)) {
+          allUsers = parsed.allUsers;
+        }
+        if (parsed.orgSettings && typeof parsed.orgSettings === 'object') {
+          orgSettings = parsed.orgSettings;
         }
         broadcastDataChange(ws, true, parsed.senderClientId);
       }
@@ -296,71 +490,98 @@ wss.on('connection', (ws) => {
 });
 
 // Supabase Status & Database Health Endpoints
+const FULL_SUPABASE_SQL_SCRIPT = `-- 1. Create table for shared project data
+CREATE TABLE IF NOT EXISTS public.app_projects (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 2. Create table for shared team leaves
+CREATE TABLE IF NOT EXISTS public.app_leaves (
+  id TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 3. Create table for organization settings & users
+CREATE TABLE IF NOT EXISTS public.app_global_state (
+  key TEXT PRIMARY KEY,
+  data JSONB NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 4. Grant privileges for anon and authenticated users
+GRANT ALL ON TABLE public.app_projects TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.app_leaves TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.app_global_state TO anon, authenticated, service_role;
+
+-- 5. Configure Row Level Security (RLS) policies for full access
+ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public full access projects" ON public.app_projects;
+CREATE POLICY "Allow public full access projects" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.app_leaves ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public full access leaves" ON public.app_leaves;
+CREATE POLICY "Allow public full access leaves" ON public.app_leaves FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.app_global_state ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public full access global" ON public.app_global_state;
+CREATE POLICY "Allow public full access global" ON public.app_global_state FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. Enable Supabase Realtime for instant multi-device sync
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_projects;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_leaves;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.app_global_state;`;
+
 app.get('/api/supabase/status', async (_req, res) => {
+  let connected = false;
+  let tableExists = false;
+  let projectCount = 0;
+  let leavesCount = allLeaves.length;
+  let errorMessage: string | null = null;
+  let errorCode: string | null = null;
+
   try {
-    const { data, error } = await supabase.from('app_projects').select('id, updated_at').limit(50);
-    const tableExists = !error;
-    const projectCount = data ? data.length : 0;
-
-    res.json({
-      success: true,
-      connected: !error || error.code !== 'PGRST301',
-      url: SUPABASE_URL,
-      tableExists,
-      projectCount,
-      activeProjectsInMemory: Object.keys(allProjectsMap).length,
-      errorMessage: error ? error.message : null,
-      errorCode: error ? error.code : null,
-      sqlScript: `-- 1. Create table for shared project data
-CREATE TABLE IF NOT EXISTS public.app_projects (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Grant privileges for anon and authenticated users
-GRANT ALL ON TABLE public.app_projects TO anon, authenticated, service_role;
-
--- 3. Configure Row Level Security (RLS) policies for full access
-ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public full access" ON public.app_projects;
-CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);
-
--- 4. Enable Supabase Realtime for instant Live & Dev multi-environment sync
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_projects;`
-    });
+    const { data, error } = await supabase.from('app_projects').select('id').limit(50);
+    if (error) {
+      errorMessage = error.message;
+      errorCode = error.code || null;
+      // If table missing but host connected:
+      if (error.code === '42P01' || error.message?.toLowerCase().includes('does not exist') || error.message?.toLowerCase().includes('could not find')) {
+        connected = true;
+        tableExists = false;
+      } else {
+        connected = false;
+      }
+    } else {
+      connected = true;
+      tableExists = true;
+      projectCount = data ? data.length : 0;
+    }
   } catch (err: any) {
-    res.json({
-      success: false,
-      connected: false,
-      url: SUPABASE_URL,
-      tableExists: false,
-      errorMessage: err.message || 'Supabase host unreachable',
-      sqlScript: `-- 1. Create table for shared project data
-CREATE TABLE IF NOT EXISTS public.app_projects (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Grant privileges for anon and authenticated users
-GRANT ALL ON TABLE public.app_projects TO anon, authenticated, service_role;
-
--- 3. Configure Row Level Security (RLS) policies for full access
-ALTER TABLE public.app_projects ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Allow public full access" ON public.app_projects;
-CREATE POLICY "Allow public full access" ON public.app_projects FOR ALL USING (true) WITH CHECK (true);
-
--- 4. Enable Supabase Realtime for instant Live & Dev multi-environment sync
-ALTER PUBLICATION supabase_realtime ADD TABLE public.app_projects;`
-    });
+    connected = false;
+    errorMessage = err.message || 'Supabase host unreachable';
   }
+
+  res.json({
+    success: true,
+    connected,
+    url: SUPABASE_URL,
+    tableExists,
+    projectCount,
+    leavesCount,
+    activeProjectsInMemory: Object.keys(allProjectsMap).length,
+    errorMessage,
+    errorCode,
+    sqlScript: FULL_SUPABASE_SQL_SCRIPT
+  });
 });
 
 app.post('/api/supabase/sync-push', async (_req, res) => {
   try {
     await syncToSupabase();
-    res.json({ success: true, message: 'Local project data pushed to Supabase app_projects table successfully.' });
+    res.json({ success: true, message: 'Local data pushed to Supabase tables successfully.' });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Push to Supabase failed' });
   }
@@ -368,11 +589,73 @@ app.post('/api/supabase/sync-push', async (_req, res) => {
 
 app.post('/api/supabase/sync-pull', async (_req, res) => {
   try {
-    await initSupabaseHydration();
+    await initSupabaseHydration(true);
     broadcastDataChange();
-    res.json({ success: true, message: 'Pulled latest state from Supabase database.', activeProjectId, data: getActiveProject() });
+    res.json({
+      success: true,
+      message: 'Pulled latest state from Supabase database.',
+      activeProjectId,
+      data: getActiveProject(),
+      leaves: allLeaves,
+      allUsers,
+      orgSettings
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Pull from Supabase failed' });
+  }
+});
+
+// Leaves REST Endpoints
+app.get('/api/leaves', (_req, res) => {
+  res.json({ success: true, leaves: allLeaves });
+});
+
+app.post('/api/leaves', (req, res) => {
+  if (Array.isArray(req.body.leaves)) {
+    allLeaves = req.body.leaves;
+    broadcastDataChange(undefined, true, req.body.senderClientId);
+    res.json({ success: true, leaves: allLeaves });
+  } else if (req.body.leave && req.body.leave.id) {
+    const existingIdx = allLeaves.findIndex(l => l.id === req.body.leave.id);
+    if (existingIdx >= 0) {
+      allLeaves[existingIdx] = req.body.leave;
+    } else {
+      allLeaves = [req.body.leave, ...allLeaves];
+    }
+    broadcastDataChange(undefined, true, req.body.senderClientId);
+    res.json({ success: true, leaves: allLeaves });
+  } else {
+    res.status(400).json({ error: 'Invalid leaves payload' });
+  }
+});
+
+// Users REST Endpoints
+app.get('/api/users', (_req, res) => {
+  res.json({ success: true, users: allUsers });
+});
+
+app.post('/api/users', (req, res) => {
+  if (Array.isArray(req.body.users)) {
+    allUsers = req.body.users;
+    broadcastDataChange(undefined, true, req.body.senderClientId);
+    res.json({ success: true, users: allUsers });
+  } else {
+    res.status(400).json({ error: 'Invalid users payload' });
+  }
+});
+
+// Settings REST Endpoints
+app.get('/api/settings', (_req, res) => {
+  res.json({ success: true, settings: orgSettings });
+});
+
+app.post('/api/settings', (req, res) => {
+  if (req.body.settings && typeof req.body.settings === 'object') {
+    orgSettings = { ...orgSettings, ...req.body.settings };
+    broadcastDataChange(undefined, true, req.body.senderClientId);
+    res.json({ success: true, settings: orgSettings });
+  } else {
+    res.status(400).json({ error: 'Invalid settings payload' });
   }
 });
 

@@ -31,7 +31,7 @@ import {
   UserRole,
   AppRole
 } from '../types';
-import { initialProjectData, defaultProjectsMap } from '../data/initialData';
+import { initialProjectData, defaultProjectsMap, DEFAULT_USERS } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
 import {
   normalizeToAppRole,
@@ -136,242 +136,8 @@ localforage.config({
   description: 'ApexPM persistent storage for user modifications across sessions'
 });
 
-export const DEFAULT_USERS: UserProfile[] = [
-  {
-    id: 'user-admin-1',
-    name: 'Sophia Martinez',
-    email: 'admin@apex.io',
-    role: 'Admin',
-    appRole: 'Admin',
-    title: 'Admin',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
-    department: 'Executive PMO & Governance',
-    hourlyRate: 175,
-    weeklyCapacityHours: 40,
-    skills: ['Portfolio Governance', 'EVM Analytics', 'Executive Strategy', 'Commercial Risk', 'PMI-PMP']
-  },
-  {
-    id: 'user-pm-1',
-    name: 'Alex Morgan',
-    email: 'alex.m@apex.io',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    isDualPMDev: true, // Can be both a developer and a PM: inherits all PM access and has own tasks
-    hasPMAccess: true,
-    title: 'Project Manager & Developer',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
-    department: 'PMO',
-    hourlyRate: 120,
-    weeklyCapacityHours: 40,
-    skills: ['Agile', 'Scrum', 'EVM', 'Risk Management', 'Full Stack Development']
-  },
-  {
-    id: 'user-pm-2',
-    name: 'Carlos Santana',
-    email: 'carlos.s@apex.io',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    title: 'Project Manager',
-    avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=150',
-    department: 'PMO',
-    hourlyRate: 110,
-    weeklyCapacityHours: 40,
-    skills: ['Technical PM', 'Cloud Migrations', 'Capacity Planning', 'Jira']
-  },
-  {
-    id: 'user-pm-3',
-    name: 'Aisha Al-Mansoor',
-    email: 'aisha.m@apex.io',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    title: 'Project Manager',
-    avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=150',
-    department: 'PMO & Agile CoE',
-    hourlyRate: 115,
-    weeklyCapacityHours: 40,
-    skills: ['Agile Coaching', 'Release Management', 'Kanban', 'Stakeholder Alignment']
-  },
-  {
-    id: 'user-dummy-pm-1',
-    name: 'Interim PM (Unassigned / Dummy)',
-    email: 'unassigned.pm@placeholder.local',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    isPlaceholder: true,
-    isDummy: true,
-    hasPMAccess: true,
-    title: 'Interim Project Manager (Placeholder)',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
-    department: 'PMO (Bench Pool)',
-    hourlyRate: 100,
-    weeklyCapacityHours: 40,
-    skills: ['Project Management', 'Agile', 'Sprint Planning', 'Risk Mitigation']
-  },
-  {
-    id: 'user-dummy-pm-2',
-    name: 'Contract PM Placeholder',
-    email: 'contractor.pm@placeholder.local',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    isPlaceholder: true,
-    isDummy: true,
-    hasPMAccess: true,
-    title: 'Contract / External PM (Dummy)',
-    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=150',
-    department: 'External Contractors',
-    hourlyRate: 110,
-    weeklyCapacityHours: 40,
-    skills: ['Technical PM', 'Vendor Coordination', 'Sprint Tracking']
-  },
-  {
-    id: 'user-dummy-pm-3',
-    name: 'Agile Delivery Lead (Placeholder)',
-    email: 'delivery.lead@placeholder.local',
-    role: 'Project Manager',
-    appRole: 'Project Manager',
-    isPlaceholder: true,
-    isDummy: true,
-    hasPMAccess: true,
-    title: 'Agile Delivery Lead (Dummy)',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
-    department: 'Agile CoE',
-    hourlyRate: 105,
-    weeklyCapacityHours: 40,
-    skills: ['Scrum Master', 'Sprint Cadence', 'Backlog Refinement']
-  },
-  {
-    id: 'user-sh-3',
-    name: 'Marcus Vance',
-    email: 'marcus.v@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    isDualPMDev: true, // Dual Developer & PM: granted full PM access while maintaining developer task ownership
-    hasPMAccess: true,
-    title: 'Developer (Team member) & PM',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
-    department: 'Engineering',
-    hourlyRate: 110,
-    weeklyCapacityHours: 40,
-    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets', 'GraphQL', 'Sprint Planning']
-  },
-  {
-    id: 'user-sh-2',
-    name: 'Dr. Elena Rostova',
-    email: 'elena.r@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
-    department: 'Architecture',
-    hourlyRate: 130,
-    weeklyCapacityHours: 35,
-    skills: ['Cloud Architecture', 'Distributed Systems', 'Security', 'Kubernetes']
-  },
-  {
-    id: 'user-sh-6',
-    name: 'Rachel Adams',
-    email: 'rachel.a@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1534751516642-a171edd25218?auto=format&fit=crop&q=80&w=150',
-    department: 'Engineering',
-    hourlyRate: 125,
-    weeklyCapacityHours: 40,
-    skills: ['Golang', 'PostgreSQL', 'Microservices', 'Kafka', 'Redis']
-  },
-  {
-    id: 'user-sh-9',
-    name: 'Samuel Wright',
-    email: 'samuel.w@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
-    department: 'Engineering',
-    hourlyRate: 135,
-    weeklyCapacityHours: 40,
-    skills: ['SOC2 Compliance', 'Zero Trust', 'Pen Testing', 'Cloud Security']
-  },
-  {
-    id: 'user-sh-7',
-    name: 'Liam O\'Connor',
-    email: 'liam.o@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=150',
-    department: 'Engineering',
-    hourlyRate: 105,
-    weeklyCapacityHours: 40,
-    skills: ['React Native', 'iOS', 'Android', 'TypeScript', 'Offline Sync']
-  },
-  {
-    id: 'user-sh-8',
-    name: 'Zoe Chen',
-    email: 'zoe.c@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
-    department: 'Data & AI',
-    hourlyRate: 120,
-    weeklyCapacityHours: 35,
-    skills: ['Gemini API', 'LLM Fine-Tuning', 'Python', 'Vector DB']
-  },
-  {
-    id: 'user-sh-11',
-    name: 'Maya Lin',
-    email: 'maya.l@apex.io',
-    role: 'Developer (Team member)',
-    appRole: 'Developer (Team member)',
-    title: 'Developer (Team member)',
-    avatar: 'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?auto=format&fit=crop&q=80&w=150',
-    department: 'Product & Engineering',
-    hourlyRate: 100,
-    weeklyCapacityHours: 40,
-    skills: ['User Story Mapping', 'UAT', 'Data Analytics', 'TypeScript']
-  },
-  {
-    id: 'user-sh-5',
-    name: 'David Chen',
-    email: 'david.c@apex.io',
-    role: 'Tester (Team Member)',
-    appRole: 'Tester (Team Member)',
-    title: 'Tester (Team Member)',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
-    department: 'Quality Assurance',
-    hourlyRate: 85,
-    weeklyCapacityHours: 40,
-    skills: ['CI/CD', 'Kubernetes', 'Automated QA', 'Docker', 'Cypress']
-  },
-  {
-    id: 'user-sh-10',
-    name: 'Kevin Taylor',
-    email: 'kevin.t@apex.io',
-    role: 'Tester (Team Member)',
-    appRole: 'Tester (Team Member)',
-    title: 'Tester (Team Member)',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150',
-    department: 'Quality Assurance',
-    hourlyRate: 95,
-    weeklyCapacityHours: 40,
-    skills: ['Playwright', 'Cypress', 'Performance Testing', 'Load Testing']
-  },
-  {
-    id: 'user-sh-4',
-    name: 'Priya Sharma',
-    email: 'priya.s@apex.io',
-    role: 'UI/UX Dev (Team Member)',
-    appRole: 'UI/UX Dev (Team Member)',
-    title: 'UI/UX Dev (Team Member)',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-    department: 'Design',
-    hourlyRate: 90,
-    weeklyCapacityHours: 30,
-    skills: ['Figma', 'Design Systems', 'User Research', 'Accessibility', 'Tailwind CSS']
-  }
-];
+// Re-export shared default users
+export { DEFAULT_USERS };
 
 interface ProjectContextType {
   projectData: ProjectData;
@@ -843,6 +609,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const wsReconnectAttempts = useRef<number>(0);
   const wsReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
   const localForageTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRemoteIncomingUpdateRef = useRef<boolean>(false);
+  const serverProjectSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const serverLeavesSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const serverUsersSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const serverSettingsSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync state to local storage asynchronously and localForage with debounce
   useEffect(() => {
@@ -885,6 +656,108 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       console.error('Failed to schedule local persistence:', e);
     }
   }, [projectData, projectsList, allProjectsMap, activeProjectId, currentUser, allUsers, isAuthenticated, customAiConfig]);
+
+  // Automatic Debounced Server & WebSocket Synchronization for Project Data
+  useEffect(() => {
+    if (isRemoteIncomingUpdateRef.current) return;
+    if (serverProjectSyncTimerRef.current) clearTimeout(serverProjectSyncTimerRef.current);
+    serverProjectSyncTimerRef.current = setTimeout(() => {
+      fetch('/api/project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: projectData, senderClientId: clientIdRef.current })
+      }).catch(() => {});
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'SYNC_STATE',
+            data: projectData,
+            senderClientId: clientIdRef.current
+          }));
+        } catch (_e) {}
+      }
+    }, 400);
+  }, [projectData]);
+
+  // Automatic Debounced Server & WebSocket Synchronization for Leaves
+  useEffect(() => {
+    try {
+      localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(leaves));
+      localforage.setItem(LEAVES_STORAGE_KEY, leaves).catch(() => {});
+    } catch (e) {}
+
+    if (isRemoteIncomingUpdateRef.current) return;
+    if (serverLeavesSyncTimerRef.current) clearTimeout(serverLeavesSyncTimerRef.current);
+    serverLeavesSyncTimerRef.current = setTimeout(() => {
+      fetch('/api/leaves', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leaves, senderClientId: clientIdRef.current })
+      }).catch(() => {});
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'SYNC_STATE',
+            leaves,
+            senderClientId: clientIdRef.current
+          }));
+        } catch (_e) {}
+      }
+    }, 400);
+  }, [leaves]);
+
+  // Automatic Debounced Server & WebSocket Synchronization for Users
+  useEffect(() => {
+    if (isRemoteIncomingUpdateRef.current) return;
+    if (serverUsersSyncTimerRef.current) clearTimeout(serverUsersSyncTimerRef.current);
+    serverUsersSyncTimerRef.current = setTimeout(() => {
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users: allUsers, senderClientId: clientIdRef.current })
+      }).catch(() => {});
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'SYNC_STATE',
+            allUsers,
+            senderClientId: clientIdRef.current
+          }));
+        } catch (_e) {}
+      }
+    }, 400);
+  }, [allUsers]);
+
+  // Automatic Debounced Server & WebSocket Synchronization for Org Settings
+  useEffect(() => {
+    try {
+      localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(orgSettings));
+      localforage.setItem(ORG_SETTINGS_KEY, orgSettings).catch(() => {});
+    } catch (e) {}
+
+    if (isRemoteIncomingUpdateRef.current) return;
+    if (serverSettingsSyncTimerRef.current) clearTimeout(serverSettingsSyncTimerRef.current);
+    serverSettingsSyncTimerRef.current = setTimeout(() => {
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: orgSettings, senderClientId: clientIdRef.current })
+      }).catch(() => {});
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'SYNC_STATE',
+            orgSettings,
+            senderClientId: clientIdRef.current
+          }));
+        } catch (_e) {}
+      }
+    }, 400);
+  }, [orgSettings]);
 
   // Handle Theme switching
   useEffect(() => {
@@ -1045,6 +918,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
           }
           if (message.type === 'INIT_STATE' || message.type === 'DATA_UPDATED') {
+            isRemoteIncomingUpdateRef.current = true;
             if (message.data && message.data.id) {
               setAllProjectsMap(prev => ({
                 ...prev,
@@ -1055,7 +929,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 data: message.data
               });
 
-              // Only update the active project view if this update matches the client's current active project
+              // Update the active project view if this update matches the client's current active project
               const currentActive = activeProjectIdRef.current;
               if (message.data.id === currentActive) {
                 setProjectData(message.data);
@@ -1072,7 +946,28 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 projects: message.projects
               });
             }
+            if (message.leaves && Array.isArray(message.leaves)) {
+              setLeaves(message.leaves);
+              try {
+                localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(message.leaves));
+              } catch (_e) {}
+            }
+            if (message.allUsers && Array.isArray(message.allUsers)) {
+              setAllUsers(message.allUsers);
+              try {
+                localStorage.setItem(USERS_LIST_KEY, JSON.stringify(message.allUsers));
+              } catch (_e) {}
+            }
+            if (message.orgSettings && typeof message.orgSettings === 'object') {
+              setOrgSettings(message.orgSettings);
+              try {
+                localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(message.orgSettings));
+              } catch (_e) {}
+            }
             queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
+            setTimeout(() => {
+              isRemoteIncomingUpdateRef.current = false;
+            }, 100);
           }
         } catch (err) {
           console.error('Error parsing WS message:', err);
@@ -1129,7 +1024,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [connectWebSocket]);
 
-  // Initial fetch from REST API with local persistence preference and TanStack Query cache priming
+  // Initial fetch from REST API with server authority
   useEffect(() => {
     fetch('/api/projects')
       .then(res => res.json())
@@ -1165,29 +1060,67 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             activeProjectId: res.activeProjectId || res.data.id || 'proj-1',
             data: res.data
           });
-          const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
-          if (!cached) {
-            setProjectData(res.data);
-          } else {
-            // Push local modifications to server to ensure server matches local persistence
-            try {
-              const parsed = JSON.parse(cached);
-              if (parsed && parsed.id) {
-                fetch('/api/project', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ data: parsed })
-                }).catch(() => {});
-              }
-            } catch (e) {
-              setProjectData(res.data);
-            }
-          }
+          isRemoteIncomingUpdateRef.current = true;
+          setProjectData(res.data);
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(res.data));
+          } catch (_e) {}
+          setTimeout(() => {
+            isRemoteIncomingUpdateRef.current = false;
+          }, 100);
         }
       })
       .catch(err => {
         console.warn('Using local cached state due to network/server response:', err);
       });
+
+    fetch('/api/leaves')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.leaves && Array.isArray(res.leaves)) {
+          isRemoteIncomingUpdateRef.current = true;
+          setLeaves(res.leaves);
+          try {
+            localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(res.leaves));
+          } catch (_e) {}
+          setTimeout(() => {
+            isRemoteIncomingUpdateRef.current = false;
+          }, 100);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.users && Array.isArray(res.users)) {
+          isRemoteIncomingUpdateRef.current = true;
+          setAllUsers(res.users);
+          try {
+            localStorage.setItem(USERS_LIST_KEY, JSON.stringify(res.users));
+          } catch (_e) {}
+          setTimeout(() => {
+            isRemoteIncomingUpdateRef.current = false;
+          }, 100);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.settings && typeof res.settings === 'object') {
+          isRemoteIncomingUpdateRef.current = true;
+          setOrgSettings(res.settings);
+          try {
+            localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(res.settings));
+          } catch (_e) {}
+          setTimeout(() => {
+            isRemoteIncomingUpdateRef.current = false;
+          }, 100);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Calculated EVM Metrics (Memoized for high-performance rendering)
