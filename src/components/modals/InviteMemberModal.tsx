@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { StakeholderCategory } from '../../types';
+import { StakeholderCategory, AppRole, APP_ROLES } from '../../types';
 import {
   X,
   Mail,
@@ -18,32 +18,62 @@ import {
   Lock,
   Zap
 } from 'lucide-react';
+import {
+  normalizeToAppRole,
+  isUserAdmin,
+  isUserPM,
+  canManageRolesAndTeam
+} from '../../utils/roleUtils';
 
 interface InviteMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultEmail?: string;
+  defaultName?: string;
+  defaultRole?: string;
+  defaultCategory?: StakeholderCategory;
+  stakeholderId?: string;
 }
 
 export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   isOpen,
   onClose,
-  defaultEmail = ''
+  defaultEmail = '',
+  defaultName = '',
+  defaultRole = 'Developer (Team member)',
+  defaultCategory = 'internal',
+  stakeholderId
 }) => {
   const { projectData, saveStakeholder, currentUser, addActivityLog } = useProject();
-  const isAdmin = currentUser?.role === 'admin';
-  const isPM = currentUser?.role === 'pm' || isAdmin;
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
+  const canManage = canManageRolesAndTeam(currentUser);
 
   const [recipientEmail, setRecipientEmail] = useState<string>(defaultEmail);
-  const [candidateName, setCandidateName] = useState<string>('');
-  const [role, setRole] = useState<string>('Contributor');
-  const [category, setCategory] = useState<StakeholderCategory>('internal');
-  const [hourlyRate, setHourlyRate] = useState<number>(75);
+  const [candidateName, setCandidateName] = useState<string>(defaultName);
+  const [role, setRole] = useState<AppRole>(normalizeToAppRole(defaultRole));
+  const [isDualPMDev, setIsDualPMDev] = useState<boolean>(false);
+  const [category, setCategory] = useState<StakeholderCategory>(defaultCategory || 'internal');
+  const [hourlyRate, setHourlyRate] = useState<number>(100);
   const [personalNote, setPersonalNote] = useState<string>('');
   
   const [copied, setCopied] = useState<boolean>(false);
   const [sentSuccess, setSentSuccess] = useState<boolean>(false);
   const [sending, setSending] = useState<boolean>(false);
+
+  // Sync state whenever modal opens or defaults change
+  React.useEffect(() => {
+    if (isOpen) {
+      setRecipientEmail(defaultEmail || '');
+      setCandidateName(defaultName || '');
+      setRole(normalizeToAppRole(defaultRole));
+      setIsDualPMDev(false);
+      setCategory(defaultCategory || 'internal');
+      setPersonalNote('');
+      setSentSuccess(false);
+      setSending(false);
+    }
+  }, [isOpen, defaultEmail, defaultName, defaultRole, defaultCategory]);
 
   if (!isOpen) return null;
 
@@ -52,7 +82,8 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
   const pmName = currentUser?.name || 'Project Manager';
   const pmEmail = currentUser?.email || 'pm@company.com';
 
-  const resolvedRole = (category === 'internal' && !isAdmin) ? 'Contributor' : (role.trim() || 'Contributor');
+  const resolvedRole = normalizeToAppRole(role);
+  const hasDualAccess = isDualPMDev || resolvedRole === 'Project Manager' || resolvedRole === 'Admin';
 
   // Dynamic Invitation Token & Link
   const inviteToken = `inv_${Math.random().toString(36).substring(2, 9)}`;
@@ -98,28 +129,39 @@ Project Manager, ${projectName}`;
     setSending(true);
 
     try {
-      // 1. Create or update stakeholder record in project state
-      const stakeholderId = `sh-inv-${Date.now().toString(36)}`;
-      const nameToUse = candidateName.trim() || recipientEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      // Find if we are updating an existing dummy/placeholder stakeholder
+      const existingStakeholder = stakeholderId
+        ? projectData.stakeholders.find(s => s.id === stakeholderId)
+        : projectData.stakeholders.find(
+            s => s.email === recipientEmail.trim() ||
+                 (s.isPlaceholder && candidateName && s.name.toLowerCase() === candidateName.trim().toLowerCase())
+          );
+
+      const targetId = existingStakeholder ? existingStakeholder.id : (stakeholderId || `sh-inv-${Date.now().toString(36)}`);
+      const nameToUse = candidateName.trim() || existingStakeholder?.name || recipientEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase());
       
-      const avatarIndex = Math.floor(Math.random() * 80) + 1;
-      const avatarUrl = `https://i.pravatar.cc/150?img=${avatarIndex}`;
+      const avatarUrl = existingStakeholder?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(nameToUse)}`;
 
       await saveStakeholder({
-        id: stakeholderId,
+        ...(existingStakeholder || {}),
+        id: targetId,
         name: nameToUse,
         email: recipientEmail.trim(),
         role: resolvedRole,
+        appRole: resolvedRole,
+        isDualPMDev: isDualPMDev,
+        hasPMAccess: hasDualAccess,
         category,
-        hourlyRate,
-        weeklyCapacityHours: 40,
-        skills: ['Team Member', resolvedRole],
+        hourlyRate: existingStakeholder?.hourlyRate || hourlyRate,
+        weeklyCapacityHours: existingStakeholder?.weeklyCapacityHours || 40,
+        skills: existingStakeholder?.skills && existingStakeholder.skills.length > 0 ? existingStakeholder.skills : ['Team Member', resolvedRole],
         status: 'invited',
+        isPlaceholder: false,
         inviteToken,
         invitedAt: new Date().toISOString(),
         avatar: avatarUrl,
-        createdBy: currentUser?.id,
-        createdByEmail: currentUser?.email
+        createdBy: existingStakeholder?.createdBy || currentUser?.id,
+        createdByEmail: existingStakeholder?.createdByEmail || currentUser?.email
       });
 
       // 2. Add Activity Log entry
@@ -239,32 +281,48 @@ Project Manager, ${projectName}`;
                   <label className="block text-xs font-semibold text-slate-300">
                     Assigned Project Role *
                   </label>
-                  {category === 'internal' && !isAdmin && (
-                    <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30">
-                      <Lock className="w-2.5 h-2.5" />
-                      Admin Role Lock
-                    </span>
-                  )}
-                  {category === 'internal' && isAdmin && (
-                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                  {canManage && (
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
                       <ShieldCheck className="w-2.5 h-2.5" />
-                      Admin
+                      {isAdmin ? 'Admin' : 'Project Manager'}
                     </span>
                   )}
                 </div>
-                <input
-                  type="text"
-                  required
-                  disabled={category === 'internal' && !isAdmin}
-                  value={category === 'internal' && !isAdmin ? 'Contributor' : role}
-                  onChange={(e) => setRole(e.target.value)}
-                  placeholder={category === 'internal' ? "Role: Contributor (Admin Assigned)" : "e.g. Client Lead Architect"}
+                <select
+                  disabled={!canManage}
+                  value={role}
+                  onChange={(e) => {
+                    const sel = e.target.value as AppRole;
+                    setRole(sel);
+                    if (sel !== 'Developer (Team member)') {
+                      setIsDualPMDev(false);
+                    }
+                    if (sel === 'Admin') setHourlyRate(175);
+                    else if (sel === 'Project Manager') setHourlyRate(120);
+                    else if (sel === 'Developer (Team member)') setHourlyRate(100);
+                    else if (sel === 'Tester (Team Member)') setHourlyRate(90);
+                    else if (sel === 'UI/UX Dev (Team Member)') setHourlyRate(95);
+                  }}
                   className="w-full bg-slate-950 border border-slate-800 focus:border-teal-500 rounded-xl px-3 py-2 text-xs text-slate-100 outline-none font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                />
-                {category === 'internal' && !isAdmin && (
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Internal roles default to Contributor and can only be set or promoted by an Executive Admin.
-                  </p>
+                >
+                  {APP_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                {role === 'Developer (Team member)' && (
+                  <label className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-amber-950/20 border border-amber-500/30 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isDualPMDev}
+                      onChange={(e) => setIsDualPMDev(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-amber-500 rounded"
+                    />
+                    <span className="text-[11px] text-amber-200 font-medium">
+                      Dual Role: Developer + PM (Full PM access)
+                    </span>
+                  </label>
                 )}
               </div>
 

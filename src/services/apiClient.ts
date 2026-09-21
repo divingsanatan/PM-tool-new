@@ -61,14 +61,17 @@ export async function fetchAllProjectsFull(): Promise<{
 }
 
 // Switch Active Project
-export async function switchProjectApi(projectId: string): Promise<{
+export async function switchProjectApi(
+  projectId: string,
+  projectData?: ProjectData
+): Promise<{
   activeProjectId: string;
   data: ProjectData;
 }> {
   const res = await fetch('/api/projects/switch', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ projectId }),
+    body: JSON.stringify({ projectId, projectData }),
   });
   if (!res.ok) {
     throw new Error(`Failed to switch project (status ${res.status})`);

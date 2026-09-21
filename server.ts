@@ -229,7 +229,11 @@ function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true,
     budget: p.budget,
     startDate: p.startDate,
     targetEndDate: p.targetEndDate,
-    taskCount: p.tasks.length
+    taskCount: p.tasks?.length || 0,
+    projectManagerId: p.projectManagerId,
+    projectManagerEmail: p.projectManagerEmail,
+    projectManagerIds: p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : []),
+    projectManagerEmails: p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail] : [])
   }));
 
   const payload = JSON.stringify({
@@ -259,7 +263,11 @@ wss.on('connection', (ws) => {
     budget: p.budget,
     startDate: p.startDate,
     targetEndDate: p.targetEndDate,
-    taskCount: p.tasks.length
+    taskCount: p.tasks?.length || 0,
+    projectManagerId: p.projectManagerId,
+    projectManagerEmail: p.projectManagerEmail,
+    projectManagerIds: p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : []),
+    projectManagerEmails: p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail] : [])
   }));
 
   ws.send(JSON.stringify({
@@ -378,7 +386,11 @@ app.get('/api/projects', (_req, res) => {
     budget: p.budget,
     startDate: p.startDate,
     targetEndDate: p.targetEndDate,
-    taskCount: p.tasks.length
+    taskCount: p.tasks?.length || 0,
+    projectManagerId: p.projectManagerId,
+    projectManagerEmail: p.projectManagerEmail,
+    projectManagerIds: p.projectManagerIds,
+    projectManagerEmails: p.projectManagerEmails
   }));
   res.json({ success: true, activeProjectId, projects: projectsList });
 });
@@ -394,7 +406,7 @@ app.get('/api/projects/all', (_req, res) => {
 });
 
 app.post('/api/projects/switch', (req, res) => {
-  const { projectId } = req.body;
+  const { projectId, projectData } = req.body;
   if (!projectId) {
     return res.status(400).json({ error: 'Missing projectId' });
   }
@@ -402,6 +414,10 @@ app.post('/api/projects/switch', (req, res) => {
   let project = allProjectsMap[projectId];
   if (!project && defaultProjectsMap[projectId]) {
     project = defaultProjectsMap[projectId];
+    allProjectsMap[projectId] = project;
+  }
+  if (!project && projectData && (projectData.id === projectId || !projectData.id)) {
+    project = { ...projectData, id: projectId };
     allProjectsMap[projectId] = project;
   }
 

@@ -99,7 +99,7 @@ const HighlightText: React.FC<{ text: string; highlight: string; className?: str
         regex.test(part) ? (
           <mark
             key={i}
-            className="bg-indigo-500/35 text-indigo-200 font-semibold px-0.5 rounded text-inherit"
+            className="bg-indigo-100 dark:bg-indigo-500/35 text-indigo-900 dark:text-indigo-200 font-semibold px-0.5 rounded text-inherit"
           >
             {part}
           </mark>
@@ -291,9 +291,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'actions',
         title: 'Configure AI Models & API Keys',
         subtitle: 'Manage Gemini, OpenAI, Anthropic, or custom AI provider keys',
-        icon: <Key className="w-4 h-4 text-amber-400" />,
+        icon: <Key className="w-4 h-4 text-amber-500 dark:text-amber-400" />,
         badge: 'SETTINGS',
-        badgeColor: 'bg-slate-800 text-slate-300 border-slate-700',
+        badgeColor: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
         metadata: 'ai settings api key gemini openai anthropic token model',
         onSelect: () => {
           onClose();
@@ -308,9 +308,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'actions',
         title: `Switch Active User Role (Current: ${currentUser?.name})`,
         subtitle: 'Simulate or act as PM, Admin, Developer, QA, or Stakeholder',
-        icon: <UserCheck className="w-4 h-4 text-indigo-400" />,
+        icon: <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />,
         badge: currentUser?.role?.toUpperCase() || 'USER',
-        badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+        badgeColor: 'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-500/30',
         metadata: 'switch role user profile act as change person admin pm developer',
         onSelect: () => {
           onClose();
@@ -324,9 +324,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
       category: 'actions',
       title: `Switch to ${theme === 'dark' ? 'Day Mode (Light)' : 'Night Mode (Dark)'}`,
       subtitle: 'Toggle application color scheme between light and dark themes',
-      icon: theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />,
+      icon: theme === 'dark' ? <Sun className="w-4 h-4 text-amber-500 dark:text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />,
       badge: 'THEME',
-      badgeColor: 'bg-slate-800 text-slate-300 border-slate-700',
+      badgeColor: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700',
       metadata: 'theme dark mode light mode toggle day night color scheme',
       onSelect: () => {
         onClose();
@@ -340,9 +340,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         category: 'actions',
         title: 'Cloud Database & Real-Time Sync Settings',
         subtitle: 'Configure Supabase cloud persistence and multi-device replication',
-        icon: <Database className="w-4 h-4 text-emerald-400" />,
+        icon: <Database className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />,
         badge: 'DATABASE',
-        badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+        badgeColor: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
         metadata: 'supabase cloud database sync postgres backend persistence',
         onSelect: () => {
           onClose();
@@ -360,9 +360,9 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           category: 'projects',
           title: `Project: ${proj.projectName}`,
           subtitle: `${proj.projectCode} • ${proj.description || 'Project workspace in portfolio'}${isCurrent ? ' • [ACTIVE]' : ''}`,
-          icon: <Briefcase className={`w-4 h-4 ${isCurrent ? 'text-emerald-400' : 'text-indigo-400'}`} />,
+          icon: <Briefcase className={`w-4 h-4 ${isCurrent ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400'}`} />,
           badge: isCurrent ? 'ACTIVE' : proj.projectCode,
-          badgeColor: isCurrent ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-800 text-indigo-300 border-slate-700',
+          badgeColor: isCurrent ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-slate-300 dark:border-slate-700',
           metadata: `project switch ${proj.projectName} ${proj.projectCode} ${proj.description || ''} portfolio workspace`,
           onSelect: () => {
             onClose();
@@ -387,6 +387,22 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
         onSelect: () => {
           onClose();
           onSelectView('admin_portfolio');
+        }
+      });
+
+      items.push({
+        id: 'view-admin-stakeholders',
+        category: 'views',
+        title: 'Admin Stakeholders, PMs & Talent Directory',
+        subtitle: 'Enterprise-wide talent database, skills matrix, utilization heatmap, and bench filters',
+        icon: <Users className="w-4 h-4 text-indigo-400" />,
+        badge: 'ADMIN ONLY',
+        badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+        shortcut: 'G S',
+        metadata: 'admin stakeholders talent pms team members skills matrix heatmap utilization bench allocation',
+        onSelect: () => {
+          onClose();
+          onSelectView('admin_stakeholders');
         }
       });
     }
@@ -1006,7 +1022,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
           onClick={onClose}
-          className="fixed inset-0 bg-slate-950/80 backdrop-blur-md"
+          className="fixed inset-0 bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-md"
         />
 
         {/* Command Palette Modal Container */}
@@ -1015,19 +1031,19 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96, y: -10 }}
           transition={{ type: 'spring', stiffness: 450, damping: 30 }}
-          className="relative w-full max-w-2xl bg-slate-900/98 dark:bg-slate-900/98 border border-slate-800/90 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-10 text-slate-100 max-h-[85vh] ring-1 ring-white/10"
+          className="relative w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col z-10 text-slate-900 dark:text-slate-100 max-h-[85vh] ring-1 ring-slate-900/5 dark:ring-white/10"
           onKeyDown={handleKeyDown}
         >
           {/* Header & Search Input Bar */}
-          <div className="relative flex items-center px-4 py-3.5 border-b border-slate-800/80 bg-slate-950/50">
-            <Search className="w-5 h-5 text-indigo-400 shrink-0 mr-3 pointer-events-none" />
+          <div className="relative flex items-center px-4 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/60">
+            <Search className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0 mr-3 pointer-events-none" />
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search tasks, RAID, team, change requests, or type '>' for actions..."
-              className="w-full bg-transparent text-base text-slate-100 placeholder-slate-400 outline-none border-none pr-8"
+              className="w-full !bg-transparent text-base text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400 outline-none !border-none !shadow-none pr-8 font-normal"
               autoComplete="off"
               spellCheck="false"
             />
@@ -1038,7 +1054,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                   setActiveCategory('all');
                   inputRef.current?.focus();
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="p-1 rounded-lg text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
                 title="Clear query"
               >
                 <X className="w-4 h-4" />
@@ -1046,7 +1062,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
             ) : (
               <button
                 onClick={onClose}
-                className="flex items-center gap-1 shrink-0 text-[11px] font-mono text-slate-400 bg-slate-800/80 hover:bg-slate-700 hover:text-white px-2 py-0.5 rounded border border-slate-700/60 transition-colors"
+                className="flex items-center gap-1 shrink-0 text-[11px] font-mono text-slate-600 dark:text-slate-400 bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800/80 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700/60 transition-colors shadow-2xs"
                 title="Close Command Palette"
               >
                 <span>ESC</span>
@@ -1055,8 +1071,8 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           </div>
 
           {/* Quick Syntax / Category Helper Bar */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-slate-800/60 bg-slate-950/30 overflow-x-auto custom-scrollbar text-xs">
-            <span className="text-[10px] text-slate-400 font-medium mr-1 uppercase tracking-wider shrink-0 hidden sm:inline">
+          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/40 overflow-x-auto custom-scrollbar text-xs">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold mr-1 uppercase tracking-wider shrink-0 hidden sm:inline">
               Filter:
             </span>
             {(
@@ -1083,16 +1099,16 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all shrink-0 ${
                     isActive
-                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 font-bold'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/80 dark:hover:bg-slate-800/60'
                   }`}
                 >
                   {tab.icon}
                   <span>{tab.label}</span>
                   {count > 0 && (
                     <span
-                      className={`text-[9px] px-1 py-0.2 rounded-full font-mono ${
-                        isActive ? 'bg-white/20 text-white' : 'bg-slate-800 text-slate-400'
+                      className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isActive ? 'bg-white/25 text-white font-bold' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 font-semibold'
                       }`}
                     >
                       {count}
@@ -1106,15 +1122,15 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           {/* Search Results / Action List */}
           <div
             ref={listRef}
-            className="flex-1 overflow-y-auto max-h-[52vh] p-2 space-y-1 custom-scrollbar focus:outline-none"
+            className="flex-1 overflow-y-auto max-h-[52vh] p-2 space-y-1 custom-scrollbar focus:outline-none bg-white dark:bg-slate-900"
             tabIndex={-1}
           >
             {filteredItems.length === 0 ? (
-              <div className="py-10 px-4 text-center text-slate-400 space-y-3">
-                <AlertCircle className="w-8 h-8 text-slate-500 mx-auto opacity-60" />
+              <div className="py-10 px-4 text-center text-slate-500 dark:text-slate-400 space-y-3">
+                <AlertCircle className="w-8 h-8 text-slate-400 dark:text-slate-500 mx-auto opacity-70" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-300">No results found for "{query}"</p>
-                  <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
+                  <p className="text-sm font-semibold text-slate-800 dark:text-slate-300">No results found for "{query}"</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
                     Try searching for a different keyword, risk title, assignee name, or click a prefix filter below.
                   </p>
                 </div>
@@ -1128,7 +1144,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                         setQuery(h.prefix);
                         inputRef.current?.focus();
                       }}
-                      className="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700/60 transition-colors font-mono"
+                      className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/80 dark:hover:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700/60 transition-colors font-mono font-medium shadow-2xs"
                     >
                       {h.label}
                     </button>
@@ -1147,16 +1163,16 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                     onMouseEnter={() => setSelectedIndex(index)}
                     className={`w-full text-left group flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all border text-xs sm:text-sm focus-visible:ring-2 ${
                       isSelected
-                        ? 'bg-indigo-600/15 border-indigo-500/40 text-white shadow-sm'
-                        : 'border-transparent hover:bg-slate-800/50 text-slate-300 hover:text-white'
+                        ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-300 dark:border-indigo-500/50 text-slate-900 dark:text-white shadow-xs ring-1 ring-indigo-500/20'
+                        : 'border-transparent hover:bg-slate-100/90 dark:hover:bg-slate-800/50 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                       <div
                         className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
                           isSelected
-                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                            : 'bg-slate-800 text-slate-400 group-hover:text-slate-200'
+                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-slate-200 border border-slate-200/80 dark:border-slate-700/60'
                         }`}
                       >
                         {item.icon}
@@ -1164,13 +1180,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-slate-100 truncate group-hover:text-white">
+                          <span className="font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-indigo-600 dark:group-hover:text-white">
                             <HighlightText text={item.title} highlight={searchText} />
                           </span>
                           {item.badge && (
                             <span
                               className={`text-[9px] px-1.5 py-0.5 rounded border font-semibold uppercase tracking-wider shrink-0 ${
-                                item.badgeColor || 'bg-slate-800 text-slate-300 border-slate-700'
+                                item.badgeColor || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                               }`}
                             >
                               {item.badge}
@@ -1178,7 +1194,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
                           )}
                         </div>
                         {item.subtitle && (
-                          <p className="text-[11px] text-slate-400 truncate mt-0.5 group-hover:text-slate-300">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5 group-hover:text-slate-700 dark:group-hover:text-slate-300">
                             <HighlightText text={item.subtitle} highlight={searchText} />
                           </p>
                         )}
@@ -1187,13 +1203,13 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
 
                     <div className="flex items-center gap-2 shrink-0">
                       {item.shortcut && (
-                        <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] text-slate-400 bg-slate-950 px-1.5 py-0.5 rounded font-mono border border-slate-800">
+                        <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-950 px-1.5 py-0.5 rounded font-mono border border-slate-300 dark:border-slate-800 shadow-2xs">
                           {item.shortcut}
                         </kbd>
                       )}
                       <ArrowRight
                         className={`w-4 h-4 transition-all ${
-                          isSelected ? 'text-indigo-400 opacity-100 translate-x-0.5' : 'text-slate-600 opacity-0 group-hover:opacity-100'
+                          isSelected ? 'text-indigo-600 dark:text-indigo-400 opacity-100 translate-x-0.5' : 'text-slate-400 dark:text-slate-600 opacity-0 group-hover:opacity-100'
                         }`}
                       />
                     </div>
@@ -1204,26 +1220,26 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
           </div>
 
           {/* Command Palette Keyboard Footer */}
-          <div className="px-4 py-2.5 border-t border-slate-800/80 bg-slate-950/80 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-4 py-2.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-950/80 text-[11px] text-slate-600 dark:text-slate-400 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">↑</kbd>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">↓</kbd>
-                <span>Navigate</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] border border-slate-300 dark:border-slate-700 shadow-2xs font-semibold">↑</kbd>
+                <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] border border-slate-300 dark:border-slate-700 shadow-2xs font-semibold">↓</kbd>
+                <span className="font-medium">Navigate</span>
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">↵</kbd>
-                <span>Select</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] border border-slate-300 dark:border-slate-700 shadow-2xs font-semibold">↵</kbd>
+                <span className="font-medium">Select</span>
               </span>
               <span className="hidden sm:flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700">Tab</kbd>
-                <span>Cycle Category</span>
+                <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono text-[10px] border border-slate-300 dark:border-slate-700 shadow-2xs font-semibold">Tab</kbd>
+                <span className="font-medium">Cycle Category</span>
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-[10px] text-slate-400">
-              <span className="hidden md:inline">Prefixes: <code className="text-indigo-300">#</code> tasks, <code className="text-indigo-300">!</code> risks, <code className="text-indigo-300">@</code> team, <code className="text-indigo-300">&gt;</code> actions, <code className="text-indigo-300">p:</code> projects</span>
-              <span className="font-mono text-indigo-400 font-semibold">{filteredItems.length} items</span>
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-slate-400">
+              <span className="hidden md:inline">Prefixes: <code className="text-indigo-600 dark:text-indigo-300 font-bold">#</code> tasks, <code className="text-indigo-600 dark:text-indigo-300 font-bold">!</code> risks, <code className="text-indigo-600 dark:text-indigo-300 font-bold">@</code> team, <code className="text-indigo-600 dark:text-indigo-300 font-bold">&gt;</code> actions, <code className="text-indigo-600 dark:text-indigo-300 font-bold">p:</code> projects</span>
+              <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{filteredItems.length} items</span>
             </div>
           </div>
         </motion.div>

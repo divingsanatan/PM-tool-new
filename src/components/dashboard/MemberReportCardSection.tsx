@@ -115,23 +115,26 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
     const roleLower = (stakeholder.role || '').toLowerCase();
     if (roleLower.includes('project manager') || roleLower.includes('pm')) return true;
     const targetEmail = (stakeholder.email || '').toLowerCase();
-    return allProjects.some(
-      p => p.projectManagerId === stakeholder.id ||
-           (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === targetEmail)
-    );
+    const targetId = stakeholder.id.toLowerCase();
+    return allProjects.some(p => {
+      const pmIds = (p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : [])).map(id => id.toLowerCase());
+      const pmEmails = (p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+      return pmIds.includes(targetId) || (targetEmail ? pmEmails.includes(targetEmail) : false);
+    });
   }, [stakeholder, matchedUser, allProjects]);
 
   const userProjects = useMemo(() => {
     if (!stakeholder) return [];
     const targetEmail = (stakeholder.email || '').toLowerCase();
-    const targetId = stakeholder.id;
+    const targetId = stakeholder.id.toLowerCase();
 
     if (isStakeholderPM) {
       const pmProjects = allProjects.filter(p => {
-        const isAssignedPM = p.projectManagerId === targetId ||
-          (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === targetEmail);
+        const pmIds = (p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : [])).map(id => id.toLowerCase());
+        const pmEmails = (p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+        const isAssignedPM = pmIds.includes(targetId) || (targetEmail ? pmEmails.includes(targetEmail) : false);
         const isStakeholderInProj = (p.stakeholders || []).some(
-          s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
+          s => s.id?.toLowerCase() === targetId || (s.email && s.email.toLowerCase() === targetEmail)
         );
         return isAssignedPM || isStakeholderInProj;
       });
@@ -374,21 +377,21 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
   ].filter(d => d.value > 0);
 
   const getGradeColor = (grade: string) => {
-    if (grade.startsWith('A')) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
-    if (grade.startsWith('B')) return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30';
-    if (grade.startsWith('C')) return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
-    return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+    if (grade.startsWith('A')) return 'text-emerald-800 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30';
+    if (grade.startsWith('B')) return 'text-indigo-800 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/30';
+    if (grade.startsWith('C')) return 'text-amber-800 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30';
+    return 'text-rose-800 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30';
   };
 
   return (
     <div
       id="member-report-card-section"
-      className="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl overflow-hidden flex flex-col space-y-0 transition-all duration-200"
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm dark:shadow-xl overflow-hidden flex flex-col space-y-0 transition-all duration-200"
     >
       {/* ========================================================================= */}
       {/* SECTION HEADER - PROFILE & GOVERNANCE SCOPE */}
       {/* ========================================================================= */}
-      <div className="p-3.5 sm:p-5 md:p-6 border-b border-slate-800 bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900">
+      <div className="p-3.5 sm:p-5 md:p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-gradient-to-r dark:from-slate-900 dark:via-indigo-950/30 dark:to-slate-900">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4">
           
           {/* Member Profile Info */}
@@ -397,10 +400,10 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               <img
                 src={stakeholder.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${stakeholder.email || stakeholder.name}`}
                 alt={stakeholder.name}
-                className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-2xl object-cover border-2 border-indigo-500/50 shadow-lg bg-slate-950"
+                className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-2xl object-cover border-2 border-indigo-400/50 dark:border-indigo-500/50 shadow-md bg-white dark:bg-slate-950"
               />
-              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-slate-900 flex items-center justify-center">
-                <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-slate-950 stroke-[3]" />
+              <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900 flex items-center justify-center">
+                <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-white dark:text-slate-950 stroke-[3]" />
               </span>
             </div>
 
@@ -408,28 +411,28 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               {/* Header Title Row with Responsive Mobile Grade Badge */}
               <div className="flex items-start sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
-                  <h3 className="text-base sm:text-lg md:text-xl font-black text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
+                  <h3 className="text-base sm:text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tight truncate max-w-[180px] sm:max-w-none">
                     {stakeholder.name}
                   </h3>
                   <span
                     className={`px-2 py-0.5 rounded-lg text-[10px] sm:text-xs font-bold uppercase shrink-0 ${
                       matchedUser?.role === 'admin'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30'
                         : isStakeholderPM || matchedUser?.role === 'pm'
-                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-500/30'
+                        : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30'
                     }`}
                   >
                     {matchedUser?.role === 'admin' ? 'Executive Admin' : isStakeholderPM || matchedUser?.role === 'pm' ? 'PM' : 'Member'}
                   </span>
-                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-lg bg-slate-800/90 text-slate-300 text-[10px] sm:text-xs font-medium shrink-0">
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/90 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-transparent text-[10px] sm:text-xs font-medium shrink-0">
                     {stakeholder.role}
                   </span>
                 </div>
 
                 {/* Mobile-Only Grade Card (compact top-right aligned) */}
                 <div className="md:hidden shrink-0">
-                  <div className={`px-2.5 py-1 rounded-xl border flex items-center gap-2 shadow-md ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
+                  <div className={`px-2.5 py-1 rounded-xl border flex items-center gap-2 shadow-sm ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
                     <div className="text-center">
                       <span className="text-[8px] uppercase font-bold tracking-wider opacity-80 block leading-none">Grade</span>
                       <span className="text-base font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
@@ -444,12 +447,12 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               </div>
 
               {/* Sub-strip info: email, rate, capacity */}
-              <div className="text-[11px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+              <div className="text-[11px] sm:text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
                 <span className="truncate max-w-[160px] sm:max-w-xs">{stakeholder.email}</span>
-                <span className="text-slate-600 hidden sm:inline">•</span>
-                <span className="font-mono text-emerald-400 font-bold">${stakeholder.hourlyRate || 85}/hr</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-slate-300 font-mono">{stakeholder.weeklyCapacityHours || 40}h/wk</span>
+                <span className="text-slate-400 dark:text-slate-600 hidden sm:inline">•</span>
+                <span className="font-mono text-emerald-700 dark:text-emerald-400 font-bold">${stakeholder.hourlyRate || 85}/hr</span>
+                <span className="text-slate-400 dark:text-slate-600">•</span>
+                <span className="text-slate-700 dark:text-slate-300 font-mono">{stakeholder.weeklyCapacityHours || 40}h/wk</span>
               </div>
 
               {/* Scorecard Project Scope Selector */}
@@ -457,7 +460,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                 <ResponsiveSelect
                   value={selectedScopeProjectId}
                   onChange={setSelectedScopeProjectId}
-                  icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+                  icon={<Building2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />}
                   label="Report Scope:"
                   options={[
                     {
@@ -473,7 +476,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                     }))
                   ]}
                   align="auto"
-                  className="border-slate-800 hover:border-slate-700 text-emerald-300"
+                  className="border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-emerald-700 dark:text-emerald-300 bg-white dark:bg-slate-900"
                 />
               </div>
             </div>
@@ -481,7 +484,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
           {/* Desktop/Tablet Composite Grade Scorecard Badge */}
           <div className="hidden md:flex items-center gap-3 shrink-0">
-            <div className={`px-4 py-2.5 rounded-2xl border flex items-center gap-3 shadow-lg ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
+            <div className={`px-4 py-2.5 rounded-2xl border flex items-center gap-3 shadow-sm dark:shadow-lg ${getGradeColor(metrics.reportCardGrade || 'A')}`}>
               <div className="text-center">
                 <span className="text-[10px] uppercase font-bold tracking-wider opacity-80 block leading-none">Grade</span>
                 <span className="text-2xl font-black block leading-tight">{metrics.reportCardGrade || 'A'}</span>
@@ -500,13 +503,13 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
       {/* ========================================================================= */}
       {/* HORIZONTAL TAB NAVIGATION (Prominent Clickable Segmented Control with Smooth Scroll) */}
       {/* ========================================================================= */}
-      <div className="px-2 sm:px-6 py-2 sm:py-3 border-b border-slate-800 bg-slate-950/90 relative">
+      <div className="px-2 sm:px-6 py-2 sm:py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-950/90 relative">
         <div className="flex items-center gap-1.5 w-full">
           {/* Scroll Left Button */}
           <button
             type="button"
             onClick={() => scrollTabs('left')}
-            className="p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all shrink-0 shadow-sm"
+            className="p-1.5 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all shrink-0 shadow-2xs"
             title="Scroll tabs left"
             aria-label="Scroll tabs left"
           >
@@ -519,7 +522,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             onWheel={handleTabWheel}
             role="tablist"
             aria-label="Member Scorecard Views"
-            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 border border-slate-800/80 shadow-inner scroll-smooth overscroll-x-contain custom-scrollbar-horizontal"
+            className="flex-1 flex items-center gap-1.5 sm:gap-2 overflow-x-auto p-1 sm:p-1.5 rounded-2xl bg-white/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800/80 shadow-inner scroll-smooth overscroll-x-contain custom-scrollbar-horizontal"
             tabIndex={0}
           >
             {/* Tab 1: Executive Overview */}
@@ -530,11 +533,11 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               onClick={() => setActiveTab('overview')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
                 activeTab === 'overview'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-50 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <Sparkles className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'overview' ? 'text-indigo-200' : 'text-indigo-600 dark:text-indigo-400'}`} />
               <span className="whitespace-nowrap">Executive Overview</span>
             </button>
 
@@ -546,17 +549,17 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               onClick={() => setActiveTab('projects')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
                 activeTab === 'projects'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-50 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              <Layers className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-400'}`} />
+              <Layers className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'projects' ? 'text-indigo-200' : 'text-indigo-600 dark:text-indigo-400'}`} />
               <span className="whitespace-nowrap">Projects &amp; Tasks</span>
               <span
                 className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                   activeTab === 'projects'
                     ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                 }`}
               >
                 {metrics.totalAssignedTasks}
@@ -571,11 +574,11 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               onClick={() => setActiveTab('analytics')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
                 activeTab === 'analytics'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-50 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-400'}`} />
+              <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'analytics' ? 'text-indigo-200' : 'text-sky-600 dark:text-sky-400'}`} />
               <span className="whitespace-nowrap">EVM Analytics</span>
             </button>
 
@@ -587,18 +590,18 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               onClick={() => setActiveTab('leaves')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
                 activeTab === 'leaves'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-50 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              <CalendarCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-400'}`} />
+              <CalendarCheck className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'leaves' ? 'text-emerald-300' : 'text-emerald-600 dark:text-emerald-400'}`} />
               <span className="whitespace-nowrap">Availability &amp; Calendar</span>
               {approvedLeaves.length > 0 && (
                 <span
                   className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                     activeTab === 'leaves'
                       ? 'bg-emerald-700/80 text-white border-emerald-400/40'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
                   }`}
                 >
                   {approvedLeaves.length}
@@ -614,17 +617,17 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               onClick={() => setActiveTab('reviews')}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 sm:gap-2 cursor-pointer select-none ${
                 activeTab === 'reviews'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
-                  : 'bg-slate-950/60 text-slate-300 hover:text-white hover:bg-slate-800/80 border border-slate-800 hover:border-slate-700'
+                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 border border-indigo-400/40 scale-[1.01]'
+                  : 'bg-slate-50 dark:bg-slate-950/60 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800'
               }`}
             >
-              <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-400'}`} />
+              <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeTab === 'reviews' ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'}`} />
               <span className="whitespace-nowrap">PMO Notes</span>
               <span
                 className={`px-1.5 py-0.5 rounded-md text-[9px] sm:text-[10px] font-mono font-bold border ${
                   activeTab === 'reviews'
                     ? 'bg-indigo-800/80 text-indigo-100 border-indigo-400/30'
-                    : 'bg-slate-900 text-slate-300 border-slate-700'
+                    : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                 }`}
               >
                 {reviewsList.length}
@@ -636,7 +639,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
           <button
             type="button"
             onClick={() => scrollTabs('right')}
-            className="p-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white transition-all shrink-0 shadow-sm"
+            className="p-1.5 rounded-xl bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all shrink-0 shadow-2xs"
             title="Scroll tabs right"
             aria-label="Scroll tabs right"
           >
@@ -655,79 +658,79 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
           <div className="space-y-5">
             {/* Top Key Metrics Grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Deliverables</span>
-                  <CheckSquare className="w-4 h-4 text-indigo-400" />
+                  <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">Deliverables</span>
+                  <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 </div>
-                <p className="text-xl sm:text-2xl font-black text-white font-mono">{metrics.totalAssignedTasks}</p>
-                <span className="text-xs text-emerald-400 font-semibold mt-0.5 block truncate">
+                <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">{metrics.totalAssignedTasks}</p>
+                <span className="text-xs text-emerald-700 dark:text-emerald-400 font-semibold mt-0.5 block truncate">
                   {metrics.completedTasksCount} done ({Math.round(metrics.taskCompletionPercent)}%)
                 </span>
               </div>
 
               <div className={`p-4 rounded-2xl transition-all ${getEVMCardClass(metrics.individualSPI, 0.9)}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Schedule (SPI)</span>
+                  <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">Schedule (SPI)</span>
                   {metrics.individualSPI < 0.9 ? (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
                   ) : (
-                    <Clock className="w-4 h-4 text-indigo-400" />
+                    <Clock className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   )}
                 </div>
                 <p className={`text-xl sm:text-2xl font-black font-mono ${getEVMTextColorClass(metrics.individualSPI, 0.9)}`}>
                   {metrics.individualSPI.toFixed(2)}
                 </p>
-                <span className="text-xs text-slate-400 mt-0.5 block truncate">
+                <span className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 block truncate">
                   {metrics.individualSPI < 0.9 ? '🚨 Critical Schedule Lag' : metrics.individualSPI >= 1.0 ? 'Ahead / On Schedule' : 'Schedule Variance'}
                 </span>
               </div>
 
               <div className={`p-4 rounded-2xl transition-all ${getEVMCardClass(metrics.individualCPI, 0.9)}`}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Cost (CPI)</span>
+                  <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">Cost (CPI)</span>
                   {metrics.individualCPI < 0.9 ? (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-600 text-white uppercase animate-pulse">Alert &lt; 0.9</span>
                   ) : (
-                    <DollarSign className="w-4 h-4 text-indigo-400" />
+                    <DollarSign className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                   )}
                 </div>
                 <p className={`text-xl sm:text-2xl font-black font-mono ${getEVMTextColorClass(metrics.individualCPI, 0.9)}`}>
                   {metrics.individualCPI.toFixed(2)}
                 </p>
-                <span className="text-xs text-slate-400 mt-0.5 block truncate">
+                <span className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 block truncate">
                   {metrics.individualCPI < 0.9 ? '🚨 Critical Cost Variance' : metrics.individualCPI >= 1.0 ? 'Under Budget' : 'Cost Variance'}
                 </span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors">
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs transition-colors">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] uppercase font-semibold text-slate-400">Capacity Load</span>
-                  <Zap className="w-4 h-4 text-indigo-400" />
+                  <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">Capacity Load</span>
+                  <Zap className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 </div>
-                <p className={`text-xl sm:text-2xl font-black font-mono ${metrics.utilizationPercent > 100 ? 'text-rose-400' : 'text-indigo-300'}`}>
+                <p className={`text-xl sm:text-2xl font-black font-mono ${metrics.utilizationPercent > 100 ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-700 dark:text-indigo-300'}`}>
                   {metrics.utilizationPercent}%
                 </p>
-                <span className="text-xs text-slate-400 mt-0.5 block truncate">
+                <span className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 block truncate">
                   {metrics.totalActualHours}h logged / {stakeholder.weeklyCapacityHours || 40}h cap
                 </span>
               </div>
             </div>
 
             {/* Quick Availability & Approved Leave Highlight Banner */}
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/30 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-gradient-to-r dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950/30 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
               <div className="flex items-start gap-3 min-w-0">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0 mt-0.5 sm:mt-0">
+                <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5 sm:mt-0">
                   <CalendarCheck className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-slate-200">Personal Availability &amp; Sprint Capacity</span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono font-bold">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-200">Personal Availability &amp; Sprint Capacity</span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-[10px] font-mono font-bold">
                       {monthStats.availabilityRate}% Available in {monthNames[calMonth]}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                     {approvedLeaves.length > 0
                       ? `${approvedLeaves.length} approved leave record(s). Working capacity and schedules are synchronized.`
                       : 'No active approved leaves recorded. Full sprint capacity available.'}
@@ -737,7 +740,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               <button
                 type="button"
                 onClick={() => setActiveTab('leaves')}
-                className="px-4 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
+                className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-600 text-indigo-700 hover:text-white dark:bg-indigo-600/20 dark:hover:bg-indigo-600 dark:text-indigo-300 dark:hover:text-white border border-indigo-200 dark:border-indigo-500/30 text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 self-start sm:self-auto shadow-2xs"
               >
                 <CalendarDays className="w-4 h-4" />
                 <span>Inspect Calendar Grid</span>
@@ -746,15 +749,15 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             </div>
 
             {/* Technical Expertise & Skills */}
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
-              <span className="text-xs font-bold text-slate-200 block uppercase tracking-wider">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2 shadow-2xs">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-200 block uppercase tracking-wider">
                 Technical Expertise &amp; Core Competencies
               </span>
               <div className="flex flex-wrap gap-2 pt-0.5">
                 {(stakeholder.skills || ['Full-Stack', 'Engineering', 'Agile Architecture']).map((skill, idx) => (
                   <span
                     key={idx}
-                    className="px-3 py-1 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold"
+                    className="px-3 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-semibold"
                   >
                     {skill}
                   </span>
@@ -765,21 +768,21 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             {/* Visual Delivery Charts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 360 Competency Radar */}
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-200">360° Capability Index</h4>
-                  <span className="text-[10px] text-slate-500 font-mono">Weighted Competencies</span>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200">360° Capability Index</h4>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Weighted Competencies</span>
                 </div>
                 <div className="w-full h-56 sm:h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <RadarChart cx="50%" cy="50%" outerRadius="58%" data={radarData}>
-                      <PolarGrid stroke="#334155" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 9 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" tick={{ fill: '#64748b', fontSize: 8 }} />
+                      <PolarGrid stroke="#94a3b8" strokeOpacity={0.3} />
+                      <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#94a3b8" strokeOpacity={0.3} tick={{ fill: '#64748b', fontSize: 9 }} />
                       <Radar name={stakeholder.name} dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.35} />
                       <Tooltip
                         wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
-                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px' }}
+                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', borderRadius: '12px', fontSize: '11px' }}
                       />
                     </RadarChart>
                   </ResponsiveContainer>
@@ -787,10 +790,10 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
               </div>
 
               {/* Task Distribution Donut */}
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between">
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-2xs">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-bold text-slate-200">Task Status Distribution</h4>
-                  <span className="text-[10px] text-slate-500 font-mono">{metrics.totalAssignedTasks} Deliverables</span>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-200">Task Status Distribution</h4>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{metrics.totalAssignedTasks} Deliverables</span>
                 </div>
                 <div className="w-full h-56 sm:h-64 flex items-center justify-center">
                   {taskStatusData.length > 0 ? (
@@ -811,9 +814,9 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                         </Pie>
                         <Tooltip
                           wrapperStyle={{ zIndex: 50, pointerEvents: 'none' }}
-                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '11px' }}
+                          contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#fff', borderRadius: '12px', fontSize: '11px' }}
                         />
-                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '4px' }} iconSize={8} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '4px' }} iconSize={8} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -831,8 +834,8 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             {/* Project Engagements */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs sm:text-sm font-bold text-slate-100">Assigned Project Engagements</h4>
-                <span className="text-slate-400 text-xs font-mono">{userProjects.length} Active Projects</span>
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">Assigned Project Engagements</h4>
+                <span className="text-slate-600 dark:text-slate-400 text-xs font-mono">{userProjects.length} Active Projects</span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -841,17 +844,17 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   const completedTasks = projectTasks.filter(t => t.status === 'done').length;
 
                   return (
-                    <div key={p.id} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 hover:border-slate-700 transition-colors">
+                    <div key={p.id} className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-2.5 hover:border-slate-300 dark:hover:border-slate-700 shadow-2xs transition-colors">
                       <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-300 font-mono font-bold text-[10px] border border-indigo-500/20">
+                        <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-mono font-bold text-[10px] border border-indigo-200 dark:border-indigo-500/20">
                           {p.projectCode}
                         </span>
-                        <span className="text-slate-400 font-mono text-[11px]">{completedTasks}/{projectTasks.length} Done</span>
+                        <span className="text-slate-600 dark:text-slate-400 font-mono text-[11px]">{completedTasks}/{projectTasks.length} Done</span>
                       </div>
                       
-                      <h5 className="font-bold text-slate-100 text-xs sm:text-sm truncate">{p.projectName}</h5>
+                      <h5 className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm truncate">{p.projectName}</h5>
                       
-                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500 rounded-full transition-all"
                           style={{ width: `${projectTasks.length > 0 ? Math.round((completedTasks / projectTasks.length) * 100) : 0}%` }}
@@ -862,7 +865,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                         <button
                           type="button"
                           onClick={() => onNavigateToProject(p.id)}
-                          className="text-indigo-400 hover:text-indigo-300 font-semibold inline-flex items-center gap-1 text-[11px] pt-1"
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-semibold inline-flex items-center gap-1 text-[11px] pt-1"
                         >
                           <span>Open Project Workspace</span>
                           <ChevronRight className="w-3 h-3" />
@@ -875,15 +878,15 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             </div>
 
             {/* Assigned Deliverables List */}
-            <div className="space-y-3 pt-3 border-t border-slate-800">
+            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs sm:text-sm font-bold text-slate-100">Assigned Deliverables ({metrics.assignedTasks.length})</h4>
+                <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">Assigned Deliverables ({metrics.assignedTasks.length})</h4>
                 <span className="text-slate-500 text-[11px]">Scoped tasks</span>
               </div>
 
               <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {metrics.assignedTasks.length === 0 ? (
-                  <div className="p-6 text-center text-slate-500 bg-slate-950/40 rounded-2xl border border-slate-800">
+                  <div className="p-6 text-center text-slate-500 bg-slate-50 dark:bg-slate-950/40 rounded-2xl border border-slate-200 dark:border-slate-800">
                     No deliverables currently assigned in this scope.
                   </div>
                 ) : (
@@ -899,22 +902,22 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                       showFirstTimeHint={idx === 0}
                       hintStorageKey="pmo_member_deliverable_swipe_hint"
                     >
-                      <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-850/40 transition-colors">
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-850/40 shadow-2xs transition-colors">
                         <div className="min-w-0 flex-1">
-                          <span className="font-bold text-slate-200 block truncate">{task.title}</span>
-                          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+                          <span className="font-bold text-slate-900 dark:text-slate-200 block truncate">{task.title}</span>
+                          <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono mt-0.5 block">
                             Est: {task.estimatedHours || 8}h • Act: {task.actualHours || 0}h • Due: {task.dueDate || 'No date'}
                           </span>
                         </div>
                         <span
                           className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase shrink-0 ${
                             task.status === 'done'
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30'
                               : task.status === 'in_progress'
-                              ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                              ? 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-500/30'
                               : task.status === 'blocked'
-                              ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                              : 'bg-slate-800 text-slate-400'
+                              ? 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
                           }`}
                         >
                           {task.status}
@@ -932,54 +935,54 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
         {activeTab === 'analytics' && (
           <div className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Planned Value (PV)</span>
-                <p className="text-xl sm:text-2xl font-black text-sky-400 font-mono">${Math.round(metrics.individualPV).toLocaleString()}</p>
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400 block mb-1">Planned Value (PV)</span>
+                <p className="text-xl sm:text-2xl font-black text-sky-700 dark:text-sky-400 font-mono">${Math.round(metrics.individualPV).toLocaleString()}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Earned Value (EV)</span>
-                <p className="text-xl sm:text-2xl font-black text-indigo-400 font-mono">${Math.round(metrics.individualEV).toLocaleString()}</p>
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400 block mb-1">Earned Value (EV)</span>
+                <p className="text-xl sm:text-2xl font-black text-indigo-700 dark:text-indigo-400 font-mono">${Math.round(metrics.individualEV).toLocaleString()}</p>
               </div>
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 text-center">
-                <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Actual Cost (AC)</span>
-                <p className="text-xl sm:text-2xl font-black text-rose-400 font-mono">${Math.round(metrics.individualAC).toLocaleString()}</p>
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center shadow-2xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400 block mb-1">Actual Cost (AC)</span>
+                <p className="text-xl sm:text-2xl font-black text-rose-700 dark:text-rose-400 font-mono">${Math.round(metrics.individualAC).toLocaleString()}</p>
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-              <h4 className="font-bold text-slate-200 text-xs sm:text-sm">Hours &amp; Velocity Performance</h4>
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+              <h4 className="font-bold text-slate-900 dark:text-slate-200 text-xs sm:text-sm">Hours &amp; Velocity Performance</h4>
               <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Total Est. Hours</span>
-                  <span className="text-base sm:text-lg font-bold font-mono text-slate-200 mt-1 block">{metrics.totalEstimatedHours}h</span>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Total Est. Hours</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-slate-200 mt-1 block">{metrics.totalEstimatedHours}h</span>
                 </div>
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Actual Logged</span>
-                  <span className="text-base sm:text-lg font-bold font-mono text-slate-200 mt-1 block">{metrics.totalActualHours}h</span>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Actual Logged</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-slate-900 dark:text-slate-200 mt-1 block">{metrics.totalActualHours}h</span>
                 </div>
-                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block">Earned Hours</span>
-                  <span className="text-base sm:text-lg font-bold font-mono text-emerald-400 mt-1 block">{Math.round(metrics.earnedHours)}h</span>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Earned Hours</span>
+                  <span className="text-base sm:text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400 mt-1 block">{Math.round(metrics.earnedHours)}h</span>
                 </div>
               </div>
             </div>
 
             {/* Variance Analysis */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-                <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Schedule Variance (SV = EV - PV)</span>
-                <p className={`text-lg sm:text-xl font-black font-mono ${metrics.individualEV >= metrics.individualPV ? 'text-emerald-400' : 'text-amber-400'}`}>
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400 block mb-1">Schedule Variance (SV = EV - PV)</span>
+                <p className={`text-lg sm:text-xl font-black font-mono ${metrics.individualEV >= metrics.individualPV ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                   {metrics.individualEV >= metrics.individualPV ? '+' : ''}${Math.round(metrics.individualEV - metrics.individualPV).toLocaleString()}
                 </p>
-                <span className="text-[11px] text-slate-500 mt-1 block">Positive indicates progress ahead of timeline baseline.</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-500 mt-1 block">Positive indicates progress ahead of timeline baseline.</span>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800">
-                <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">Cost Variance (CV = EV - AC)</span>
-                <p className={`text-lg sm:text-xl font-black font-mono ${metrics.individualEV >= metrics.individualAC ? 'text-emerald-400' : 'text-rose-400'}`}>
+              <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                <span className="text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400 block mb-1">Cost Variance (CV = EV - AC)</span>
+                <p className={`text-lg sm:text-xl font-black font-mono ${metrics.individualEV >= metrics.individualAC ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}`}>
                   {metrics.individualEV >= metrics.individualAC ? '+' : ''}${Math.round(metrics.individualEV - metrics.individualAC).toLocaleString()}
                 </p>
-                <span className="text-[11px] text-slate-500 mt-1 block">Positive indicates delivery achieved under baseline budget.</span>
+                <span className="text-[11px] text-slate-600 dark:text-slate-500 mt-1 block">Positive indicates delivery achieved under baseline budget.</span>
               </div>
             </div>
           </div>
@@ -989,26 +992,26 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
         {activeTab === 'leaves' && (
           <div className="space-y-5 text-xs">
             {/* Header & Quick Summary */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/60 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
               <div>
                 <div className="flex items-center gap-2">
-                  <CalendarCheck className="w-4 h-4 text-emerald-400" />
-                  <h4 className="font-bold text-slate-100 text-xs sm:text-sm">Personal Availability &amp; Leave Calendar</h4>
-                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-[10px] font-mono font-bold">
+                  <CalendarCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">Personal Availability &amp; Leave Calendar</h4>
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 text-[10px] font-mono font-bold">
                     Read-Only
                   </span>
                 </div>
-                <p className="text-slate-400 text-xs mt-0.5">
-                  Visual day-by-day availability calendar for <strong className="text-slate-200">{stakeholder.name}</strong> showing PTO schedule, leave approvals, and active sprint capacity.
+                <p className="text-slate-600 dark:text-slate-400 text-xs mt-0.5">
+                  Visual day-by-day availability calendar for <strong className="text-slate-900 dark:text-slate-200">{stakeholder.name}</strong> showing PTO schedule, leave approvals, and active sprint capacity.
                 </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                <span className="px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold">
+                <span className="px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-mono font-bold">
                   {approvedLeaves.length} Approved
                 </span>
                 {pendingLeaves.length > 0 && (
-                  <span className="px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono font-bold">
+                  <span className="px-3 py-1 rounded-xl bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs font-mono font-bold">
                     {pendingLeaves.length} Pending
                   </span>
                 )}
@@ -1017,23 +1020,23 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
             {/* Month Selector Bar & Capacity KPI Cards */}
             <div className="space-y-3">
-              <div className="flex items-center justify-between bg-slate-950 p-3 rounded-2xl border border-slate-800">
+              <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handlePrevMonth}
-                    className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-colors"
+                    className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 transition-colors shadow-2xs"
                     title="Previous Month"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="font-bold text-slate-100 text-xs sm:text-sm px-2">
+                  <span className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm px-2">
                     {monthNames[calMonth]} {calYear}
                   </span>
                   <button
                     type="button"
                     onClick={handleNextMonth}
-                    className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 transition-colors"
+                    className="p-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 transition-colors shadow-2xs"
                     title="Next Month"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -1043,7 +1046,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                 <button
                   type="button"
                   onClick={handleCurrentMonth}
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-semibold transition-colors"
+                  className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800 text-xs font-semibold transition-colors shadow-2xs"
                 >
                   August 2026 (Active)
                 </button>
@@ -1051,27 +1054,27 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
               {/* Capacity & Availability Metrics for Selected Month */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Working Days</span>
-                  <span className="text-base font-bold font-mono text-slate-200">{monthStats.workingDays}d</span>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block uppercase font-semibold">Working Days</span>
+                  <span className="text-base font-bold font-mono text-slate-900 dark:text-slate-200">{monthStats.workingDays}d</span>
                   <span className="text-[10px] text-slate-500 block truncate">Weekdays in month</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Approved Leaves</span>
-                  <span className="text-base font-bold font-mono text-emerald-400">{monthStats.approvedLeaveDaysInMonth}d</span>
-                  <span className="text-[10px] text-emerald-500/80 block truncate">Capacity adjusted</span>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block uppercase font-semibold">Approved Leaves</span>
+                  <span className="text-base font-bold font-mono text-emerald-700 dark:text-emerald-400">{monthStats.approvedLeaveDaysInMonth}d</span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-500/80 block truncate">Capacity adjusted</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Available Days</span>
-                  <span className="text-base font-bold font-mono text-indigo-300">{monthStats.availableWorkDays}d</span>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block uppercase font-semibold">Available Days</span>
+                  <span className="text-base font-bold font-mono text-indigo-700 dark:text-indigo-300">{monthStats.availableWorkDays}d</span>
                   <span className="text-[10px] text-slate-500 block truncate">({monthStats.capacityHours}h capacity)</span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800">
-                  <span className="text-[10px] text-slate-400 block uppercase font-semibold">Availability</span>
-                  <span className={`text-base font-bold font-mono ${monthStats.availabilityRate >= 80 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 block uppercase font-semibold">Availability</span>
+                  <span className={`text-base font-bold font-mono ${monthStats.availabilityRate >= 80 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                     {monthStats.availabilityRate}%
                   </span>
                   <span className="text-[10px] text-slate-500 block truncate">Sprint Availability</span>
@@ -1080,15 +1083,15 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             </div>
 
             {/* READ-ONLY MINI-CALENDAR GRID */}
-            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
+            <div className="p-4 rounded-2xl bg-white dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-400" />
-                  <span className="font-bold text-slate-200 text-xs sm:text-sm">
+                  <Calendar className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span className="font-bold text-slate-900 dark:text-slate-200 text-xs sm:text-sm">
                     {monthNames[calMonth]} {calYear} Availability Grid
                   </span>
                 </div>
-                <span className="text-xs text-slate-400">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
                   Click any day to inspect details
                 </span>
               </div>
@@ -1099,7 +1102,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   <div
                     key={d}
                     className={`py-1 text-xs font-bold uppercase tracking-wider rounded-lg ${
-                      i === 0 || i === 6 ? 'text-slate-500 bg-slate-900/40' : 'text-slate-400 bg-slate-900/80'
+                      i === 0 || i === 6 ? 'text-slate-500 bg-slate-100 dark:bg-slate-900/40' : 'text-slate-700 dark:text-slate-400 bg-slate-100/80 dark:bg-slate-900/80'
                     }`}
                   >
                     {d}
@@ -1115,9 +1118,9 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   return (
                     <div
                       key={`prev-${idx}`}
-                      className="h-14 sm:h-16 md:h-18 p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
+                      className="h-14 sm:h-16 md:h-18 p-1.5 rounded-xl bg-slate-50/50 dark:bg-slate-950/30 border border-slate-200/60 dark:border-slate-900/60 opacity-30 flex flex-col justify-between"
                     >
-                      <span className="text-xs font-mono text-slate-600">{prevDayNum}</span>
+                      <span className="text-xs font-mono text-slate-400 dark:text-slate-600">{prevDayNum}</span>
                     </div>
                   );
                 })}
@@ -1132,14 +1135,14 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   const dateObj = new Date(calYear, calMonth, dayNum);
                   const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
 
-                  let cellBg = isWeekend ? 'bg-slate-950/40 border-slate-900' : 'bg-slate-900/80 border-slate-800/80';
+                  let cellBg = isWeekend ? 'bg-slate-100/50 dark:bg-slate-950/40 border-slate-200 dark:border-slate-900' : 'bg-slate-50/60 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800/80';
                   let badgeInfo = null;
 
                   if (leaveOnDate?.type === 'approved') {
                     badgeInfo = getLeaveTypeBadge(leaveOnDate.leave.leaveType);
                     cellBg = `${badgeInfo.bg} shadow-sm`;
                   } else if (leaveOnDate?.type === 'pending') {
-                    cellBg = 'bg-amber-500/10 border-dashed border-amber-500/50 text-amber-300';
+                    cellBg = 'bg-amber-50 dark:bg-amber-500/10 border-dashed border-amber-300 dark:border-amber-500/50 text-amber-800 dark:text-amber-300';
                   }
 
                   return (
@@ -1148,7 +1151,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                       key={`curr-${dayNum}`}
                       onClick={() => setSelectedCalendarDateStr(dateStr)}
                       className={`h-14 sm:h-16 md:h-18 p-1.5 rounded-xl border text-left flex flex-col justify-between transition-all relative overflow-hidden group ${cellBg} ${
-                        isSelected ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-950 z-10 scale-[1.02]' : 'hover:border-slate-700'
+                        isSelected ? 'ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 z-10 scale-[1.02]' : 'hover:border-slate-400 dark:hover:border-slate-700'
                       }`}
                     >
                       {/* Day Number and Today Indicator */}
@@ -1160,15 +1163,15 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                               : leaveOnDate?.type === 'approved'
                               ? 'text-white'
                               : isWeekend
-                              ? 'text-slate-500'
-                              : 'text-slate-300'
+                              ? 'text-slate-400 dark:text-slate-500'
+                              : 'text-slate-800 dark:text-slate-300'
                           }`}
                         >
                           {dayNum}
                         </span>
 
                         {isToday && (
-                          <span className="text-[8px] font-mono uppercase px-1 rounded bg-indigo-500/30 text-indigo-200 font-bold hidden sm:inline">
+                          <span className="text-[8px] font-mono uppercase px-1 rounded bg-indigo-100 dark:bg-indigo-500/30 text-indigo-800 dark:text-indigo-200 font-bold hidden sm:inline">
                             Today
                           </span>
                         )}
@@ -1177,7 +1180,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                       {/* Leave Type Label or Status */}
                       {leaveOnDate?.type === 'approved' && badgeInfo && (
                         <div className="w-full">
-                          <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-slate-950/60 text-white leading-tight">
+                          <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-slate-900/90 dark:bg-slate-950/60 text-white leading-tight">
                             {leaveOnDate.leave.durationType === 'hours' 
                               ? `${leaveOnDate.leave.hoursCount}h`
                               : badgeInfo.label.split('/')[0].trim()}
@@ -1187,7 +1190,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
                       {leaveOnDate?.type === 'pending' && (
                         <div className="w-full">
-                          <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-amber-950/80 text-amber-300 leading-tight">
+                          <span className="text-[9px] font-bold truncate block px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-300 border border-amber-200 dark:border-transparent leading-tight">
                             {leaveOnDate.leave.durationType === 'hours' ? `${leaveOnDate.leave.hoursCount}h (P)` : 'Pend'}
                           </span>
                         </div>
@@ -1195,13 +1198,13 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
                       {!leaveOnDate && !isWeekend && (
                         <div className="w-full opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                          <span className="text-[9px] text-slate-400 font-mono">8h Cap</span>
+                          <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono">8h Cap</span>
                         </div>
                       )}
 
                       {isWeekend && !leaveOnDate && (
                         <div className="w-full text-right hidden sm:block">
-                          <span className="text-[9px] text-slate-600 font-mono">Rest</span>
+                          <span className="text-[9px] text-slate-400 dark:text-slate-600 font-mono">Rest</span>
                         </div>
                       )}
                     </button>
@@ -1214,15 +1217,15 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                 }).map((_, idx) => (
                   <div
                     key={`next-${idx}`}
-                    className="h-14 sm:h-16 md:h-18 p-1.5 rounded-xl bg-slate-950/30 border border-slate-900/60 opacity-30 flex flex-col justify-between"
+                    className="h-14 sm:h-16 md:h-18 p-1.5 rounded-xl bg-slate-50/50 dark:bg-slate-950/30 border border-slate-200/60 dark:border-slate-900/60 opacity-30 flex flex-col justify-between"
                   >
-                    <span className="text-xs font-mono text-slate-600">{idx + 1}</span>
+                    <span className="text-xs font-mono text-slate-400 dark:text-slate-600">{idx + 1}</span>
                   </div>
                 ))}
               </div>
 
               {/* Calendar Legend */}
-              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-800 text-xs text-slate-400">
+              <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
                   <span>Vacation / PTO</span>
@@ -1236,11 +1239,11 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                   <span>Training</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-dashed border-amber-300" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 border border-dashed border-amber-400" />
                   <span>Pending PM Review</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-700" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-300 dark:bg-slate-700" />
                   <span>Standard 8.0h Work Day</span>
                 </div>
               </div>
@@ -1248,30 +1251,30 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
             {/* Selected Day Inspector Card */}
             {selectedDateLeaveInfo && (
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-indigo-500/30 space-y-3 shadow-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-gradient-to-r dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 border border-indigo-200 dark:border-indigo-500/30 space-y-3 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
                   <div>
-                    <span className="text-[10px] text-slate-400 uppercase font-semibold block">Date Inspector</span>
-                    <h5 className="text-xs sm:text-sm font-bold text-white">{selectedDateLeaveInfo.formattedDate}</h5>
+                    <span className="text-[10px] text-slate-600 dark:text-slate-400 uppercase font-semibold block">Date Inspector</span>
+                    <h5 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">{selectedDateLeaveInfo.formattedDate}</h5>
                   </div>
 
                   <div>
                     {selectedDateLeaveInfo.leaveData?.type === 'approved' ? (
-                      <span className="px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center gap-1.5">
+                      <span className="px-3 py-1 rounded-xl bg-emerald-100 dark:bg-emerald-500/15 border border-emerald-300 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold text-xs flex items-center gap-1.5">
                         <Check className="w-3.5 h-3.5" />
                         <span>Approved Time Off</span>
                       </span>
                     ) : selectedDateLeaveInfo.leaveData?.type === 'pending' ? (
-                      <span className="px-3 py-1 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-1.5">
+                      <span className="px-3 py-1 rounded-xl bg-amber-100 dark:bg-amber-500/15 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 font-bold text-xs flex items-center gap-1.5">
                         <AlertCircle className="w-3.5 h-3.5" />
                         <span>Pending PM Approval</span>
                       </span>
                     ) : selectedDateLeaveInfo.isWeekend ? (
-                      <span className="px-3 py-1 rounded-xl bg-slate-800 border border-slate-700 text-slate-400 font-bold text-xs">
+                      <span className="px-3 py-1 rounded-xl bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-400 font-bold text-xs">
                         Weekend Rest Day
                       </span>
                     ) : (
-                      <span className="px-3 py-1 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 font-bold text-xs flex items-center gap-1.5">
+                      <span className="px-3 py-1 rounded-xl bg-indigo-100 dark:bg-indigo-500/15 border border-indigo-300 dark:border-indigo-500/30 text-indigo-800 dark:text-indigo-300 font-bold text-xs flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5" />
                         <span>Fully Available (8.0h Cap)</span>
                       </span>
@@ -1281,50 +1284,50 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
                 {selectedDateLeaveInfo.leaveData ? (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block">Leave Category</span>
-                      <span className="font-bold text-slate-100 text-xs capitalize block">
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Leave Category</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xs capitalize block">
                         {selectedDateLeaveInfo.leaveData.leave.leaveType} Leave
                       </span>
                       {selectedDateLeaveInfo.leaveData.leave.durationType === 'hours' ? (
-                        <span className="text-[10px] text-amber-400 font-medium">Hourly Off ({selectedDateLeaveInfo.leaveData.leave.hoursCount}h)</span>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-medium">Hourly Off ({selectedDateLeaveInfo.leaveData.leave.hoursCount}h)</span>
                       ) : (
-                        <span className="text-[10px] text-indigo-400 font-medium">Full Day Off ({selectedDateLeaveInfo.leaveData.leave.daysCount}d)</span>
+                        <span className="text-[10px] text-indigo-700 dark:text-indigo-400 font-medium">Full Day Off ({selectedDateLeaveInfo.leaveData.leave.daysCount}d)</span>
                       )}
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block">Schedule Span</span>
-                      <span className="font-bold text-slate-100 text-xs font-mono block truncate">
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Schedule Span</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xs font-mono block truncate">
                         {selectedDateLeaveInfo.leaveData.leave.startDate === selectedDateLeaveInfo.leaveData.leave.endDate
                           ? selectedDateLeaveInfo.leaveData.leave.startDate
                           : `${selectedDateLeaveInfo.leaveData.leave.startDate} to ${selectedDateLeaveInfo.leaveData.leave.endDate}`}
                       </span>
                       {selectedDateLeaveInfo.leaveData.leave.timeRange ? (
-                        <span className="text-[10px] text-indigo-300 font-medium">{selectedDateLeaveInfo.leaveData.leave.timeRange}</span>
+                        <span className="text-[10px] text-indigo-700 dark:text-indigo-300 font-medium">{selectedDateLeaveInfo.leaveData.leave.timeRange}</span>
                       ) : (
-                        <span className="text-[10px] text-slate-400">{selectedDateLeaveInfo.leaveData.leave.hoursCount}h blocked</span>
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400">{selectedDateLeaveInfo.leaveData.leave.hoursCount}h blocked</span>
                       )}
                     </div>
-                    <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block">Authorization</span>
-                      <span className="font-bold text-slate-100 text-xs block truncate">
+                    <div className="p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-2xs">
+                      <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Authorization</span>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-xs block truncate">
                         {selectedDateLeaveInfo.leaveData.leave.approvedBy
                           ? `Approved by ${selectedDateLeaveInfo.leaveData.leave.approvedBy}`
                           : 'Pending PM / Admin Sign-off'}
                       </span>
                     </div>
-                    <div className="sm:col-span-3 p-3 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-2">
-                      <Info className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                    <div className="sm:col-span-3 p-3 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-start gap-2 shadow-2xs">
+                      <Info className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                       <div>
-                        <span className="text-[10px] text-slate-400 block">Reason &amp; Deliverable Impact</span>
-                        <p className="text-slate-200 text-xs mt-0.5">
+                        <span className="text-[10px] text-slate-600 dark:text-slate-400 block">Reason &amp; Deliverable Impact</span>
+                        <p className="text-slate-800 dark:text-slate-200 text-xs mt-0.5">
                           {selectedDateLeaveInfo.leaveData.leave.reason || 'Personal scheduled time off.'}
                         </p>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-slate-400 text-xs">
+                  <p className="text-slate-600 dark:text-slate-400 text-xs">
                     {selectedDateLeaveInfo.isWeekend
                       ? 'Standard weekend non-working rest day. No project deliverables or capacity are scheduled.'
                       : 'Standard working day with 100% active capacity (8.0 hours). Deliverable tasks and sprint assignments are fully active on this date.'}
@@ -1336,12 +1339,12 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
             {/* Complete Leave History Records List */}
             <div className="space-y-2.5 pt-2">
               <div className="flex items-center justify-between">
-                <h5 className="font-bold text-slate-200 text-xs">All Leave Applications &amp; History ({memberLeaves.length})</h5>
+                <h5 className="font-bold text-slate-900 dark:text-slate-200 text-xs">All Leave Applications &amp; History ({memberLeaves.length})</h5>
                 <span className="text-slate-500 text-[11px]">Dossier Records</span>
               </div>
 
               {memberLeaves.length === 0 ? (
-                <div className="p-6 rounded-2xl bg-slate-950/60 border border-slate-800 text-center text-slate-500">
+                <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-center text-slate-500">
                   No leave requests recorded for this member.
                 </div>
               ) : (
@@ -1351,7 +1354,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                     return (
                       <div
                         key={l.id}
-                        className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                        className="p-3.5 rounded-xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs"
                       >
                         <div className="space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1361,36 +1364,36 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                             <span
                               className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                                 l.status === 'approved'
-                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                  ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30'
                                   : l.status === 'pending'
-                                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                                  : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                  ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30'
+                                  : 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30'
                               }`}
                             >
                               {l.status}
                             </span>
                             {l.durationType === 'hours' ? (
-                              <span className="text-[10px] font-mono text-amber-300 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                              <span className="text-[10px] font-mono text-amber-800 dark:text-amber-300 font-bold bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded border border-amber-200 dark:border-amber-500/20">
                                 {l.hoursCount}h Hourly Off
                               </span>
                             ) : (
-                              <span className="text-[10px] font-mono text-slate-300 font-bold">
+                              <span className="text-[10px] font-mono text-slate-700 dark:text-slate-300 font-bold">
                                 {l.daysCount}d ({l.hoursCount}h)
                               </span>
                             )}
                           </div>
 
-                          <p className="text-slate-300 text-xs">{l.reason || 'Personal Time Off'}</p>
+                          <p className="text-slate-800 dark:text-slate-300 text-xs">{l.reason || 'Personal Time Off'}</p>
                           <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
                             <span>Schedule: {l.startDate === l.endDate ? l.startDate : `${l.startDate} to ${l.endDate}`}</span>
-                            {l.timeRange && <span className="text-indigo-400 font-sans font-medium">({l.timeRange})</span>}
+                            {l.timeRange && <span className="text-indigo-600 dark:text-indigo-400 font-sans font-medium">({l.timeRange})</span>}
                           </div>
                         </div>
 
                         {l.approvedBy && (
-                          <div className="text-left sm:text-right text-[10px] text-slate-400 shrink-0 bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-800">
+                          <div className="text-left sm:text-right text-[10px] text-slate-600 dark:text-slate-400 shrink-0 bg-slate-50 dark:bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
                             <span>Approved by</span>
-                            <span className="font-semibold text-slate-200 block">{l.approvedBy}</span>
+                            <span className="font-semibold text-slate-900 dark:text-slate-200 block">{l.approvedBy}</span>
                           </div>
                         )}
                       </div>
@@ -1405,8 +1408,8 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
         {/* ================= TAB 5: REVIEWS ================= */}
         {activeTab === 'reviews' && (
           <div className="space-y-4 text-xs">
-            <form onSubmit={handleAddReview} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
-              <span className="font-bold text-slate-200 block text-xs sm:text-sm">Add Executive PMO / Supervisor Performance Note</span>
+            <form onSubmit={handleAddReview} className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs">
+              <span className="font-bold text-slate-900 dark:text-slate-200 block text-xs sm:text-sm">Add Executive PMO / Supervisor Performance Note</span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="sm:col-span-2">
                   <input
@@ -1414,14 +1417,14 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
                     placeholder="Write evaluation feedback or commendation..."
                     value={reviewText}
                     onChange={e => setReviewText(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-xs"
                   />
                 </div>
                 <div className="flex gap-2">
                   <select
                     value={reviewRating}
                     onChange={e => setReviewRating(e.target.value)}
-                    className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-indigo-500 flex-1 text-xs"
+                    className="bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500 flex-1 text-xs"
                   >
                     <option value="Exceeds Expectations">Exceeds Expectations</option>
                     <option value="Meets High Standard">Meets High Standard</option>
@@ -1439,14 +1442,14 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
 
             <div className="space-y-3">
               {reviewsList.map(rev => (
-                <div key={rev.id} className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-1.5">
+                <div key={rev.id} className="p-4 rounded-2xl bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-100">{rev.author} <span className="text-slate-400 font-normal">({rev.role})</span></span>
-                    <span className="px-2.5 py-0.5 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold text-[10px]">
+                    <span className="font-bold text-slate-900 dark:text-slate-100">{rev.author} <span className="text-slate-500 dark:text-slate-400 font-normal">({rev.role})</span></span>
+                    <span className="px-2.5 py-0.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-500/20 font-bold text-[10px]">
                       {rev.rating}
                     </span>
                   </div>
-                  <p className="text-slate-300 leading-relaxed text-xs">{rev.comment}</p>
+                  <p className="text-slate-700 dark:text-slate-300 leading-relaxed text-xs">{rev.comment}</p>
                   <span className="text-[10px] text-slate-500 font-mono block pt-0.5">{rev.date}</span>
                 </div>
               ))}
@@ -1458,12 +1461,12 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
       {/* ========================================================================= */}
       {/* SECTION FOOTER */}
       {/* ========================================================================= */}
-      <div className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950/70 flex items-center justify-between text-xs">
+      <div className="p-3.5 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/70 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">
           <span className="text-slate-500 font-mono text-[11px]">Stakeholder ID: {stakeholder.id}</span>
-          <span className="text-slate-700">•</span>
-          <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-            <Shield className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="text-slate-400 dark:text-slate-700">•</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400">
+            <Shield className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             <span>360° PMO Governance Dossier</span>
           </span>
         </div>
@@ -1473,7 +1476,7 @@ export const MemberReportCardSection: React.FC<MemberReportCardSectionProps> = (
           onClick={() => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold transition-colors text-xs"
+          className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-bold transition-colors text-xs border border-slate-200 dark:border-transparent shadow-2xs"
         >
           Back to Top ↑
         </button>

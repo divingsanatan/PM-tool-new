@@ -19,13 +19,31 @@ export interface PendingInvite {
   name?: string;
 }
 
+export type AppRole =
+  | 'Admin'
+  | 'Project Manager'
+  | 'Developer (Team member)'
+  | 'Tester (Team Member)'
+  | 'UI/UX Dev (Team Member)';
+
+export const APP_ROLES: AppRole[] = [
+  'Admin',
+  'Project Manager',
+  'Developer (Team member)',
+  'Tester (Team Member)',
+  'UI/UX Dev (Team Member)'
+];
+
 export interface Stakeholder {
   id: string;
   name: string;
   email: string;
   role: string;
+  appRole?: AppRole;
+  isDualPMDev?: boolean; // Can be both a developer and a PM: inherits all PM access while holding tasks
+  hasPMAccess?: boolean; // PM access granted by Admin or PM
   category?: StakeholderCategory;
-  avatar: string;
+  avatar?: string;
   hourlyRate: number;
   weeklyCapacityHours: number;
   skills: string[];
@@ -285,7 +303,7 @@ export interface StakeholderWorkload {
   overloaded: boolean;
 }
 
-export type UserRole = 'admin' | 'pm' | 'stakeholder';
+export type UserRole = 'admin' | 'pm' | 'stakeholder' | AppRole;
 
 export type LeaveType = 'vacation' | 'sick' | 'parental' | 'conference' | 'unpaid' | 'training' | 'other';
 export type LeaveStatus = 'approved' | 'pending' | 'rejected';
@@ -345,6 +363,9 @@ export interface ProjectCommercials {
   projectCode: string;
   pmName?: string;
   pmAvatar?: string;
+  pmNames?: string[];
+  projectManagerIds?: string[];
+  pms?: { id: string; name: string; email: string; avatar?: string; title?: string }[];
   contractValue: number;
   plannedCost: number;
   actualCost: number;
@@ -384,6 +405,11 @@ export interface UserProfile {
   name: string;
   email: string;
   role: UserRole;
+  appRole?: AppRole;
+  isDualPMDev?: boolean; // Can be both a developer and a PM: inherits all PM access while holding tasks
+  hasPMAccess?: boolean; // Granted PM access by Admin or PM
+  isPlaceholder?: boolean; // True if this is a placeholder/dummy member slot
+  isDummy?: boolean; // Alias for dummy/placeholder
   title: string;
   avatar: string;
   department?: string;
@@ -405,6 +431,11 @@ export interface ProjectMeta {
   taskCount: number;
   spi?: number;
   cpi?: number;
+  projectManagerId?: string;
+  projectManagerEmail?: string;
+  projectManagerIds?: string[];
+  projectManagerEmails?: string[];
+  pmNames?: string[];
 }
 
 export interface DashboardWidgetConfig {
@@ -505,6 +536,10 @@ export interface ProjectData {
   startDate: string;
   targetEndDate: string;
   budget: number;
+  projectManagerId?: string;
+  projectManagerEmail?: string;
+  projectManagerIds?: string[];
+  projectManagerEmails?: string[];
   stakeholders: Stakeholder[];
   milestones: Milestone[];
   epics: Epic[];
@@ -530,6 +565,7 @@ export type ViewMode =
   | 'dashboard'
   | 'member_dashboard'
   | 'admin_portfolio'
+  | 'admin_stakeholders'
   | 'leave_management'
   | 'governance'
   | 'wbs'

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
-import { Stakeholder, StakeholderCategory } from '../../types';
+import { Stakeholder, StakeholderCategory, AppRole, APP_ROLES } from '../../types';
 import {
   X,
   Users,
@@ -26,12 +26,19 @@ import {
   TalentBenchCandidate,
   TalentRoleCategory
 } from '../../utils/talentPoolUtils';
+import {
+  normalizeToAppRole,
+  isUserAdmin,
+  isUserPM,
+  canManageRolesAndTeam,
+  getAppRoleBadge
+} from '../../utils/roleUtils';
 
 interface StakeholderModalProps {
   isOpen: boolean;
   onClose: () => void;
   stakeholderToEdit?: Stakeholder | null;
-  onOpenInviteModal?: (email?: string) => void;
+  onOpenInviteModal?: (dataOrEmail?: string | { email?: string; name?: string; role?: string; category?: StakeholderCategory; stakeholderId?: string }) => void;
 }
 
 export const StakeholderModal: React.FC<StakeholderModalProps> = ({
@@ -50,22 +57,24 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     projectData
   } = useProject();
 
-  const isAdmin = currentUser?.role === 'admin';
-  const isPM = currentUser?.role === 'pm' || isAdmin;
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
+  const canManageRoles = canManageRolesAndTeam(currentUser);
 
   const isEditable = useMemo(() => {
-    if (isPM) return true;
+    if (canManageRoles) return true;
     if (!stakeholderToEdit) return false;
     if (stakeholderToEdit.id === currentUser?.id) return true;
     if (stakeholderToEdit.email && stakeholderToEdit.email.toLowerCase() === currentUser?.email.toLowerCase()) return true;
     return false;
-  }, [isPM, stakeholderToEdit, currentUser]);
+  }, [canManageRoles, stakeholderToEdit, currentUser]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('');
+  const [role, setRole] = useState<AppRole>('Developer (Team member)');
+  const [isDualPMDev, setIsDualPMDev] = useState(false);
   const [category, setCategory] = useState<StakeholderCategory>('internal');
-  const [hourlyRate, setHourlyRate] = useState<number | ''>(90);
+  const [hourlyRate, setHourlyRate] = useState<number | ''>(100);
   const [skillsStr, setSkillsStr] = useState('');
   const [isDummy, setIsDummy] = useState(false);
   const [triggerInvite, setTriggerInvite] = useState(false);
@@ -160,39 +169,39 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
   }, [email, talentBenchPool, isDummy]);
 
   // Determine if the current user has permission to set/change the role
-  // Rule: ONLY an admin can set roles for internal stakeholders, unless imported from Admin Registry.
+  // Rule: PM and Admin roles manage roles and hybrid assignments across the app.
   const canEditRole = useMemo(() => {
     if (!isEditable) return false;
-    if (category === 'internal') {
-      return isAdmin;
-    }
-    // External stakeholders role can be edited by PM or Admin
-    return isPM;
-  }, [isEditable, category, isAdmin, isPM]);
+    return canManageRoles;
+  }, [isEditable, canManageRoles]);
 
   useEffect(() => {
     if (stakeholderToEdit) {
       setName(stakeholderToEdit.name);
       setEmail(stakeholderToEdit.email.includes('@placeholder') ? '' : stakeholderToEdit.email);
-      setRole(stakeholderToEdit.role);
+      const normalized = normalizeToAppRole(stakeholderToEdit.appRole || stakeholderToEdit.role);
+      setRole(normalized);
+      setIsDualPMDev(Boolean(stakeholderToEdit.isDualPMDev));
       setCategory(stakeholderToEdit.category || 'internal');
       setHourlyRate(stakeholderToEdit.hourlyRate || '');
       setSkillsStr(stakeholderToEdit.skills.join(', '));
-      setIsDummy(Boolean(stakeholderToEdit.isPlaceholder || stakeholderToEdit.status === 'placeholder'));
-      setTriggerInvite(Boolean(stakeholderToEdit.status === 'placeholder' || !stakeholderToEdit.email));
+      const isPlaceholderMember = Boolean(stakeholderToEdit.isPlaceholder || stakeholderToEdit.status === 'placeholder' || stakeholderToEdit.email.includes('@placeholder'));
+      setIsDummy(isPlaceholderMember);
+      setTriggerInvite(true);
       setImportedNotice(null);
     } else {
       setName('');
       setEmail('');
-      setRole(category === 'internal' && !isAdmin ? 'Contributor' : '');
+      setRole('Developer (Team member)');
+      setIsDualPMDev(false);
       setCategory('internal');
-      setHourlyRate(90);
+      setHourlyRate(110);
       setSkillsStr('Agile, React, TypeScript');
       setIsDummy(false);
       setTriggerInvite(true);
       setImportedNotice(null);
     }
-  }, [stakeholderToEdit, isOpen, isAdmin, category]);
+  }, [stakeholderToEdit, isOpen, canManageRoles, category]);
 
   if (!isOpen) return null;
 
@@ -201,8 +210,10 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     setName(u.name);
     setEmail(u.email);
     setCategory('internal');
-    setRole(u.title || (u.role === 'pm' ? 'Project Manager' : 'Team Member'));
-    setHourlyRate(u.hourlyRate || 90);
+    const norm = normalizeToAppRole(u.appRole || u.title || u.role);
+    setRole(norm);
+    setIsDualPMDev(Boolean(u.isDualPMDev));
+    setHourlyRate(u.hourlyRate || 100);
     setSkillsStr((u.skills || []).join(', '));
     setIsDummy(false);
     setTriggerInvite(true);
@@ -219,9 +230,19 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
 
     setImportedNotice({
       name: u.name,
-      title: u.title || u.role.toUpperCase(),
+      title: norm + (u.isDualPMDev ? ' (Dual PM & Dev)' : ''),
       status: statusText
     });
+  };
+
+  const handleSelectRolePreset = (presetRole: AppRole) => {
+    setRole(presetRole);
+    if (presetRole !== 'Developer (Team member)') {
+      setIsDualPMDev(false);
+    }
+    if (!name && isDummy) {
+      setName(`${presetRole} (Unassigned)`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -229,54 +250,65 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
     if (!isEditable) return;
     const skills = skillsStr.split(',').map(s => s.trim()).filter(Boolean);
 
-    let finalEmail = email.trim();
-    if (isDummy && (!finalEmail || !finalEmail.includes('@'))) {
-      finalEmail = `unassigned.${(role || name || 'role').toLowerCase().replace(/\s+/g, '.')}@placeholder.local`;
+    const rawEmail = email.trim();
+    // If no email provided, automatically treat as dummy / placeholder
+    const shouldBeDummy = isDummy || !rawEmail || !rawEmail.includes('@');
+
+    let finalEmail = rawEmail;
+    if (shouldBeDummy) {
+      finalEmail = stakeholderToEdit?.email && stakeholderToEdit.email.includes('@placeholder')
+        ? stakeholderToEdit.email
+        : `unassigned.${(role || name || 'member').toLowerCase().replace(/[^a-z0-9]/g, '.')}@placeholder.local`;
     }
 
-    const isNowInvited = !isDummy && finalEmail.includes('@') && !finalEmail.includes('@placeholder') && triggerInvite;
-    const computedStatus = isDummy ? 'placeholder' : (isNowInvited ? 'invited' : (stakeholderToEdit?.status || 'active'));
+    const isNowInvited = !shouldBeDummy && finalEmail.includes('@') && !finalEmail.includes('@placeholder') && triggerInvite;
+    const computedStatus = shouldBeDummy ? 'placeholder' : (isNowInvited ? 'invited' : (stakeholderToEdit?.status === 'invited' ? 'invited' : 'active'));
 
-    // Enforce role preservation if non-admin attempts to save internal stakeholder
-    let finalRole = role.trim();
-    if (category === 'internal' && !isAdmin) {
-      finalRole = role || stakeholderToEdit?.role || 'Contributor';
-    }
-    if (!finalRole) {
-      finalRole = 'Contributor';
-    }
+    const finalRole = normalizeToAppRole(role);
+    const hasDualAccess = isDualPMDev || finalRole === 'Project Manager' || finalRole === 'Admin';
 
     // Match avatar if from existing directory
     const matchedUser = allUsers.find(
-      u => u.email.toLowerCase() === finalEmail.toLowerCase() || u.name.toLowerCase() === name.trim().toLowerCase()
+      u => u.email.toLowerCase() === finalEmail.toLowerCase() || (name.trim() && u.name.toLowerCase() === name.trim().toLowerCase())
     );
+
+    const displayName = name.trim() || (shouldBeDummy ? `${finalRole} (Unassigned)` : 'New Team Member');
 
     await saveStakeholder({
       id: stakeholderToEdit?.id || matchedUser?.id,
-      name: name.trim() || (isDummy ? `${finalRole || 'Placeholder'} (Unassigned)` : 'New Team Member'),
+      name: displayName,
       email: finalEmail,
       role: finalRole,
+      appRole: finalRole,
+      isDualPMDev: isDualPMDev,
+      hasPMAccess: hasDualAccess,
       category,
       avatar: matchedUser?.avatar,
       hourlyRate: hourlyRate === '' ? 0 : Number(hourlyRate),
       weeklyCapacityHours: 40,
-      skills,
+      skills: skills.length > 0 ? skills : [finalRole, 'Agile'],
       status: computedStatus,
-      isPlaceholder: isDummy,
+      isPlaceholder: shouldBeDummy,
       createdBy: stakeholderToEdit?.createdBy || currentUser?.id,
       createdByEmail: stakeholderToEdit?.createdByEmail || currentUser?.email
     });
 
     if (isNowInvited && onOpenInviteModal) {
-      onOpenInviteModal(finalEmail);
+      onOpenInviteModal({
+        email: finalEmail,
+        name: displayName,
+        role: finalRole,
+        category,
+        stakeholderId: stakeholderToEdit?.id
+      });
     } else {
       addActivityLog({
         user: currentUser?.name || 'User',
         userEmail: currentUser?.email || '',
-        action: isDummy ? 'Created Placeholder Stakeholder' : (stakeholderToEdit ? 'Updated Stakeholder' : 'Added Team Member'),
-        details: isDummy
-          ? `Added placeholder stakeholder profile "${finalRole || name}" to project team.`
-          : `Added/updated team member "${name}" (${finalEmail}) with role "${finalRole}" from organizational directory.`,
+        action: shouldBeDummy ? 'Saved Dummy/Placeholder Member' : (stakeholderToEdit ? 'Updated Stakeholder' : 'Added Team Member'),
+        details: shouldBeDummy
+          ? `Saved dummy/placeholder member profile "${displayName}" (${finalRole}). Tasks can be assigned immediately; invite will be triggered once an email is attached.`
+          : `Saved team member "${displayName}" (${finalEmail}) with role "${finalRole}".`,
         category: 'stakeholder'
       });
     }
@@ -596,14 +628,27 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+            {/* Banner for Placeholder / Dummy Member */}
+            {isDummy && (
+              <div className="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl flex items-start gap-2.5 text-purple-200 animate-fade-in">
+                <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                <div className="space-y-0.5 min-w-0">
+                  <span className="font-bold block text-purple-100">Dummy / Placeholder Stakeholder Profile</span>
+                  <p className="text-[11px] text-purple-300/80 leading-relaxed">
+                    This profile reserves project team capacity and can be assigned tasks immediately. When you attach an email address and save, an official invitation link will be dispatched.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Dummy / Placeholder Mode Toggle */}
-            <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-xl flex items-center justify-between gap-3">
+            <div className="p-3 bg-slate-950/60 border border-indigo-500/30 rounded-xl flex items-center justify-between gap-3">
               <div>
                 <label className="text-xs font-bold text-indigo-200 block cursor-pointer">
-                  Create as Dummy / Placeholder Stakeholder
+                  Create as Dummy / Placeholder Member (No Email Required)
                 </label>
                 <p className="text-[11px] text-slate-400">
-                  Reserve team allocation before assigning a real person. You can attach their email later to send an invitation link.
+                  Allocate tasks, sprint workload, and RACI roles now without sending an email invite.
                 </p>
               </div>
               <input
@@ -624,7 +669,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
             <div ref={nameInputContainerRef} className="relative">
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-slate-300 font-semibold">
-                  Full Name {isDummy ? '(Optional)' : '*'}
+                  Full Name {isDummy ? '(Optional / Role Placeholder)' : '*'}
                 </label>
                 {!isDummy && (
                   <span className="text-[10px] text-slate-400">
@@ -634,7 +679,6 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
               </div>
               <input
                 type="text"
-                required={!isDummy}
                 disabled={!isEditable}
                 value={name}
                 onFocus={() => setIsNameDropdownOpen(true)}
@@ -642,7 +686,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
                   setName(e.target.value);
                   setIsNameDropdownOpen(true);
                 }}
-                placeholder={isDummy ? "e.g. Lead Frontend Engineer (Unassigned)" : "e.g. Sarah Jenkins"}
+                placeholder={isDummy ? "e.g. Lead Project Manager (Unassigned)" : "e.g. Sarah Jenkins"}
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               />
 
@@ -700,19 +744,25 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
                   onChange={(e) => setCategory(e.target.value as StakeholderCategory)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <option value="internal">🏢 Internal Stakeholder</option>
+                  <option value="internal">🏢 Internal Stakeholder / PM</option>
                   <option value="external">🌐 External Stakeholder</option>
                 </select>
               </div>
 
               {/* Email Address with Autocomplete */}
               <div ref={emailInputContainerRef} className="relative">
-                <label className="block text-slate-300 font-semibold mb-1">
-                  Email Address {isDummy ? '(Optional / Pending)' : '*'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-300 font-semibold">
+                    Email Address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  {!email && (
+                    <span className="text-[10px] text-purple-300 font-medium">
+                      Dummy mode if blank
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
-                  required={!isDummy}
                   disabled={!isEditable}
                   value={email}
                   onFocus={() => setIsEmailDropdownOpen(true)}
@@ -720,7 +770,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
                     setEmail(e.target.value);
                     setIsEmailDropdownOpen(true);
                   }}
-                  placeholder={isDummy ? "pending.invite@company.com" : "sarah.j@company.com"}
+                  placeholder="Leave blank for dummy member, or enter email to invite"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
 
@@ -758,15 +808,15 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
               </div>
             </div>
 
-            {/* Trigger Email Invitation option */}
-            {!isDummy && (
-              <div className="p-3 bg-teal-950/40 border border-teal-500/20 rounded-xl flex items-center justify-between gap-3">
+            {/* Trigger Email Invitation option (shown when email is provided) */}
+            {email && email.includes('@') && !email.includes('@placeholder') && (
+              <div className="p-3 bg-teal-950/40 border border-teal-500/20 rounded-xl flex items-center justify-between gap-3 animate-fade-in">
                 <div>
                   <label className="text-xs font-bold text-teal-300 block cursor-pointer">
-                    📧 Trigger Email Invitation with Join Link
+                    📧 Dispatch Project Invitation with Join Link
                   </label>
                   <p className="text-[11px] text-slate-400">
-                    Automatically generates a personal project invitation link and opens the invitation email composer upon saving.
+                    Sends an invitation email with a secure join link so the recipient can join this project and take over this profile.
                   </p>
                 </div>
                 <input
@@ -779,38 +829,70 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
               </div>
             )}
 
+            {/* Role & Canonical Role Selection */}
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-slate-300 font-semibold">
-                  Role / Job Title *
+                  Canonical Project Role *
                 </label>
-                {!canEditRole && category === 'internal' && (
-                  <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
-                    <Lock className="w-3 h-3 text-amber-400" />
-                    Admin Governance Only
-                  </span>
-                )}
-                {canEditRole && isAdmin && category === 'internal' && (
+                {canManageRoles && (
                   <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
                     <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                    Admin Authorized
+                    Role Managed by {isAdmin ? 'Admin' : 'Project Manager'}
                   </span>
                 )}
               </div>
-              <input
-                type="text"
-                required
-                disabled={!isEditable || (!canEditRole && !role)}
+
+              {/* Canonical Role Selector */}
+              <select
+                disabled={!isEditable || !canEditRole}
                 value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder={category === 'internal' ? 'e.g. Lead QA Engineer (Admin Set)' : 'e.g. Client Project Director'}
-                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
-              />
-              {!canEditRole && category === 'internal' && !role && (
-                <p className="text-[11px] text-amber-300/80 mt-1 flex items-center gap-1">
-                  <Lock className="w-3 h-3 shrink-0" />
-                  <span>Internal stakeholder roles are governed by the Executive Admin. Selecting from the directory automatically applies certified titles.</span>
-                </p>
+                onChange={(e) => {
+                  const selectedRole = e.target.value as AppRole;
+                  setRole(selectedRole);
+                  if (selectedRole !== 'Developer (Team member)') {
+                    setIsDualPMDev(false);
+                  }
+                  if (selectedRole === 'Admin') setHourlyRate(175);
+                  else if (selectedRole === 'Project Manager') setHourlyRate(120);
+                  else if (selectedRole === 'Developer (Team member)') setHourlyRate(100);
+                  else if (selectedRole === 'Tester (Team Member)') setHourlyRate(90);
+                  else if (selectedRole === 'UI/UX Dev (Team Member)') setHourlyRate(95);
+                }}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-slate-100 font-medium outline-none focus:border-teal-500 text-xs disabled:opacity-60 disabled:cursor-not-allowed mb-2.5"
+              >
+                {APP_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+
+              {/* Dual Role Toggle: Developer + PM */}
+              {(role === 'Developer (Team member)' || isDualPMDev) && (
+                <div className="p-3 bg-amber-950/30 border border-amber-500/30 rounded-xl flex items-start justify-between gap-3 animate-fade-in mb-2.5">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                      <label className="text-xs font-bold text-amber-200 cursor-pointer">
+                        Enable Dual Role: Developer & Project Manager
+                      </label>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                        Hybrid PM Access
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-300/80 leading-relaxed">
+                      Grants full Project Manager privileges (managing sprints, WBS, team roles, and budget) while keeping developer task ownership and assignment. Handled by PM and Admin roles only.
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    disabled={!isEditable || !canEditRole}
+                    checked={isDualPMDev}
+                    onChange={(e) => setIsDualPMDev(e.target.checked)}
+                    className="w-4 h-4 accent-amber-500 cursor-pointer rounded mt-0.5"
+                  />
+                </div>
               )}
             </div>
 
@@ -841,7 +923,7 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
                   disabled={!isEditable}
                   value={skillsStr}
                   onChange={(e) => setSkillsStr(e.target.value)}
-                  placeholder="e.g. React, Docker, Security (Optional)"
+                  placeholder="e.g. Project Management, Agile, React (Optional)"
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-100 outline-none focus:border-teal-500 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
@@ -858,10 +940,22 @@ export const StakeholderModal: React.FC<StakeholderModalProps> = ({
               {isEditable ? (
                 <button
                   type="submit"
-                  className="px-4 sm:px-5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs shadow-md shadow-teal-600/20 whitespace-nowrap shrink-0 flex items-center gap-1.5"
+                  className={`px-4 sm:px-5 py-2 rounded-xl text-white font-semibold text-xs shadow-md whitespace-nowrap shrink-0 flex items-center gap-1.5 transition-all ${
+                    !email || isDummy
+                      ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'
+                      : triggerInvite
+                      ? 'bg-teal-600 hover:bg-teal-500 shadow-teal-600/20'
+                      : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20'
+                  }`}
                 >
                   <UserCheck className="w-4 h-4" />
-                  <span>{stakeholderToEdit ? 'Save Changes' : 'Add to Project Team'}</span>
+                  <span>
+                    {!email || isDummy
+                      ? (stakeholderToEdit ? 'Save Placeholder Profile' : 'Create Dummy Member')
+                      : triggerInvite
+                      ? 'Save & Send Invite'
+                      : (stakeholderToEdit ? 'Save Changes' : 'Add Team Member')}
+                  </span>
                 </button>
               ) : (
                 <button

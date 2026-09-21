@@ -7,6 +7,7 @@ import {
   LeaveStatus,
   LeaveType,
   UserRole,
+  AppRole,
   StandardRateCard,
   OrganizationSettings,
   PortfolioInsight
@@ -18,9 +19,11 @@ import {
   DEFAULT_RATE_CARDS,
   CrossProjectMemberWorkload
 } from '../../utils/portfolioAndLeaveUtils';
+import { normalizeToAppRole, getAppRoleBadge, APP_ROLES } from '../../utils/roleUtils';
 import { LeaveRequestModal } from './LeaveRequestModal';
 import { LeaveManagement } from './LeaveManagement';
 import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
+import { PMAssignProjectModal } from '../dashboard/PMAssignProjectModal';
 import {
   Building2,
   TrendingUp,
@@ -105,10 +108,12 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<'all' | LeaveType>('all');
   const [resourceFilter, setResourceFilter] = useState<'all' | 'overallocated' | 'on_leave' | 'available'>('all');
   const [selectedTechSkillFilter, setSelectedTechSkillFilter] = useState<string>('all');
-  const [stakeholderRoleFilter, setStakeholderRoleFilter] = useState<'all' | 'pm' | 'developer' | 'qa_design' | 'admin'>('all');
+  const [stakeholderRoleFilter, setStakeholderRoleFilter] = useState<'all' | 'pm' | 'developer' | 'tester' | 'uiux' | 'admin'>('all');
 
   // Modals state
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [isAssignPmModalOpen, setIsAssignPmModalOpen] = useState(false);
+  const [selectedProjectIdForAssign, setSelectedProjectIdForAssign] = useState<string | undefined>(undefined);
   const [selectedUserForLeave, setSelectedUserForLeave] = useState<string | undefined>(undefined);
   const [selectedStakeholderForReportCard, setSelectedStakeholderForReportCard] = useState<Stakeholder | null>(null);
   const [editingRateCard, setEditingRateCard] = useState<StandardRateCard | null>(null);
@@ -175,8 +180,12 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
       userProfile?: typeof allUsers[0];
       assignedProjects: { projectId: string; projectCode: string; projectName: string; role: string; assignedTasksCount: number }[];
       skills: string[];
+      normRole: AppRole;
+      isAdmin: boolean;
       isPM: boolean;
       isDeveloper: boolean;
+      isTester: boolean;
+      isUiUx: boolean;
       isQaOrDesign: boolean;
       totalTasks: number;
       completedTasks: number;
@@ -189,13 +198,17 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
         const existing = map.get(key);
         const projectTasks = (proj.tasks || []).filter(t => (t.assigneeIds || []).includes(sh.id));
         const projRole = sh.role || 'Contributor';
-        const roleLower = projRole.toLowerCase();
-        const isPmRole = roleLower.includes('manager') || roleLower.includes('pm') || roleLower.includes('master') || roleLower.includes('lead');
-        const isDevRole = roleLower.includes('dev') || roleLower.includes('engineer') || roleLower.includes('architect') || roleLower.includes('full') || roleLower.includes('backend') || roleLower.includes('frontend');
-        const isQaDesign = roleLower.includes('qa') || roleLower.includes('test') || roleLower.includes('design') || roleLower.includes('ux') || roleLower.includes('ui');
+        const matchedUser = allUsers.find(u => u.email.toLowerCase() === key || u.id === sh.id);
+        const rawRole = projRole || sh.appRole || matchedUser?.appRole || matchedUser?.role || matchedUser?.title || '';
+        const normRole: AppRole = normalizeToAppRole(rawRole);
+        const isPmRole = normRole === 'Project Manager' || matchedUser?.role === 'pm' || sh.isDualPMDev || matchedUser?.isDualPMDev;
+        const isAdminRole = normRole === 'Admin' || matchedUser?.role === 'admin';
+        const isDevRole = normRole === 'Developer (Team member)';
+        const isTesterRole = normRole === 'Tester (Team Member)';
+        const isUiUxRole = normRole === 'UI/UX Dev (Team Member)';
+        const isQaDesign = isTesterRole || isUiUxRole;
 
         if (!existing) {
-          const matchedUser = allUsers.find(u => u.email.toLowerCase() === key || u.id === sh.id);
           const initialSkills = Array.from(new Set([...(sh.skills || []), ...(matchedUser?.title ? [matchedUser.title] : [])]));
           map.set(key, {
             stakeholder: sh,
@@ -208,8 +221,12 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
               assignedTasksCount: projectTasks.length
             }],
             skills: initialSkills,
-            isPM: isPmRole || matchedUser?.role === 'pm',
+            normRole,
+            isAdmin: isAdminRole,
+            isPM: isPmRole,
             isDeveloper: isDevRole,
+            isTester: isTesterRole,
+            isUiUx: isUiUxRole,
             isQaOrDesign: isQaDesign,
             totalTasks: projectTasks.length,
             completedTasks: projectTasks.filter(t => t.status === 'done').length
@@ -219,8 +236,11 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
           sh.skills?.forEach(s => {
             if (!existing.skills.includes(s)) existing.skills.push(s);
           });
+          if (isAdminRole) existing.isAdmin = true;
           if (isPmRole) existing.isPM = true;
           if (isDevRole) existing.isDeveloper = true;
+          if (isTesterRole) existing.isTester = true;
+          if (isUiUxRole) existing.isUiUx = true;
           if (isQaDesign) existing.isQaOrDesign = true;
           existing.totalTasks += projectTasks.length;
           existing.completedTasks += projectTasks.filter(t => t.status === 'done').length;
@@ -241,10 +261,14 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
     allUsers.forEach(u => {
       if (u.role === 'admin' || u.email.toLowerCase() === 'admin@apex.io') return;
       const key = u.email.toLowerCase();
-      const roleLower = (u.title || u.role).toLowerCase();
-      const isPmRole = u.role === 'pm' || roleLower.includes('pm') || roleLower.includes('manager');
-      const isDevRole = roleLower.includes('dev') || roleLower.includes('engineer') || roleLower.includes('architect');
-      const isQaDesign = roleLower.includes('qa') || roleLower.includes('design') || roleLower.includes('ux');
+      const rawRole = u.appRole || u.title || u.role || '';
+      const normRole: AppRole = normalizeToAppRole(rawRole);
+      const isPmRole = normRole === 'Project Manager' || u.role === 'pm' || u.isDualPMDev;
+      const isAdminRole = normRole === 'Admin' || u.role === 'admin';
+      const isDevRole = normRole === 'Developer (Team member)';
+      const isTesterRole = normRole === 'Tester (Team Member)';
+      const isUiUxRole = normRole === 'UI/UX Dev (Team Member)';
+      const isQaDesign = isTesterRole || isUiUxRole;
 
       if (!map.has(key)) {
         map.set(key, {
@@ -252,7 +276,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
             id: u.id,
             name: u.name,
             email: u.email,
-            role: u.title || (u.role === 'pm' ? 'Project Manager' : 'Team Contributor'),
+            role: u.title || (u.role === 'pm' ? 'Project Manager' : 'Developer (Team member)'),
             avatar: u.avatar,
             hourlyRate: u.hourlyRate || 95,
             weeklyCapacityHours: u.weeklyCapacityHours || 40,
@@ -262,8 +286,12 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
           userProfile: u,
           assignedProjects: [],
           skills: ['Full-Stack', 'Engineering', 'Agile'],
+          normRole,
+          isAdmin: isAdminRole,
           isPM: isPmRole,
-          isDeveloper: isDevRole || (!isPmRole && !isQaDesign),
+          isDeveloper: isDevRole,
+          isTester: isTesterRole,
+          isUiUx: isUiUxRole,
           isQaOrDesign: isQaDesign,
           totalTasks: 0,
           completedTasks: 0
@@ -294,10 +322,11 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
   const filteredPortfolioStakeholders = useMemo(() => {
     return allPortfolioStakeholders.filter(item => {
       // Role filter
-      if (stakeholderRoleFilter === 'pm' && !item.isPM && item.userProfile?.role !== 'pm') return false;
-      if (stakeholderRoleFilter === 'admin' && item.userProfile?.role !== 'admin') return false;
+      if (stakeholderRoleFilter === 'pm' && !item.isPM) return false;
       if (stakeholderRoleFilter === 'developer' && !item.isDeveloper) return false;
-      if (stakeholderRoleFilter === 'qa_design' && !item.isQaOrDesign) return false;
+      if (stakeholderRoleFilter === 'tester' && !item.isTester) return false;
+      if (stakeholderRoleFilter === 'uiux' && !item.isUiUx) return false;
+      if (stakeholderRoleFilter === 'admin' && !item.isAdmin) return false;
 
       // Tech skill filter
       if (selectedTechSkillFilter !== 'all') {
@@ -347,32 +376,44 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
   return (
     <div className="space-y-6 pb-16">
       {/* Top Banner: Executive Operations & PMO Command Center */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 p-4 sm:p-6 md:p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-gradient-to-br dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900 border border-slate-200 dark:border-slate-800 p-4 sm:p-6 md:p-8 shadow-xs">
         <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 sm:w-64 h-48 sm:h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 -mb-12 w-60 sm:w-80 h-60 sm:h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-6">
           <div className="space-y-1 sm:space-y-2">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-700 dark:text-amber-300 text-[10px] sm:text-xs font-semibold uppercase tracking-wider">
               <Building2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               <span>Executive PMO &amp; Portfolio Operations Hub</span>
             </div>
-            <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight">
+            <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Organization Command Center
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed line-clamp-2 sm:line-clamp-none">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 max-w-2xl leading-relaxed line-clamp-2 sm:line-clamp-none">
               Multi-project governance, cross-initiative resource capacity, leave availability blocking, commercial margin tracking, and automated PMO decision intelligence.
             </p>
           </div>
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap pt-1 sm:pt-0 shrink-0">
+            {isAdmin && (
+              <button
+                onClick={() => {
+                  setSelectedProjectIdForAssign(undefined);
+                  setIsAssignPmModalOpen(true);
+                }}
+                className="flex-1 sm:flex-none px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5 sm:gap-2 transition-all"
+              >
+                <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="whitespace-nowrap">Assign PMs</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 setSelectedUserForLeave(undefined);
                 setIsLeaveModalOpen(true);
               }}
-              className="flex-1 sm:flex-none px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-1.5 sm:gap-2 transition-all"
+              className="flex-1 sm:flex-none px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 sm:gap-2 transition-all"
             >
               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="whitespace-nowrap">{isAdmin ? 'Log / Approve Leave' : 'Request Leave'}</span>
@@ -388,77 +429,77 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
         </div>
 
         {/* Global Portfolio KPI Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-800/80">
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-200 dark:border-slate-800/80">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Contract Value</span>
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+              <DollarSign className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <p className="text-lg font-extrabold text-white font-mono">
+            <p className="text-lg font-extrabold text-slate-900 dark:text-white font-mono">
               ${(portfolioStats.totalContract / 1000).toFixed(0)}k
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">{portfolioStats.projectsCount} Active Projects</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">{portfolioStats.projectsCount} Active Projects</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Actual Cost (AC)</span>
-              <TrendingUp className="w-3.5 h-3.5 text-indigo-400" />
+              <TrendingUp className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
             </div>
-            <p className="text-lg font-extrabold text-indigo-300 font-mono">
+            <p className="text-lg font-extrabold text-indigo-700 dark:text-indigo-300 font-mono">
               ${(portfolioStats.totalActual / 1000).toFixed(0)}k
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">EV: ${(portfolioStats.totalEarned / 1000).toFixed(0)}k</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">EV: ${(portfolioStats.totalEarned / 1000).toFixed(0)}k</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Gross Margin</span>
-              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <Award className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
             </div>
             <p className={`text-lg font-extrabold font-mono ${
-              portfolioStats.portfolioMarginPercent >= 30 ? 'text-emerald-400' : 'text-amber-400'
+              portfolioStats.portfolioMarginPercent >= 30 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
             }`}>
               {portfolioStats.portfolioMarginPercent}%
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">${(portfolioStats.portfolioMarginDollars / 1000).toFixed(0)}k Projected</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">${(portfolioStats.portfolioMarginDollars / 1000).toFixed(0)}k Projected</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Portfolio CPI</span>
-              <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
+              <BarChart3 className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
             </div>
             <p className={`text-lg font-extrabold font-mono ${
-              portfolioStats.portfolioCPI >= 1.0 ? 'text-emerald-400' : 'text-rose-400'
+              portfolioStats.portfolioCPI >= 1.0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
             }`}>
               {portfolioStats.portfolioCPI.toFixed(2)}
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Cost Efficiency</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Cost Efficiency</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Portfolio SPI</span>
-              <Clock className="w-3.5 h-3.5 text-purple-400" />
+              <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
             </div>
             <p className={`text-lg font-extrabold font-mono ${
-              portfolioStats.portfolioSPI >= 1.0 ? 'text-emerald-400' : 'text-amber-400'
+              portfolioStats.portfolioSPI >= 1.0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
             }`}>
               {portfolioStats.portfolioSPI.toFixed(2)}
             </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Schedule Velocity</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">Schedule Velocity</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
-            <div className="flex items-center justify-between text-slate-400 text-xs mb-1">
+          <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 text-xs mb-1 font-medium">
               <span>Leaves on Record</span>
-              <Plane className="w-3.5 h-3.5 text-sky-400" />
+              <Plane className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
             </div>
-            <p className="text-lg font-extrabold text-sky-300 font-mono">
+            <p className="text-lg font-extrabold text-sky-700 dark:text-sky-300 font-mono">
               {leaves.length}
             </p>
-            <p className="text-[10px] text-amber-400 mt-0.5">
+            <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5 font-semibold">
               {leaves.filter(l => l.status === 'pending').length} Pending Approval
             </p>
           </div>
@@ -469,14 +510,14 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
       <div className="space-y-3">
         {/* Mobile Dropdown View (< lg) */}
         <div className="block lg:hidden">
-          <label className="block text-xs font-bold text-slate-400 mb-1.5 uppercase tracking-wider">
+          <label className="block text-xs font-bold text-slate-700 dark:text-slate-400 mb-1.5 uppercase tracking-wider">
             Portfolio Navigation View
           </label>
           <div className="relative">
             <select
               value={activeTab}
               onChange={(e) => setActiveTab(e.target.value as any)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-xs font-semibold text-slate-100 focus:outline-none focus:border-indigo-500 appearance-none pr-10 shadow-lg"
+              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl px-4 py-3 text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500 appearance-none pr-10 shadow-sm"
             >
               <option value="portfolio">📂 Multi-Project Portfolio ({projectsArray.length})</option>
               <option value="resources">👥 Cross-Project Workloads ({memberWorkloads.length})</option>
@@ -488,7 +529,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
               <option value="insights">✨ AI Decision Intelligence ({portfolioInsights.length})</option>
               {isAdmin && <option value="access">🛡️ Roles &amp; PM Assignment</option>}
             </select>
-            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+            <div className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 dark:text-slate-400 font-bold">
               ▼
             </div>
           </div>
@@ -636,20 +677,20 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="text-base font-bold text-slate-100">Enterprise Project Roster</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">Enterprise Project Roster</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
                 Comparative status, earned value parameters, assigned PMs, and real-time execution health.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <div className="relative w-full sm:w-auto">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400" />
                 <input
                   type="text"
                   placeholder="Search projects or PM..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full sm:w-64 pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl text-xs text-slate-900 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
                 />
               </div>
             </div>
@@ -671,10 +712,10 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                 return (
                   <div
                     key={proj.projectId}
-                    className={`rounded-3xl bg-slate-900/90 border p-5 transition-all flex flex-col justify-between ${
+                    className={`rounded-3xl bg-white dark:bg-slate-900/90 border p-5 transition-all flex flex-col justify-between shadow-2xs ${
                       isCurrentActive
-                        ? 'border-indigo-500 ring-1 ring-indigo-500/50 shadow-xl shadow-indigo-950/40'
-                        : 'border-slate-800 hover:border-slate-700'
+                        ? 'border-indigo-500 ring-2 ring-indigo-500/40 dark:ring-indigo-500/50 shadow-md shadow-indigo-500/10'
+                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                     }`}
                   >
                     <div>
@@ -682,22 +723,22 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                       <div className="flex items-start justify-between gap-3 mb-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-mono font-bold text-indigo-400">
+                            <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-[10px] font-mono font-bold text-indigo-700 dark:text-indigo-400">
                               {proj.projectCode}
                             </span>
                             <span
                               className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase ${
                                 proj.profitabilityStatus === 'healthy'
-                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                  ? 'bg-emerald-50 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30'
                                   : proj.profitabilityStatus === 'at_risk'
-                                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                                  : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                                  ? 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30'
+                                  : 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-500/30'
                               }`}
                             >
                               {proj.profitabilityStatus.replace('_', ' ')}
                             </span>
                           </div>
-                          <h3 className="font-bold text-sm text-slate-100 truncate">{proj.projectName}</h3>
+                          <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">{proj.projectName}</h3>
                         </div>
                         {isCurrentActive && (
                           <span className="px-2 py-1 rounded-xl bg-indigo-600 text-white text-[10px] font-bold tracking-tight shrink-0 shadow-sm">
@@ -706,58 +747,96 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                         )}
                       </div>
 
-                      {/* Lead PM */}
-                      <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800/80 mb-3">
-                        {proj.pmAvatar ? (
-                          <img
-                            src={proj.pmAvatar}
-                            alt={proj.pmName}
-                            className="w-6 h-6 rounded-full object-cover border border-slate-700"
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-indigo-600/30 text-indigo-300 flex items-center justify-center text-[10px] font-bold">
-                            {proj.pmName?.charAt(0) || 'P'}
+                      {/* Assigned Project Managers */}
+                      {(() => {
+                        const fullProj = allProjectsMap[proj.projectId];
+                        const pmIds = Array.from(new Set([
+                          ...(fullProj?.projectManagerIds || []),
+                          ...(fullProj?.projectManagerId ? [fullProj.projectManagerId] : []),
+                          ...(proj.pmId ? [proj.pmId] : [])
+                        ]));
+                        const assignedPms = allUsers.filter(u => pmIds.includes(u.id));
+
+                        return (
+                          <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80 mb-3">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {assignedPms.length > 0 ? (
+                                <div className="flex -space-x-1.5 overflow-hidden shrink-0">
+                                  {assignedPms.map(pm => (
+                                    <img
+                                      key={pm.id}
+                                      src={pm.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(pm.name)}`}
+                                      alt={pm.name}
+                                      title={`${pm.name} (${pm.title || 'Project Manager'})`}
+                                      className="inline-block w-6 h-6 rounded-full ring-2 ring-white dark:ring-slate-900 object-cover"
+                                    />
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-600/30 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                                  {proj.pmName?.charAt(0) || 'P'}
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-none font-medium">
+                                  {assignedPms.length > 1 ? `Project Managers (${assignedPms.length})` : 'Project Manager'}
+                                </p>
+                                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate mt-0.5">
+                                  {assignedPms.length > 0
+                                    ? assignedPms.map(p => p.name).join(', ')
+                                    : proj.pmName || 'Unassigned'}
+                                </p>
+                              </div>
+                            </div>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProjectIdForAssign(proj.projectId);
+                                  setIsAssignPmModalOpen(true);
+                                }}
+                                className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline shrink-0"
+                              >
+                                Manage PMs
+                              </button>
+                            )}
                           </div>
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] text-slate-400 leading-none">Lead Project Manager</p>
-                          <p className="text-xs font-semibold text-slate-200 truncate mt-0.5">{proj.pmName}</p>
-                        </div>
-                      </div>
+                        );
+                      })()}
 
                       {/* Financial Metrics */}
                       <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                        <div className="p-2 rounded-xl bg-slate-950/40 border border-slate-850">
-                          <span className="text-[10px] text-slate-400 block">Contract Budget</span>
-                          <span className="font-mono font-bold text-slate-200">
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Contract Budget</span>
+                          <span className="font-mono font-bold text-slate-900 dark:text-slate-200">
                             ${proj.contractValue.toLocaleString()}
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-slate-950/40 border border-slate-850">
-                          <span className="text-[10px] text-slate-400 block">Gross Margin</span>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Gross Margin</span>
                           <span
                             className={`font-mono font-bold ${
-                              proj.grossMarginPercent >= 30 ? 'text-emerald-400' : 'text-amber-400'
+                              proj.grossMarginPercent >= 30 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
                             }`}
                           >
                             {proj.grossMarginPercent}% (${proj.grossMarginDollars.toLocaleString()})
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-slate-950/40 border border-slate-850">
-                          <span className="text-[10px] text-slate-400 block">CPI (Cost Eff.)</span>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">CPI (Cost Eff.)</span>
                           <span
                             className={`font-mono font-bold ${
-                              proj.costEfficiencyIndex >= 1.0 ? 'text-emerald-400' : 'text-rose-400'
+                              proj.costEfficiencyIndex >= 1.0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
                             }`}
                           >
                             {proj.costEfficiencyIndex.toFixed(2)}
                           </span>
                         </div>
-                        <div className="p-2 rounded-xl bg-slate-950/40 border border-slate-850">
-                          <span className="text-[10px] text-slate-400 block">SPI (Schedule)</span>
+                        <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-slate-850">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">SPI (Schedule)</span>
                           <span
                             className={`font-mono font-bold ${
-                              proj.scheduleEfficiencyIndex >= 1.0 ? 'text-emerald-400' : 'text-amber-400'
+                              proj.scheduleEfficiencyIndex >= 1.0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'
                             }`}
                           >
                             {proj.scheduleEfficiencyIndex.toFixed(2)}
@@ -767,7 +846,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                     </div>
 
                     {/* Actions */}
-                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
                       <span className="text-[10px] text-slate-500 font-mono">ID: {proj.projectId}</span>
                       <button
                         onClick={async () => {
@@ -776,7 +855,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                             onSwitchToProjectView(proj.projectId);
                           }
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all"
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-600 dark:bg-slate-800 dark:hover:bg-indigo-600 text-slate-700 hover:text-white dark:text-slate-200 dark:hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs border border-slate-200 dark:border-transparent"
                       >
                         <span>Open Workspace</span>
                         <ChevronRight className="w-3.5 h-3.5" />
@@ -998,7 +1077,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
             </div>
 
             {/* Quick KPI Role Counters */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2 border-t border-slate-800">
               <button
                 onClick={() => setStakeholderRoleFilter(stakeholderRoleFilter === 'pm' ? 'all' : 'pm')}
                 className={`p-3.5 rounded-2xl text-left transition-all border ${
@@ -1012,7 +1091,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                   <Briefcase className="w-3.5 h-3.5 text-indigo-400" />
                 </div>
                 <p className="text-xl font-black font-mono">
-                  {allPortfolioStakeholders.filter(s => s.isPM || s.userProfile?.role === 'pm').length}
+                  {allPortfolioStakeholders.filter(s => s.isPM).length}
                 </p>
                 <span className="text-[10px] text-indigo-400">Click to filter PMs</span>
               </button>
@@ -1026,7 +1105,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-400">Tech & Developers</span>
+                  <span className="text-[11px] font-semibold text-slate-400">Developer (Team member)</span>
                   <Code className="w-3.5 h-3.5 text-emerald-400" />
                 </div>
                 <p className="text-xl font-black font-mono">
@@ -1036,21 +1115,39 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
               </button>
 
               <button
-                onClick={() => setStakeholderRoleFilter(stakeholderRoleFilter === 'qa_design' ? 'all' : 'qa_design')}
+                onClick={() => setStakeholderRoleFilter(stakeholderRoleFilter === 'tester' ? 'all' : 'tester')}
                 className={`p-3.5 rounded-2xl text-left transition-all border ${
-                  stakeholderRoleFilter === 'qa_design'
+                  stakeholderRoleFilter === 'tester'
                     ? 'bg-purple-600/20 border-purple-500 text-purple-300 shadow-md shadow-purple-600/20'
                     : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-400">QA & UI/UX Design</span>
+                  <span className="text-[11px] font-semibold text-slate-400">Tester (Team Member)</span>
                   <Laptop className="w-3.5 h-3.5 text-purple-400" />
                 </div>
                 <p className="text-xl font-black font-mono">
-                  {allPortfolioStakeholders.filter(s => s.isQaOrDesign).length}
+                  {allPortfolioStakeholders.filter(s => s.isTester).length}
                 </p>
-                <span className="text-[10px] text-purple-400">Click to filter QA/Design</span>
+                <span className="text-[10px] text-purple-400">Click to filter Testers</span>
+              </button>
+
+              <button
+                onClick={() => setStakeholderRoleFilter(stakeholderRoleFilter === 'uiux' ? 'all' : 'uiux')}
+                className={`p-3.5 rounded-2xl text-left transition-all border ${
+                  stakeholderRoleFilter === 'uiux'
+                    ? 'bg-pink-600/20 border-pink-500 text-pink-300 shadow-md shadow-pink-600/20'
+                    : 'bg-slate-950/60 border-slate-800 hover:border-slate-700 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-slate-400">UI/UX Dev (Team Member)</span>
+                  <Laptop className="w-3.5 h-3.5 text-pink-400" />
+                </div>
+                <p className="text-xl font-black font-mono">
+                  {allPortfolioStakeholders.filter(s => s.isUiUx).length}
+                </p>
+                <span className="text-[10px] text-pink-400">Click to filter UI/UX</span>
               </button>
 
               <button
@@ -1066,7 +1163,7 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                   <Shield className="w-3.5 h-3.5 text-amber-400" />
                 </div>
                 <p className="text-xl font-black font-mono">
-                  {allPortfolioStakeholders.filter(s => s.userProfile?.role === 'admin').length}
+                  {allPortfolioStakeholders.filter(s => s.isAdmin).length}
                 </p>
                 <span className="text-[10px] text-amber-400">Click to filter Admins</span>
               </button>
@@ -1141,8 +1238,9 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
               >
                 <option value="all">All Roles</option>
                 <option value="pm">Project Managers</option>
-                <option value="developer">Tech & Developers</option>
-                <option value="qa_design">QA & Designers</option>
+                <option value="developer">Developer (Team member)</option>
+                <option value="tester">Tester (Team Member)</option>
+                <option value="uiux">UI/UX Dev (Team Member)</option>
                 <option value="admin">Executive Admins</option>
               </select>
 
@@ -1351,22 +1449,22 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
             {(orgSettings.rateCards || DEFAULT_RATE_CARDS).map(card => (
               <div
                 key={card.id}
-                className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col justify-between"
+                className="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex flex-col justify-between shadow-2xs"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 font-bold uppercase text-[10px]">
+                    <span className="px-2 py-0.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-bold uppercase text-[10px]">
                       {card.seniority}
                     </span>
-                    <span className="font-mono text-xs text-slate-400">{card.currency}</span>
+                    <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{card.currency}</span>
                   </div>
-                  <h3 className="font-bold text-sm text-slate-100 mb-1">{card.role}</h3>
-                  <div className="mt-3 p-3 rounded-xl bg-slate-950/60 border border-slate-800/80">
-                    <span className="text-[10px] text-slate-400 block">Standard Rate</span>
-                    <p className="text-xl font-extrabold text-white font-mono">
-                      ${card.standardHourlyRate}<span className="text-xs text-slate-400 font-normal">/hr</span>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100 mb-1">{card.role}</h3>
+                  <div className="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Standard Rate</span>
+                    <p className="text-xl font-extrabold text-slate-900 dark:text-white font-mono">
+                      ${card.standardHourlyRate}<span className="text-xs text-slate-500 dark:text-slate-400 font-normal">/hr</span>
                     </p>
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800">
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mt-1 pt-1 border-t border-slate-200 dark:border-slate-800">
                       <span>Min: ${card.minHourlyRate}</span>
                       <span>Max: ${card.maxHourlyRate}</span>
                     </div>
@@ -1744,6 +1842,18 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
           isOpen={!!selectedStakeholderForReportCard}
           onClose={() => setSelectedStakeholderForReportCard(null)}
           onNavigateToProject={onSwitchToProjectView}
+        />
+      )}
+
+      {/* PM Multi-Assignment Modal */}
+      {isAssignPmModalOpen && (
+        <PMAssignProjectModal
+          isOpen={isAssignPmModalOpen}
+          onClose={() => {
+            setIsAssignPmModalOpen(false);
+            setSelectedProjectIdForAssign(undefined);
+          }}
+          preselectedProjectId={selectedProjectIdForAssign}
         />
       )}
     </div>

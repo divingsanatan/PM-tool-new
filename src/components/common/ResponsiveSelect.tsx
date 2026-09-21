@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search, X } from 'lucide-react';
 
 export interface SelectOption {
@@ -24,6 +25,7 @@ interface ResponsiveSelectProps {
   align?: 'auto' | 'left' | 'right';
   id?: string;
   disabled?: boolean;
+  fullWidth?: boolean;
 }
 
 export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
@@ -38,7 +40,8 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
   searchable,
   align = 'auto',
   id,
-  disabled = false
+  disabled = false,
+  fullWidth = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,11 +50,13 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
     left?: number;
     right?: number;
     width: number;
-    alignment: 'left' | 'right' | 'center';
+    maxHeight: number;
+    isUpward: boolean;
   }>({
     top: 0,
-    width: 260,
-    alignment: 'left'
+    width: 280,
+    maxHeight: 320,
+    isUpward: false
   });
 
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -64,41 +69,36 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
   const isSearchEnabled = searchable !== undefined ? searchable : options.length > 6;
 
   // Calculate smart viewport placement
-  const updatePosition = () => {
+  const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
 
     const minMenuWidth = Math.max(rect.width, 240);
-    const maxMenuWidth = Math.min(viewportWidth - 24, 340);
+    const maxMenuWidth = Math.min(viewportWidth - 24, 380);
     const menuWidth = Math.min(Math.max(minMenuWidth, 260), maxMenuWidth);
 
     // Check vertical space (open downward or upward)
     const spaceBelow = viewportHeight - rect.bottom;
     const spaceAbove = rect.top;
-    const shouldOpenUp = spaceBelow < 260 && spaceAbove > spaceBelow;
-    const top = shouldOpenUp ? Math.max(10, rect.top - 270) : rect.bottom + 6;
+    const estimatedHeight = Math.min(340, Math.max(160, (options.length * 44) + (isSearchEnabled ? 50 : 10)));
+    const shouldOpenUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    
+    const availableHeight = shouldOpenUp ? Math.max(160, spaceAbove - 16) : Math.max(160, spaceBelow - 16);
+    const top = shouldOpenUp ? Math.max(8, rect.top - Math.min(availableHeight, estimatedHeight) - 6) : rect.bottom + 6;
 
-    // Check horizontal space
-    let alignment: 'left' | 'right' | 'center' = 'left';
-    let left: number | undefined = rect.left;
+    // Check horizontal alignment
+    let left: number | undefined = undefined;
     let right: number | undefined = undefined;
 
     if (viewportWidth < 640) {
-      // Mobile screen: Center or constrain within 12px margins
-      alignment = 'center';
-      const calculatedLeft = Math.max(12, Math.min(rect.left, viewportWidth - menuWidth - 12));
-      left = calculatedLeft;
-      right = undefined;
-    } else if (align === 'right' || rect.right + menuWidth > viewportWidth || (align === 'auto' && rect.left + menuWidth > viewportWidth)) {
-      alignment = 'right';
-      right = Math.max(12, viewportWidth - rect.right);
-      left = undefined;
-    } else {
-      alignment = 'left';
+      // Mobile screen: Constrain within 12px margin
       left = Math.max(12, Math.min(rect.left, viewportWidth - menuWidth - 12));
-      right = undefined;
+    } else if (align === 'right' || rect.left + menuWidth > viewportWidth - 12) {
+      right = Math.max(12, viewportWidth - rect.right);
+    } else {
+      left = Math.max(12, Math.min(rect.left, viewportWidth - menuWidth - 12));
     }
 
     setMenuPosition({
@@ -106,9 +106,10 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
       left,
       right,
       width: menuWidth,
-      alignment
+      maxHeight: Math.min(380, availableHeight),
+      isUpward: shouldOpenUp
     });
-  };
+  }, [align, options.length, isSearchEnabled]);
 
   useEffect(() => {
     if (isOpen) {
@@ -121,10 +122,12 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
         }, 50);
       }
     }
-  }, [isOpen]);
+  }, [isOpen, updatePosition, isSearchEnabled]);
 
   // Handle outside click & window resize / scroll
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
       if (
         triggerRef.current &&
@@ -137,25 +140,21 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
+      if (e.key === 'Escape') {
         setIsOpen(false);
         triggerRef.current?.focus();
       }
     };
 
     const handleReposition = () => {
-      if (isOpen) {
-        updatePosition();
-      }
+      updatePosition();
     };
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleOutsideClick);
-      document.addEventListener('touchstart', handleOutsideClick);
-      document.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('resize', handleReposition);
-      window.addEventListener('scroll', handleReposition, true);
-    }
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleReposition);
+    window.addEventListener('scroll', handleReposition, true);
 
     return () => {
       document.removeEventListener('mousedown', handleOutsideClick);
@@ -164,7 +163,7 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
       window.removeEventListener('resize', handleReposition);
       window.removeEventListener('scroll', handleReposition, true);
     };
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   const filteredOptions = searchQuery.trim()
     ? options.filter((opt) =>
@@ -181,7 +180,7 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
   };
 
   return (
-    <div className="relative inline-block text-left w-full sm:w-auto min-w-0">
+    <div className={`relative inline-block text-left ${fullWidth ? 'w-full' : 'w-full sm:w-auto'} min-w-0`}>
       {/* Trigger Button */}
       <button
         type="button"
@@ -191,7 +190,7 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
         onClick={() => !disabled && setIsOpen(!isOpen)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        className={`flex items-center justify-between gap-2 px-3 py-2 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all select-none min-h-[40px] sm:min-h-0 w-full sm:w-auto text-left shadow-sm ${
+        className={`flex items-center justify-between gap-2 px-3 py-2 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all select-none min-h-[38px] sm:min-h-0 w-full text-left shadow-sm ${
           disabled
             ? 'opacity-50 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500'
             : isOpen
@@ -199,7 +198,7 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
             : 'bg-slate-950/90 hover:bg-slate-900/90 border-slate-800 hover:border-slate-700 text-slate-200 hover:text-white'
         } ${className}`}
       >
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
           {icon && <span className="shrink-0">{icon}</span>}
           {label && (
             <span className="text-slate-400 font-medium text-xs whitespace-nowrap shrink-0">
@@ -223,13 +222,14 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
         />
       </button>
 
-      {/* Floating Viewport-Safe Menu Portal / Popover */}
-      {isOpen && (
+      {/* Floating Viewport-Safe Menu Portal */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <>
           {/* Mobile Backdrop to prevent accidental touch-through */}
           <div
-            className="fixed inset-0 z-40 bg-black/40 sm:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none"
+            className="fixed inset-0 z-[9998] bg-black/40 sm:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none"
             aria-hidden="true"
+            onClick={() => setIsOpen(false)}
           />
 
           <div
@@ -242,13 +242,13 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
               right: menuPosition.right !== undefined ? `${menuPosition.right}px` : undefined,
               width: `${menuPosition.width}px`,
               maxWidth: 'calc(100vw - 24px)',
-              zIndex: 50
+              zIndex: 9999
             }}
-            className={`overflow-hidden rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 text-xs text-slate-200 ${menuClassName}`}
+            className={`overflow-hidden rounded-2xl bg-slate-900/98 border border-slate-700/90 shadow-2xl backdrop-blur-md transition-all duration-150 animate-in fade-in zoom-in-95 text-xs text-slate-200 ${menuClassName}`}
           >
             {/* Optional Header Search */}
             {isSearchEnabled && (
-              <div className="p-2 border-b border-slate-800 bg-slate-950/60 flex items-center gap-2">
+              <div className="p-2 border-b border-slate-800 bg-slate-950/80 flex items-center gap-2">
                 <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                 <input
                   ref={searchInputRef}
@@ -271,7 +271,10 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
             )}
 
             {/* Options List */}
-            <div className="max-h-64 sm:max-h-72 overflow-y-auto p-1.5 space-y-1 overscroll-contain">
+            <div 
+              style={{ maxHeight: `${menuPosition.maxHeight}px` }}
+              className="overflow-y-auto p-1.5 space-y-1 overscroll-contain custom-scrollbar"
+            >
               {filteredOptions.length === 0 ? (
                 <div className="p-4 text-center text-slate-500 text-xs">
                   No matching options found
@@ -329,7 +332,8 @@ export const ResponsiveSelect: React.FC<ResponsiveSelectProps> = ({
               )}
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

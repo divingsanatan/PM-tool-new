@@ -13,57 +13,48 @@ import { calculateEVMMetrics } from './evm';
 
 export const DEFAULT_RATE_CARDS: StandardRateCard[] = [
   {
-    id: 'rc-exec',
-    role: 'Executive / Program Director',
+    id: 'rc-admin',
+    role: 'Admin',
     seniority: 'executive',
-    standardHourlyRate: 180,
+    standardHourlyRate: 175,
     minHourlyRate: 150,
     maxHourlyRate: 250,
     currency: 'USD'
   },
   {
-    id: 'rc-pm-lead',
-    role: 'Project Manager & Scrum Master',
+    id: 'rc-pm',
+    role: 'Project Manager',
     seniority: 'lead',
     standardHourlyRate: 120,
     minHourlyRate: 95,
-    maxHourlyRate: 150,
+    maxHourlyRate: 160,
     currency: 'USD'
   },
   {
-    id: 'rc-arch-prin',
-    role: 'Principal Software Architect',
-    seniority: 'principal',
-    standardHourlyRate: 145,
-    minHourlyRate: 120,
-    maxHourlyRate: 190,
-    currency: 'USD'
-  },
-  {
-    id: 'rc-eng-sr',
-    role: 'Senior Full Stack Engineer',
-    seniority: 'senior',
-    standardHourlyRate: 110,
-    minHourlyRate: 90,
+    id: 'rc-dev-member',
+    role: 'Developer (Team member)',
+    seniority: 'mid',
+    standardHourlyRate: 100,
+    minHourlyRate: 80,
     maxHourlyRate: 135,
     currency: 'USD'
   },
   {
-    id: 'rc-des-lead',
-    role: 'Lead UI/UX Product Designer',
-    seniority: 'lead',
-    standardHourlyRate: 95,
-    minHourlyRate: 75,
-    maxHourlyRate: 120,
+    id: 'rc-tester',
+    role: 'Tester (Team Member)',
+    seniority: 'mid',
+    standardHourlyRate: 85,
+    minHourlyRate: 70,
+    maxHourlyRate: 110,
     currency: 'USD'
   },
   {
-    id: 'rc-qa-sr',
-    role: 'DevOps & QA Automation Engineer',
-    seniority: 'senior',
+    id: 'rc-uiux',
+    role: 'UI/UX Dev (Team Member)',
+    seniority: 'mid',
     standardHourlyRate: 90,
-    minHourlyRate: 70,
-    maxHourlyRate: 115,
+    minHourlyRate: 75,
+    maxHourlyRate: 120,
     currency: 'USD'
   }
 ];
@@ -352,10 +343,40 @@ export function calculateProjectCommercials(
     ? Math.round((totalBilledActual / totalBilledStandard) * 100)
     : 100;
 
-  // Find PM
-  const pmStakeholder = (project.stakeholders || []).find(
-    s => s.role.toLowerCase().includes('pm') || s.role.toLowerCase().includes('project manager') || s.role.toLowerCase().includes('scrum')
-  );
+  // Find all assigned PMs for this project
+  const pmIdsSet = new Set<string>((project.projectManagerIds || []).map(id => id.toLowerCase()));
+  const pmEmailsSet = new Set<string>((project.projectManagerEmails || []).map(e => e.toLowerCase()));
+  if (project.projectManagerId) pmIdsSet.add(project.projectManagerId.toLowerCase());
+  if (project.projectManagerEmail) pmEmailsSet.add(project.projectManagerEmail.toLowerCase());
+
+  const assignedPms: { id: string; name: string; email: string; avatar?: string; title?: string }[] = [];
+  const seenPmKeys = new Set<string>();
+
+  (project.stakeholders || []).forEach(s => {
+    const sId = (s.id || '').toLowerCase();
+    const sEmail = (s.email || '').toLowerCase();
+    const isExplicitPM = pmIdsSet.has(sId) || pmEmailsSet.has(sEmail);
+    const isRolePM = s.appRole === 'Project Manager' ||
+      s.role.toLowerCase().includes('project manager') ||
+      s.role.toLowerCase().includes('scrum master') ||
+      s.role.toLowerCase().includes('lead pm') ||
+      Boolean(s.isDualPMDev);
+
+    if ((isExplicitPM || (pmIdsSet.size === 0 && isRolePM)) && !seenPmKeys.has(sEmail || sId)) {
+      seenPmKeys.add(sEmail || sId);
+      assignedPms.push({
+        id: s.id,
+        name: s.name,
+        email: s.email,
+        avatar: s.avatar,
+        title: s.role
+      });
+    }
+  });
+
+  const pmNames = assignedPms.map(p => p.name);
+  const primaryPm = assignedPms[0];
+  const pmName = pmNames.length > 0 ? pmNames.join(', ') : 'Unassigned';
 
   let profitabilityStatus: ProjectCommercials['profitabilityStatus'] = 'healthy';
   if (grossMarginPercent < 15 || metrics.cpi < 0.85) {
@@ -368,8 +389,11 @@ export function calculateProjectCommercials(
     projectId: project.id,
     projectName: project.projectName,
     projectCode: project.projectCode,
-    pmName: pmStakeholder?.name || 'Assigned PM',
-    pmAvatar: pmStakeholder?.avatar,
+    pmName,
+    pmAvatar: primaryPm?.avatar,
+    pmNames,
+    projectManagerIds: project.projectManagerIds || (primaryPm ? [primaryPm.id] : []),
+    pms: assignedPms,
     contractValue,
     plannedCost,
     actualCost,
@@ -840,9 +864,22 @@ export function calculateCrossProjectPMPerformance(
   const pmUsersList: UserProfile[] = [];
   const seenIds = new Set<string>();
 
-  // Add only users with explicit PM role (never Admin)
+  // Add all users with PM role or PM capabilities (including dummy/placeholder PMs, strictly exclude Admin)
   allUsers.forEach(u => {
-    if (u.role === 'pm' && !seenIds.has(u.id) && !adminEmails.has(u.email.toLowerCase())) {
+    const roleLower = (u.role || '').toLowerCase();
+    const appRoleLower = (u.appRole || '').toLowerCase();
+    const titleLower = (u.title || '').toLowerCase();
+    const isPM =
+      roleLower === 'pm' ||
+      roleLower === 'project manager' ||
+      appRoleLower === 'project manager' ||
+      titleLower.includes('pm') ||
+      titleLower.includes('project manager') ||
+      titleLower.includes('scrum') ||
+      Boolean(u.isDualPMDev) ||
+      Boolean(u.hasPMAccess);
+
+    if (isPM && !seenIds.has(u.id) && !adminEmails.has(u.email.toLowerCase())) {
       seenIds.add(u.id);
       pmUsersList.push(u);
     }
@@ -906,28 +943,26 @@ export function calculateCrossProjectPMPerformance(
     const uniqueTeamMemberIds = new Set<string>();
 
     projects.forEach((proj, idx) => {
+      const pmIdLower = (pm.id || '').toLowerCase();
+      const pmEmailLower = (pm.email || '').toLowerCase();
+
+      const pmIdsSet = new Set<string>((proj.projectManagerIds || []).map(id => id.toLowerCase()));
+      const pmEmailsSet = new Set<string>((proj.projectManagerEmails || []).map(e => e.toLowerCase()));
+      if (proj.projectManagerId) pmIdsSet.add(proj.projectManagerId.toLowerCase());
+      if (proj.projectManagerEmail) pmEmailsSet.add(proj.projectManagerEmail.toLowerCase());
+
+      const isExplicitInProjectArrays = pmIdsSet.has(pmIdLower) || pmEmailsSet.has(pmEmailLower);
+
       const isLeadOnProject = (proj.stakeholders || []).some(
-        s => (s.id === pm.id || s.email.toLowerCase() === pm.email.toLowerCase()) &&
-             (s.role.toLowerCase().includes('manager') || s.role.toLowerCase().includes('master') || s.role.toLowerCase().includes('lead') || s.role.toLowerCase().includes('director') || s.role.toLowerCase().includes('pm'))
+        s => (s.id?.toLowerCase() === pmIdLower || s.email?.toLowerCase() === pmEmailLower) &&
+             (s.appRole === 'Project Manager' || s.role?.toLowerCase().includes('manager') || s.role?.toLowerCase().includes('master') || s.role?.toLowerCase().includes('lead') || s.role?.toLowerCase().includes('director') || s.role?.toLowerCase().includes('pm') || Boolean(s.isDualPMDev))
       );
 
-      // If PM is explicit lead, OR if fallback round-robin assignment based on PM count
-      let shouldInclude = isLeadOnProject;
-      if (!shouldInclude && !isUserAdmin) {
-        // If this PM has no projects yet and this project has no other PM, map it
-        const hasOtherExplicitPM = (proj.stakeholders || []).some(
-          s => s.id !== pm.id && s.email.toLowerCase() !== pm.email.toLowerCase() &&
-               (s.role.toLowerCase().includes('manager') || s.role.toLowerCase().includes('master') || s.role.toLowerCase().includes('pm'))
-        );
-        if (!hasOtherExplicitPM && idx % pmUsersList.length === pmUsersList.indexOf(pm)) {
-          shouldInclude = true;
-        }
-      }
-
-      // For admin (e.g. Sophia Martinez), if they oversee governance across projects or specific flag
-      if (isUserAdmin && projects.length > 0) {
-        // Admin oversees all or assigned projects
-        shouldInclude = isLeadOnProject || idx === 0 || idx === 2;
+      let shouldInclude = false;
+      if (isExplicitInProjectArrays) {
+        shouldInclude = true;
+      } else if (pmIdsSet.size === 0 && isLeadOnProject) {
+        shouldInclude = true;
       }
 
       if (shouldInclude) {
@@ -999,46 +1034,6 @@ export function calculateCrossProjectPMPerformance(
         });
       }
     });
-
-    // If PM has no assigned projects yet, assign the primary project as default view
-    if (managedProjects.length === 0 && projects.length > 0) {
-      const defaultProj = projects[0];
-      const evm = calculateEVMMetrics(defaultProj.tasks || [], defaultProj.budget || 200000, defaultProj.subtasks || [], defaultProj.stakeholders || []);
-      const tasks = defaultProj.tasks || [];
-      const completedTasks = tasks.filter(t => t.status === 'done').length;
-      managedProjects.push({
-        projectId: defaultProj.id,
-        projectName: defaultProj.projectName,
-        projectCode: defaultProj.projectCode,
-        description: defaultProj.description,
-        budget: defaultProj.budget,
-        startDate: defaultProj.startDate,
-        targetEndDate: defaultProj.targetEndDate,
-        health: 'on_track',
-        spi: evm.spi,
-        cpi: evm.cpi,
-        evm: {
-          plannedValue: evm.plannedValue,
-          earnedValue: evm.earnedValue,
-          actualCost: evm.actualCost,
-          eac: evm.eac
-        },
-        completionPercent: tasks.length > 0 ? Math.round((completedTasks / tasks.length) * 100) : 0,
-        totalTasks: tasks.length,
-        completedTasks,
-        inProgressTasks: tasks.filter(t => t.status === 'in_progress').length,
-        blockedTasks: tasks.filter(t => t.status === 'blocked').length,
-        overdueTasks: tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < todayStr).length,
-        openRisksCount: (defaultProj.raidItems || []).filter(r => r.type === 'risk').length,
-        criticalRisksCount: 0,
-        openIssuesCount: (defaultProj.raidItems || []).filter(r => r.type === 'issue').length,
-        pendingCRsCount: (defaultProj.changeRequests || []).filter(c => c.status === 'submitted').length,
-        milestonesTotal: (defaultProj.milestones || []).length,
-        milestonesAchieved: (defaultProj.milestones || []).filter(m => m.status === 'achieved').length,
-        milestonesDelayed: 0,
-        teamSize: (defaultProj.stakeholders || []).length
-      });
-    }
 
     // Combined PM Metrics
     const totalProjectsCount = managedProjects.length;

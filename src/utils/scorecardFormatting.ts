@@ -34,12 +34,12 @@ export function getEVMCardClass(
   criticalThreshold = 0.9
 ): string {
   if (value < criticalThreshold) {
-    return 'bg-gradient-to-b from-rose-950/70 to-slate-900 border-2 border-rose-500/80 shadow-[0_0_18px_rgba(244,63,94,0.28)] ring-1 ring-rose-500/50 transition-all';
+    return 'bg-rose-50/90 dark:bg-gradient-to-b dark:from-rose-950/70 dark:to-slate-900 border-2 border-rose-300 dark:border-rose-500/80 shadow-xs dark:shadow-[0_0_18px_rgba(244,63,94,0.28)] ring-1 ring-rose-300/60 dark:ring-rose-500/50 transition-all';
   }
   if (value < 1.0) {
-    return 'bg-slate-900 border border-amber-500/50 shadow-sm transition-all';
+    return 'bg-amber-50/70 dark:bg-slate-900 border border-amber-300 dark:border-amber-500/50 shadow-2xs transition-all';
   }
-  return 'bg-slate-900 border border-slate-800 transition-all';
+  return 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs transition-all';
 }
 
 /**
@@ -50,12 +50,12 @@ export function getEVMBadgeClass(
   criticalThreshold = 0.9
 ): string {
   if (value < criticalThreshold) {
-    return 'bg-rose-500/20 text-rose-300 border-2 border-rose-500 font-black shadow-[0_0_10px_rgba(244,63,94,0.35)] ring-1 ring-rose-500/40';
+    return 'bg-rose-100 dark:bg-rose-500/20 text-rose-800 dark:text-rose-300 border-2 border-rose-400 dark:border-rose-500 font-black shadow-xs dark:shadow-[0_0_10px_rgba(244,63,94,0.35)] ring-1 ring-rose-300 dark:ring-rose-500/40';
   }
   if (value < 1.0) {
-    return 'bg-amber-500/15 text-amber-300 border border-amber-500/40 font-bold';
+    return 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-500/40 font-bold';
   }
-  return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-bold';
+  return 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-500/30 font-bold';
 }
 
 /**
@@ -66,12 +66,12 @@ export function getEVMTextColorClass(
   criticalThreshold = 0.9
 ): string {
   if (value < criticalThreshold) {
-    return 'text-rose-400 font-black drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]';
+    return 'text-rose-600 dark:text-rose-400 font-black dark:drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]';
   }
   if (value < 1.0) {
-    return 'text-amber-400 font-bold';
+    return 'text-amber-700 dark:text-amber-400 font-bold';
   }
-  return 'text-emerald-400 font-bold';
+  return 'text-emerald-700 dark:text-emerald-400 font-bold';
 }
 
 /**

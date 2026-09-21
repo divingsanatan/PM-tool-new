@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { calculateStakeholderWorkloads } from '../../utils/evm';
-import { Stakeholder, StakeholderCategory } from '../../types';
+import { Stakeholder, StakeholderCategory, AppRole, APP_ROLES } from '../../types';
 import {
   Users,
   BarChart3,
@@ -28,7 +28,19 @@ import {
   Award,
   Flame,
   LayoutGrid,
-  UserMinus
+  Table as TableIcon,
+  UserMinus,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  X,
+  RotateCcw,
+  Check,
+  ShieldCheck,
+  Code,
+  Laptop,
+  Bug,
+  Palmtree
 } from 'lucide-react';
 import { EmptyState } from '../common/EmptyState';
 import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
@@ -49,10 +61,18 @@ import {
   checkTaskLeaveConflict,
   calculateEffectiveWeeklyCapacity
 } from '../../utils/portfolioAndLeaveUtils';
+import {
+  normalizeToAppRole,
+  isUserAdmin,
+  isUserPM,
+  canManageRolesAndTeam,
+  getAppRoleBadge,
+  isDualPMAndDeveloper
+} from '../../utils/roleUtils';
 
 interface StakeholdersViewProps {
   onOpenStakeholderModal: (stakeholder?: Stakeholder) => void;
-  onOpenInviteModal?: (email?: string) => void;
+  onOpenInviteModal?: (dataOrEmail?: string | { email?: string; name?: string; role?: string; category?: StakeholderCategory; stakeholderId?: string }) => void;
   onOpenTaskModal?: (taskId: string) => void;
   initialTab?: 'directory' | 'workload';
 }
@@ -63,23 +83,37 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   onOpenTaskModal,
   initialTab = 'directory'
 }) => {
-  const { projectData, saveStakeholder, deleteStakeholder, currentUser, leaves } = useProject();
-  const isAdmin = currentUser?.role === 'admin';
-  const isPM = currentUser?.role === 'pm' || isAdmin;
+  const { projectData, saveStakeholder, deleteStakeholder, updateUserRole, currentUser, leaves } = useProject();
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
+  const canManageRoles = canManageRolesAndTeam(currentUser);
 
   const [activeTab, setActiveTab] = useState<'directory' | 'workload'>(initialTab);
   const [workloadSubView, setWorkloadSubView] = useState<'heatmap' | 'chart' | 'cards'>('heatmap');
+  
+  // Layout mode for directory: default to 'table' (Tabular View)
+  const [layoutMode, setLayoutMode] = useState<'table' | 'cards'>('table');
+
+  // Filters State
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | AppRole | 'dual_pm_dev'>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'internal' | 'external'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'invited' | 'placeholder' | 'on_leave' | 'overloaded'>('all');
   const [workloadFilter, setWorkloadFilter] = useState<'all' | 'overloaded' | 'active'>('all');
+
+  // Sorting State
+  const [sortField, setSortField] = useState<'name' | 'role' | 'category' | 'status' | 'utilization' | 'tasks' | 'rate'>('name');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
   const [selectedStakeholderForReport, setSelectedStakeholderForReport] = useState<Stakeholder | null>(null);
   const [memberToRemove, setMemberToRemove] = useState<Stakeholder | null>(null);
 
-  // Quick Add State
+  // Quick Add State with Canonical Roles
   const [quickName, setQuickName] = useState('');
-  const [quickRole, setQuickRole] = useState('Contributor');
+  const [quickRole, setQuickRole] = useState<AppRole>('Developer (Team member)');
+  const [quickIsDualPMDev, setQuickIsDualPMDev] = useState(false);
   const [quickCategory, setQuickCategory] = useState<StakeholderCategory>('internal');
-  const [quickRate, setQuickRate] = useState(85);
+  const [quickRate, setQuickRate] = useState(100);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const handleConfirmRemoveMember = async () => {
@@ -99,40 +133,42 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   }, [initialTab]);
 
   const canEditStakeholder = (sh: Stakeholder) => {
-    if (isPM) return true;
+    if (canManageRoles) return true;
     if (sh.id === currentUser?.id) return true;
     if (sh.email && sh.email.toLowerCase() === currentUser?.email.toLowerCase()) return true;
     return false;
   };
 
-  const handleQuickAddStakeholder = () => {
+  const handleQuickAddStakeholder = async () => {
     if (!quickName.trim()) return;
 
-    // Enforce role: If internal, only admin can set a custom role. Otherwise defaults to Contributor.
-    const resolvedRole = quickCategory === 'internal' && !isAdmin ? 'Contributor' : (quickRole.trim() || 'Contributor');
+    const normalizedRole = normalizeToAppRole(quickRole);
+    const hasDualPM = quickIsDualPMDev || normalizedRole === 'Project Manager' || normalizedRole === 'Admin';
 
     const newSh: Stakeholder = {
       id: `sh-${Date.now()}`,
       name: quickName.trim(),
-      email: `${quickName.trim().toLowerCase().replace(/\s+/g, '.')}@company.com`,
-      role: resolvedRole,
+      email: `unassigned.${quickName.trim().toLowerCase().replace(/[^a-z0-9]/g, '.')}@placeholder.local`,
+      role: normalizedRole,
+      appRole: normalizedRole,
+      isDualPMDev: quickIsDualPMDev,
+      hasPMAccess: hasDualPM,
       category: quickCategory,
-      avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80`,
-      hourlyRate: Number(quickRate) || 85,
+      avatar: undefined,
+      hourlyRate: Number(quickRate) || (normalizedRole === 'Admin' ? 175 : normalizedRole === 'Project Manager' ? 120 : 110),
       weeklyCapacityHours: 40,
-      skills: [resolvedRole, 'Agile'],
-      status: 'active',
+      skills: [normalizedRole, 'Agile'],
+      status: 'placeholder',
+      isPlaceholder: true,
       createdBy: currentUser?.id,
       createdByEmail: currentUser?.email
     };
 
-    saveStakeholder(newSh);
+    await saveStakeholder(newSh);
     setQuickName('');
-    if (quickCategory === 'internal' && !isAdmin) {
-      setQuickRole('Contributor');
-    }
-    setToastMessage(`⚡ ${quickCategory === 'external' ? 'External' : 'Internal'} team member "${quickName.trim()}" added!`);
-    setTimeout(() => setToastMessage(null), 3000);
+    setQuickIsDualPMDev(false);
+    setToastMessage(`✓ Created member profile "${quickName.trim()}" (${normalizedRole}${quickIsDualPMDev ? ' + PM Dual Role' : ''}).`);
+    setTimeout(() => setToastMessage(null), 4000);
   };
 
   // Workload calculations
@@ -144,44 +180,139 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
     );
   }, [projectData.stakeholders, projectData.tasks, projectData.subtasks]);
 
-  // Filtered Stakeholders
+  // Filtered & Sorted Stakeholders
   const filteredStakeholders = useMemo(() => {
-    return projectData.stakeholders.filter(sh => {
-      // Category filter
-      if (categoryFilter !== 'all' && (sh.category || 'internal') !== categoryFilter) {
-        return false;
-      }
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = sh.name.toLowerCase().includes(q);
-        const matchesRole = sh.role.toLowerCase().includes(q);
-        const matchesEmail = sh.email.toLowerCase().includes(q);
-        const matchesSkill = sh.skills?.some(s => s.toLowerCase().includes(q));
-        if (!matchesName && !matchesRole && !matchesEmail && !matchesSkill) {
+    return projectData.stakeholders
+      .filter(sh => {
+        const normRole = normalizeToAppRole(sh.appRole || sh.role);
+        const isDual = Boolean(sh.isDualPMDev || (sh.role && sh.role.toLowerCase().includes('pm') && sh.role.toLowerCase().includes('dev')));
+        const wl = allWorkloads.find(w => w.stakeholder.id === sh.id);
+        const onLeave = isUserOnLeave(sh.id, leaves || []);
+        const { effectiveCapacity } = calculateEffectiveWeeklyCapacity(sh.weeklyCapacityHours || 40, sh.id, leaves || []);
+        const isOverloaded = wl ? wl.assignedHours > effectiveCapacity : false;
+
+        // Role Filter
+        if (roleFilter !== 'all') {
+          if (roleFilter === 'dual_pm_dev') {
+            if (!isDual) return false;
+          } else if (normRole !== roleFilter) {
+            return false;
+          }
+        }
+
+        // Category Filter
+        if (categoryFilter !== 'all' && (sh.category || 'internal') !== categoryFilter) {
           return false;
         }
-      }
-      return true;
-    });
-  }, [projectData.stakeholders, categoryFilter, searchQuery]);
 
-  // Filtered Workloads
+        // Status Filter
+        if (statusFilter !== 'all') {
+          if (statusFilter === 'on_leave' && !onLeave) return false;
+          if (statusFilter === 'overloaded' && !isOverloaded) return false;
+          if (statusFilter === 'active' && (sh.status !== 'active' || sh.isPlaceholder)) return false;
+          if (statusFilter === 'invited' && sh.status !== 'invited') return false;
+          if (statusFilter === 'placeholder' && !sh.isPlaceholder && sh.status !== 'placeholder') return false;
+        }
+
+        // Search query (multi-field matching)
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchesName = sh.name.toLowerCase().includes(q);
+          const matchesRole = (sh.role || '').toLowerCase().includes(q) || normRole.toLowerCase().includes(q);
+          const matchesEmail = (sh.email || '').toLowerCase().includes(q);
+          const matchesSkill = sh.skills?.some(s => s.toLowerCase().includes(q));
+          const assignedTasks = projectData.tasks.filter(
+            t => t.assigneeIds.includes(sh.id) || projectData.subtasks.some(st => st.taskId === t.id && st.assigneeId === sh.id)
+          );
+          const matchesTask = assignedTasks.some(t => t.title.toLowerCase().includes(q));
+
+          if (!matchesName && !matchesRole && !matchesEmail && !matchesSkill && !matchesTask) {
+            return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        let comp = 0;
+        const wlA = allWorkloads.find(w => w.stakeholder.id === a.id);
+        const wlB = allWorkloads.find(w => w.stakeholder.id === b.id);
+        const tasksA = projectData.tasks.filter(t => t.assigneeIds.includes(a.id)).length;
+        const tasksB = projectData.tasks.filter(t => t.assigneeIds.includes(b.id)).length;
+
+        if (sortField === 'name') {
+          comp = a.name.localeCompare(b.name);
+        } else if (sortField === 'role') {
+          comp = (a.role || '').localeCompare(b.role || '');
+        } else if (sortField === 'category') {
+          comp = (a.category || 'internal').localeCompare(b.category || 'internal');
+        } else if (sortField === 'status') {
+          comp = (a.status || '').localeCompare(b.status || '');
+        } else if (sortField === 'utilization') {
+          const utilA = wlA && wlA.capacityHours > 0 ? (wlA.assignedHours / wlA.capacityHours) : 0;
+          const utilB = wlB && wlB.capacityHours > 0 ? (wlB.assignedHours / wlB.capacityHours) : 0;
+          comp = utilA - utilB;
+        } else if (sortField === 'tasks') {
+          comp = tasksA - tasksB;
+        } else if (sortField === 'rate') {
+          comp = (a.hourlyRate || 0) - (b.hourlyRate || 0);
+        }
+
+        return sortDirection === 'asc' ? comp : -comp;
+      });
+  }, [projectData.stakeholders, projectData.tasks, projectData.subtasks, allWorkloads, roleFilter, categoryFilter, statusFilter, searchQuery, sortField, sortDirection, leaves]);
+
+  // Toggle Sort handler
+  const handleToggleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const hasActiveFilters = searchQuery !== '' || roleFilter !== 'all' || categoryFilter !== 'all' || statusFilter !== 'all';
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setRoleFilter('all');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+  };
+
+  // Quick Role Change / Dual Role Toggle for PM & Admin
+  const handleQuickRoleChange = async (stakeholder: Stakeholder, newRole: AppRole) => {
+    if (!canManageRoles) return;
+    const shouldKeepDual = newRole === 'Developer (Team member)' && stakeholder.isDualPMDev;
+    await updateUserRole(stakeholder.id, newRole, shouldKeepDual);
+    setToastMessage(`✓ Updated ${stakeholder.name}'s role to ${newRole}`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleToggleDualPMDev = async (stakeholder: Stakeholder) => {
+    if (!canManageRoles) return;
+    const currentDual = Boolean(stakeholder.isDualPMDev);
+    const newDual = !currentDual;
+    const norm = normalizeToAppRole(stakeholder.appRole || stakeholder.role);
+    await updateUserRole(stakeholder.id, norm, newDual);
+    setToastMessage(newDual ? `✓ Granted Dual PM & Developer access to ${stakeholder.name}` : `✓ Removed Dual PM access from ${stakeholder.name}`);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Filtered Workloads for Heatmap/Charts tab
   const filteredWorkloads = useMemo(() => {
     return allWorkloads.filter(wl => {
       const sh = wl.stakeholder;
-      // Category filter
       if (categoryFilter !== 'all' && (sh.category || 'internal') !== categoryFilter) {
         return false;
       }
-      // Workload status filter
       if (workloadFilter === 'overloaded' && !wl.overloaded) {
         return false;
       }
       if (workloadFilter === 'active' && wl.taskCount === 0) {
         return false;
       }
-      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = sh.name.toLowerCase().includes(q);
@@ -198,7 +329,6 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
   const totalStakeholders = projectData.stakeholders.length;
   const internalCount = projectData.stakeholders.filter(s => (s.category || 'internal') === 'internal').length;
   const externalCount = projectData.stakeholders.filter(s => s.category === 'external').length;
-  const activeLeavesCount = projectData.stakeholders.filter(s => isUserOnLeave(s.id, leaves || [])).length;
   const totalAssignedHours = allWorkloads.reduce((sum, w) => sum + w.assignedHours, 0);
   const totalCapacityHours = allWorkloads.reduce((sum, w) => {
     const { effectiveCapacity } = calculateEffectiveWeeklyCapacity(w.stakeholder.weeklyCapacityHours || 40, w.stakeholder.id, leaves || []);
@@ -208,9 +338,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
     const { effectiveCapacity } = calculateEffectiveWeeklyCapacity(w.stakeholder.weeklyCapacityHours || 40, w.stakeholder.id, leaves || []);
     return w.assignedHours > effectiveCapacity;
   }).length;
-  const avgHourlyRate = totalStakeholders > 0
-    ? Math.round(projectData.stakeholders.reduce((sum, s) => sum + (s.hourlyRate || 80), 0) / totalStakeholders)
-    : 80;
+  const dualPMDevCount = projectData.stakeholders.filter(s => s.isDualPMDev || (s.role && s.role.toLowerCase().includes('pm') && s.role.toLowerCase().includes('dev'))).length;
 
   // Chart Data with effective capacity adjusted for approved leaves
   const chartData = allWorkloads.map(w => {
@@ -237,18 +365,18 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
               </div>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl font-bold text-slate-100 truncate">
-                  Team & Workload Management
+                  Team & Stakeholder Roster
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Project directory, role assignments, hourly rates, and capacity balancing.
+                  Standardized canonical roles, dual PM & Developer hybrid permissions, tabular metrics, and capacity tracking.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions (PM & Team) */}
+          {/* Quick Actions (PM & Admin) */}
           <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
-            {isPM && onOpenInviteModal && (
+            {canManageRoles && onOpenInviteModal && (
               <button
                 onClick={() => onOpenInviteModal()}
                 className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 font-semibold text-xs transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
@@ -257,7 +385,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                 <span>Invite Member</span>
               </button>
             )}
-            {isPM && (
+            {canManageRoles && (
               <button
                 onClick={() => onOpenStakeholderModal()}
                 className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs transition-colors shadow-md shadow-teal-600/20 flex-1 sm:flex-none whitespace-nowrap"
@@ -298,15 +426,17 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
               <span className="text-[11px] text-slate-400 font-medium block truncate">Capacity Health</span>
               {overloadedCount > 0 ? (
                 <span className="text-base sm:text-lg font-bold font-mono text-rose-400 flex items-center gap-1">
-                  <span>{overloadedCount} Over-limit</span>
+                  <span>{overloadedCount} Overloaded</span>
+                  <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               ) : (
                 <span className="text-base sm:text-lg font-bold font-mono text-emerald-400 flex items-center gap-1">
                   <span>100% Balanced</span>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
                 </span>
               )}
               <span className="text-[10px] text-slate-500 block truncate">
-                {overloadedCount > 0 ? 'Workload rebalance advised' : 'All members within limits'}
+                {overloadedCount > 0 ? 'Requires task re-balancing' : 'All members within limits'}
               </span>
             </div>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
@@ -314,39 +444,43 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                 ? 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
                 : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
             }`}>
-              {overloadedCount > 0 ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+              <Flame className="w-4 h-4" />
             </div>
           </div>
 
           <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <span className="text-[11px] text-slate-400 font-medium block truncate">Avg. Blended Rate</span>
-              <span className="text-base sm:text-lg font-bold font-mono text-emerald-400">${avgHourlyRate}/hr</span>
-              <span className="text-[10px] text-slate-500 block truncate">Standard billing metric</span>
+              <span className="text-[11px] text-slate-400 font-medium block truncate">Hybrid PM & Devs</span>
+              <span className="text-base sm:text-lg font-bold font-mono text-amber-300 flex items-center gap-1">
+                <span>{dualPMDevCount} Hybrid Roles</span>
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+              </span>
+              <span className="text-[10px] text-slate-500 block truncate">
+                Full PM access + Task ownership
+              </span>
             </div>
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-              <DollarSign className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+              <Zap className="w-4 h-4" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* 🎛️ Unified Tab Switcher & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-2 sm:p-2.5 rounded-2xl">
-        {/* Tab Pills */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-950 rounded-xl border border-slate-800">
+      {/* 🧭 Tabs Navigation & Live Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-1.5 rounded-2xl border border-slate-800">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setActiveTab('directory')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'directory'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <Users className="w-3.5 h-3.5" />
-            <span>Team Directory</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-              activeTab === 'directory' ? 'bg-teal-700 text-white' : 'bg-slate-800 text-slate-400'
+            <span>Team Roster & Roles</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
+              activeTab === 'directory' ? 'bg-teal-700 text-teal-100' : 'bg-slate-800 text-slate-400'
             }`}>
               {projectData.stakeholders.length}
             </span>
@@ -354,42 +488,76 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
 
           <button
             onClick={() => setActiveTab('workload')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all ${
               activeTab === 'workload'
-                ? 'bg-teal-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                ? 'bg-teal-600 text-white shadow-md shadow-teal-600/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Workload & Capacity</span>
-            {overloadedCount > 0 && (
-              <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" title={`${overloadedCount} overloaded`} />
-            )}
           </button>
         </div>
 
-        {/* Global Search & Filters within View */}
-        <div className="flex items-center gap-2 flex-1 sm:flex-none sm:min-w-[240px]">
-          <div className="relative flex-1">
+        {/* Search & View Switcher */}
+        <div className="flex items-center gap-2">
+          {activeTab === 'directory' && (
+            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-0.5">
+              <button
+                onClick={() => setLayoutMode('table')}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  layoutMode === 'table'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Tabular View (Comprehensive Matrix)"
+              >
+                <TableIcon className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Table View</span>
+              </button>
+              <button
+                onClick={() => setLayoutMode('cards')}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  layoutMode === 'cards'
+                    ? 'bg-teal-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Card Grid View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Card Grid</span>
+              </button>
+            </div>
+          )}
+
+          <div className="relative w-full sm:w-64">
             <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder={activeTab === 'directory' ? "Search team, roles, skills..." : "Filter workload by name..."}
+              placeholder="Search by name, role, skill, task..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none focus:border-teal-500"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
 
       {/* ========================================================================= */}
-      {/* TAB 1: 👥 TEAM DIRECTORY */}
+      {/* TAB 1: 👥 TEAM DIRECTORY (TABULAR & CARD VIEWS) */}
       {/* ========================================================================= */}
       {activeTab === 'directory' && (
         <div className="space-y-4">
-          {/* Quick Add Stakeholder Bar (PM Only) */}
-          {isPM ? (
+          {/* Quick Add Stakeholder Bar (PM & Admin) */}
+          {canManageRoles ? (
             <div id="quick-stakeholder-bar" className="bg-slate-900 border border-teal-500/40 p-3.5 rounded-2xl shadow-lg relative space-y-2.5">
               {toastMessage && (
                 <div className="absolute top-2 right-4 bg-emerald-500 text-slate-950 font-bold px-3 py-1 rounded-full text-xs shadow-md animate-bounce flex items-center gap-1 z-20">
@@ -403,6 +571,9 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                   <Zap className="w-4 h-4 text-amber-400" />
                   <span>Quick Add Team Member (Press Enter ↵)</span>
                 </div>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Select from the 5 canonical roles
+                </span>
               </div>
 
               <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-2.5">
@@ -417,21 +588,55 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                       handleQuickAddStakeholder();
                     }
                   }}
-                  className="flex-1 min-w-[220px] bg-slate-950 border border-slate-700 focus:border-teal-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none shadow-inner min-h-[40px]"
+                  className="flex-1 min-w-[200px] bg-slate-950 border border-slate-700 focus:border-teal-500 rounded-xl px-3.5 py-2 text-xs text-slate-100 placeholder-slate-500 outline-none shadow-inner min-h-[40px]"
                 />
 
                 <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+                  {/* Canonical Role Dropdown */}
+                  <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl min-h-[40px]">
+                    <select
+                      value={quickRole}
+                      onChange={(e) => {
+                        const sel = e.target.value as AppRole;
+                        setQuickRole(sel);
+                        if (sel !== 'Developer (Team member)') {
+                          setQuickIsDualPMDev(false);
+                        }
+                        if (sel === 'Admin') setQuickRate(175);
+                        else if (sel === 'Project Manager') setQuickRate(120);
+                        else if (sel === 'Developer (Team member)') setQuickRate(100);
+                        else if (sel === 'Tester (Team Member)') setQuickRate(90);
+                        else if (sel === 'UI/UX Dev (Team Member)') setQuickRate(95);
+                      }}
+                      className="bg-transparent text-teal-300 text-xs font-semibold outline-none cursor-pointer"
+                      title="Select Canonical Role"
+                    >
+                      {APP_ROLES.map(r => (
+                        <option key={r} value={r} className="bg-slate-900 text-slate-100">
+                          {r}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Dual PM & Dev Checkbox */}
+                  {quickRole === 'Developer (Team member)' && (
+                    <label className="flex items-center gap-1.5 bg-amber-950/30 border border-amber-500/40 px-2.5 py-1.5 rounded-xl min-h-[40px] cursor-pointer text-[11px] text-amber-200 font-semibold" title="Grants full PM access while maintaining developer task assignments">
+                      <input
+                        type="checkbox"
+                        checked={quickIsDualPMDev}
+                        onChange={(e) => setQuickIsDualPMDev(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-amber-500 rounded"
+                      />
+                      <span>⚡ Dual PM + Dev</span>
+                    </label>
+                  )}
+
                   {/* Category Dropdown */}
                   <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl min-h-[40px]">
                     <select
                       value={quickCategory}
-                      onChange={(e) => {
-                        const cat = e.target.value as StakeholderCategory;
-                        setQuickCategory(cat);
-                        if (cat === 'internal' && !isAdmin) {
-                          setQuickRole('Contributor');
-                        }
-                      }}
+                      onChange={(e) => setQuickCategory(e.target.value as StakeholderCategory)}
                       className="bg-transparent text-slate-200 text-xs font-semibold outline-none cursor-pointer"
                       title="Select Stakeholder Type"
                     >
@@ -440,27 +645,7 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                     </select>
                   </div>
 
-                  <div className="relative">
-                    <input
-                      type="text"
-                      disabled={quickCategory === 'internal' && !isAdmin}
-                      placeholder={quickCategory === 'internal' && !isAdmin ? "Role: Contributor (Admin Set)" : "Role (e.g. Lead Designer)"}
-                      value={quickCategory === 'internal' && !isAdmin ? "Contributor (Admin Managed)" : quickRole}
-                      onChange={(e) => setQuickRole(e.target.value)}
-                      title={quickCategory === 'internal' && !isAdmin ? "Only Organization Administrators can assign custom roles for internal stakeholders." : "Role / Title"}
-                      className={`bg-slate-950 border border-slate-700 px-3 py-2 rounded-xl outline-none text-xs w-48 min-h-[40px] ${
-                        quickCategory === 'internal' && !isAdmin
-                          ? 'text-slate-400 bg-slate-950/80 cursor-not-allowed border-dashed'
-                          : 'text-teal-300 focus:border-teal-500'
-                      }`}
-                    />
-                    {quickCategory === 'internal' && !isAdmin && (
-                      <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-amber-400 text-[10px] flex items-center gap-0.5 pointer-events-none" title="Admin role lock">
-                        <Lock className="w-3 h-3" />
-                      </span>
-                    )}
-                  </div>
-
+                  {/* Rate */}
                   <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 px-2.5 py-1.5 rounded-xl min-h-[40px]">
                     <span className="text-[10px] text-slate-500 font-mono">$</span>
                     <input
@@ -486,134 +671,477 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
           ) : (
             <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-xs text-slate-400 flex items-center gap-2">
               <Lock className="w-4 h-4 text-slate-500 shrink-0" />
-              <span>Team members can view roster details and update their own profile. Only Project Managers can add or modify other team members.</span>
+              <span>Team members can view roster details and update their own profile. Role management and dual PM access are handled by PM and Admin roles only.</span>
             </div>
           )}
 
-          {/* Category Filter Bar */}
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-400 flex-wrap">
-              <Filter className="w-4 h-4 text-teal-400 shrink-0" />
-              <span className="font-semibold text-slate-300">Filter View:</span>
-              <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-xl">
-                <button
-                  onClick={() => setCategoryFilter('all')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-colors ${
-                    categoryFilter === 'all' ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  All ({projectData.stakeholders.length})
-                </button>
-                <button
-                  onClick={() => setCategoryFilter('internal')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-colors flex items-center gap-1 ${
-                    categoryFilter === 'internal' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Building2 className="w-3 h-3" />
-                  <span>Internal ({internalCount})</span>
-                </button>
-                <button
-                  onClick={() => setCategoryFilter('external')}
-                  className={`px-3 py-1 rounded-lg font-bold transition-colors flex items-center gap-1 ${
-                    categoryFilter === 'external' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Globe className="w-3 h-3" />
-                  <span>External ({externalCount})</span>
-                </button>
+          {/* 🎛️ Comprehensive Filter & Sorting Toolbar */}
+          <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-2xl space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 text-slate-400 font-semibold mr-1">
+                  <Filter className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Filters:</span>
+                </div>
+
+                {/* 1. Canonical Role Filter */}
+                <div className="relative">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value as any)}
+                    className="bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-teal-500 cursor-pointer"
+                  >
+                    <option value="all">All Roles ({projectData.stakeholders.length})</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Project Manager">Project Manager</option>
+                    <option value="Developer (Team member)">Developer (Team member)</option>
+                    <option value="Tester (Team Member)">Tester (Team Member)</option>
+                    <option value="UI/UX Dev (Team Member)">UI/UX Dev (Team Member)</option>
+                    <option value="dual_pm_dev">⚡ Dual PM & Dev ({dualPMDevCount})</option>
+                  </select>
+                </div>
+
+                {/* 2. Category Filter */}
+                <div className="relative">
+                  <select
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value as any)}
+                    className="bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-teal-500 cursor-pointer"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="internal">🏢 Internal ({internalCount})</option>
+                    <option value="external">🌐 External ({externalCount})</option>
+                  </select>
+                </div>
+
+                {/* 3. Status & Availability Filter */}
+                <div className="relative">
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value as any)}
+                    className="bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold outline-none focus:border-teal-500 cursor-pointer"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">✓ Active Members</option>
+                    <option value="on_leave">🏖️ On Leave</option>
+                    <option value="overloaded">⚠️ Overloaded</option>
+                    <option value="invited">✉️ Pending Invite</option>
+                    <option value="placeholder">🧩 Dummy / Unassigned</option>
+                  </select>
+                </div>
+
+                {/* Reset Filters */}
+                {hasActiveFilters && (
+                  <button
+                    onClick={handleResetFilters}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3 text-teal-400" />
+                    <span>Reset</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="text-[11px] text-slate-400 flex items-center gap-2">
+                <span>Showing <strong>{filteredStakeholders.length}</strong> of {projectData.stakeholders.length} members</span>
               </div>
             </div>
-
-            {searchQuery && (
-              <span className="text-[11px] text-slate-400">
-                Found <strong>{filteredStakeholders.length}</strong> matching members
-              </span>
-            )}
           </div>
 
-          {/* Stakeholders Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 min-w-0">
-            {filteredStakeholders.map((sh) => {
-              const assignedTasks = projectData.tasks.filter(
-                t => t.assigneeIds.includes(sh.id) || projectData.subtasks.some(st => st.taskId === t.id && st.assigneeId === sh.id)
-              );
-              const isExternal = sh.category === 'external';
-              const wl = allWorkloads.find(w => w.stakeholder.id === sh.id);
+          {/* ========================================================================= */}
+          {/* TABULAR VIEW (TABLE) */}
+          {/* ========================================================================= */}
+          {layoutMode === 'table' ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto custom-scrollbar-horizontal">
+                <table className="w-full text-left text-xs border-collapse min-w-[860px]">
+                  <thead>
+                    <tr className="bg-slate-950/80 border-b border-slate-800 text-slate-400 font-semibold select-none">
+                      <th
+                        onClick={() => handleToggleSort('name')}
+                        className="py-3 px-4 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Team Member</span>
+                          {sortField === 'name' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('role')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Canonical Role</span>
+                          {sortField === 'role' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('category')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Type</span>
+                          {sortField === 'category' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('status')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Status & Leave</span>
+                          {sortField === 'status' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('utilization')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>Capacity & Workload</span>
+                          {sortField === 'utilization' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('tasks')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap text-center"
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span>Tasks</span>
+                          {sortField === 'tasks' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleToggleSort('rate')}
+                        className="py-3 px-3 cursor-pointer hover:text-slate-200 transition-colors whitespace-nowrap text-right"
+                      >
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span>Rate</span>
+                          {sortField === 'rate' && (sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-teal-400" /> : <ArrowDown className="w-3 h-3 text-teal-400" />)}
+                        </div>
+                      </th>
+                      <th className="py-3 px-3 whitespace-nowrap">Skills</th>
+                      <th className="py-3 px-4 text-right whitespace-nowrap">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {filteredStakeholders.map((sh) => {
+                      const assignedTasks = projectData.tasks.filter(
+                        t => t.assigneeIds.includes(sh.id) || projectData.subtasks.some(st => st.taskId === t.id && st.assigneeId === sh.id)
+                      );
+                      const isExternal = sh.category === 'external';
+                      const wl = allWorkloads.find(w => w.stakeholder.id === sh.id);
+                      const normRole = normalizeToAppRole(sh.appRole || sh.role);
+                      const roleBadge = getAppRoleBadge(sh.appRole || sh.role, sh.isDualPMDev);
+                      const onLeave = isUserOnLeave(sh.id, leaves || []);
+                      const { effectiveCapacity } = calculateEffectiveWeeklyCapacity(sh.weeklyCapacityHours || 40, sh.id, leaves || []);
+                      const assignedHours = wl ? wl.assignedHours : 0;
+                      const utilPercent = effectiveCapacity > 0 ? Math.round((assignedHours / effectiveCapacity) * 100) : 0;
+                      const isOverloaded = assignedHours > effectiveCapacity;
 
-              return (
-                <div
-                  key={sh.id}
-                  className="bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 sm:p-5 rounded-2xl space-y-3.5 shadow-sm flex flex-col justify-between transition-all min-w-0 overflow-hidden"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-2 min-w-0">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={sh.avatar}
-                          alt={sh.name}
-                          className="w-11 h-11 rounded-full object-cover border-2 border-teal-500/30 shrink-0"
-                        />
-                        <div className="min-w-0">
-                          <h3 className="font-bold text-slate-100 text-sm truncate">
-                            {sh.name}
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5 min-w-0">
-                            <span className="text-xs text-teal-400 font-medium truncate">{sh.role}</span>
-                            <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full border flex items-center gap-1 shrink-0 ${
+                      return (
+                        <tr
+                          key={sh.id}
+                          className="hover:bg-slate-800/40 transition-colors group"
+                        >
+                          {/* 1. Member / Name */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="relative shrink-0">
+                                <img
+                                  src={sh.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(sh.name)}`}
+                                  alt={sh.name}
+                                  className="w-9 h-9 rounded-full object-cover border border-slate-700 shadow-sm"
+                                />
+                                {onLeave && (
+                                  <span className="absolute -bottom-1 -right-1 text-xs" title="Currently on approved leave">
+                                    🏖️
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-slate-100 text-xs truncate">{sh.name}</span>
+                                  {sh.isDualPMDev && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0" title="Dual Role: Project Manager & Developer">
+                                      ⚡ PM & Dev
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                                  {sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder')) ? (
+                                    <span className="text-purple-300 italic">Unassigned (Dummy)</span>
+                                  ) : (
+                                    sh.email
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* 2. Canonical Role */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              {canManageRoles ? (
+                                <select
+                                  value={normRole}
+                                  onChange={(e) => handleQuickRoleChange(sh, e.target.value as AppRole)}
+                                  className={`text-xs font-semibold rounded-lg px-2 py-1 outline-none cursor-pointer border ${roleBadge.badgeClass} bg-slate-950/80`}
+                                  title="Change Canonical Role"
+                                >
+                                  {APP_ROLES.map(r => (
+                                    <option key={r} value={r} className="bg-slate-900 text-slate-100">
+                                      {r}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border ${roleBadge.badgeClass}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${roleBadge.dotColor}`} />
+                                  <span>{normRole}</span>
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 3. Category */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
                               isExternal
-                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                                : 'bg-indigo-500/10 border-indigo-500/40 text-indigo-300'
+                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300'
                             }`}>
                               {isExternal ? <Globe className="w-2.5 h-2.5" /> : <Building2 className="w-2.5 h-2.5" />}
                               <span>{isExternal ? 'External' : 'Internal'}</span>
                             </span>
+                          </td>
 
-                            {/* Leave Status Badge */}
-                            {isUserOnLeave(sh.id, leaves || []) ? (
-                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 flex items-center gap-1 shrink-0 animate-pulse">
-                                <span>🏖️ On Leave Now</span>
+                          {/* 4. Status & Leave */}
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {onLeave ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 animate-pulse">
+                                <span>🏖️ On Leave</span>
+                              </span>
+                            ) : (sh.isPlaceholder || sh.status === 'placeholder') ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300">
+                                <span>Dummy</span>
+                              </span>
+                            ) : sh.status === 'invited' ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                                <span>Invited</span>
                               </span>
                             ) : (
-                              (leaves || []).filter(l => l.userId === sh.id && l.status === 'approved').length > 0 && (
-                                <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-1 shrink-0">
-                                  <span>🏖️ Leave Scheduled</span>
-                                </span>
-                              )
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Active</span>
+                              </span>
                             )}
+                          </td>
 
-                            {/* Status Badges */}
-                            {(sh.isPlaceholder || sh.status === 'placeholder') && (
-                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-300 flex items-center gap-1 shrink-0">
-                                <span>Dummy / Unassigned</span>
+                          {/* 5. Capacity & Workload */}
+                          <td className="py-3 px-3 min-w-[160px]">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-[11px] font-mono">
+                                <span className={isOverloaded ? 'text-rose-300 font-bold' : 'text-slate-300'}>
+                                  {assignedHours}h / {effectiveCapacity}h
+                                </span>
+                                <span className={`font-bold ${
+                                  isOverloaded ? 'text-rose-400' : utilPercent > 80 ? 'text-amber-400' : 'text-teal-400'
+                                }`}>
+                                  {utilPercent}%
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-slate-800">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    isOverloaded ? 'bg-rose-500' : utilPercent > 80 ? 'bg-amber-500' : 'bg-teal-500'
+                                  }`}
+                                  style={{ width: `${Math.min(utilPercent, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* 6. Tasks */}
+                          <td className="py-3 px-3 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-indigo-300 font-mono font-bold text-xs">
+                              {assignedTasks.length}
+                            </span>
+                          </td>
+
+                          {/* 7. Rate */}
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <span className="font-mono font-bold text-emerald-400 text-xs">
+                              ${sh.hourlyRate}/hr
+                            </span>
+                          </td>
+
+                          {/* 8. Skills */}
+                          <td className="py-3 px-3 max-w-[200px]">
+                            <div className="flex flex-wrap gap-1">
+                              {sh.skills && sh.skills.length > 0 ? (
+                                <>
+                                  {sh.skills.slice(0, 2).map((skill, idx) => (
+                                    <span key={idx} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700/80 text-[10px] text-slate-300 truncate max-w-[90px]">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {sh.skills.length > 2 && (
+                                    <span className="px-1 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400">
+                                      +{sh.skills.length - 2}
+                                    </span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-slate-500 text-[10px] italic">—</span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 9. Actions */}
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* Individual Report Card */}
+                              <button
+                                onClick={() => setSelectedStakeholderForReport(sh)}
+                                className="p-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 transition-all"
+                                title="View Performance & EVM Report Card"
+                              >
+                                <Award className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Toggle Dual PM & Developer (PM / Admin only for Developers) */}
+                              {canManageRoles && (normRole === 'Developer (Team member)' || sh.isDualPMDev) && (
+                                <button
+                                  onClick={() => handleToggleDualPMDev(sh)}
+                                  className={`p-1.5 rounded-lg border transition-all ${
+                                    sh.isDualPMDev
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                                      : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-amber-300'
+                                  }`}
+                                  title={sh.isDualPMDev ? "Dual PM access active (Click to revoke PM privileges)" : "Enable Dual PM + Developer access (Grants full PM authority)"}
+                                >
+                                  <Zap className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Invite button if pending or dummy */}
+                              {canManageRoles && (sh.isPlaceholder || sh.status === 'invited') && onOpenInviteModal && (
+                                <button
+                                  onClick={() => onOpenInviteModal({
+                                    email: sh.email,
+                                    name: sh.name,
+                                    role: sh.role,
+                                    category: sh.category,
+                                    stakeholderId: sh.id
+                                  })}
+                                  className="p-1.5 rounded-lg bg-teal-500/20 text-teal-300 border border-teal-500/40 hover:bg-teal-500/30 transition-colors"
+                                  title="Send Email Invitation"
+                                >
+                                  <Mail className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Edit Modal */}
+                              {canEditStakeholder(sh) && (
+                                <button
+                                  onClick={() => onOpenStakeholderModal(sh)}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
+                                  title="Edit Stakeholder"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              {/* Remove / Return to bench */}
+                              {canManageRoles && (
+                                <button
+                                  onClick={() => setMemberToRemove(sh)}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
+                                  title="Remove from project & return to bench"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            /* ========================================================================= */
+            /* CARD GRID VIEW (ALTERNATIVE VIEW) */
+            /* ========================================================================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 min-w-0">
+              {filteredStakeholders.map((sh) => {
+                const assignedTasks = projectData.tasks.filter(
+                  t => t.assigneeIds.includes(sh.id) || projectData.subtasks.some(st => st.taskId === t.id && st.assigneeId === sh.id)
+                );
+                const isExternal = sh.category === 'external';
+                const wl = allWorkloads.find(w => w.stakeholder.id === sh.id);
+                const normRole = normalizeToAppRole(sh.appRole || sh.role);
+                const roleBadge = getAppRoleBadge(sh.appRole || sh.role, sh.isDualPMDev);
+                const onLeave = isUserOnLeave(sh.id, leaves || []);
+
+                return (
+                  <div
+                    key={sh.id}
+                    className="bg-slate-900 border border-slate-800 hover:border-slate-700 p-4 sm:p-5 rounded-2xl space-y-3.5 shadow-sm flex flex-col justify-between transition-all min-w-0 overflow-hidden"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-2 min-w-0">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={sh.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(sh.name)}`}
+                            alt={sh.name}
+                            className="w-11 h-11 rounded-full object-cover border-2 border-teal-500/30 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-slate-100 text-sm truncate">
+                              {sh.name}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5 min-w-0">
+                              <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full border ${roleBadge.badgeClass}`}>
+                                {normRole}
                               </span>
-                            )}
-                            {sh.status === 'invited' && (
-                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center gap-1 shrink-0">
-                                <span>Invite Pending</span>
+                              {sh.isDualPMDev && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  ⚡ Dual PM & Dev
+                                </span>
+                              )}
+                              <span className={`text-[10px] font-bold px-2 py-0.2 rounded-full border flex items-center gap-1 shrink-0 ${
+                                isExternal
+                                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
+                                  : 'bg-indigo-500/10 border-indigo-500/40 text-indigo-300'
+                              }`}>
+                                {isExternal ? <Globe className="w-2.5 h-2.5" /> : <Building2 className="w-2.5 h-2.5" />}
+                                <span>{isExternal ? 'External' : 'Internal'}</span>
                               </span>
-                            )}
-                            {sh.status === 'active' && !sh.isPlaceholder && (
-                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1 shrink-0">
-                                <span>✓ Active</span>
-                              </span>
-                            )}
+
+                              {onLeave && (
+                                <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-amber-500/20 border border-amber-500/50 text-amber-300 flex items-center gap-1 shrink-0 animate-pulse">
+                                  <span>🏖️ On Leave Now</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Edit / Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => setSelectedStakeholderForReport(sh)}
-                          className="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-[10px] font-bold transition-all flex items-center gap-1"
-                          title="View Individual Report Card"
-                        >
-                          <Award className="w-3 h-3" />
-                          <span>Report</span>
-                        </button>
-                        {canEditStakeholder(sh) ? (
-                          <>
+                        {/* Edit / Actions */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setSelectedStakeholderForReport(sh)}
+                            className="px-2 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600 text-indigo-300 hover:text-white border border-indigo-500/30 text-[10px] font-bold transition-all flex items-center gap-1"
+                            title="View Individual Report Card"
+                          >
+                            <Award className="w-3 h-3" />
+                            <span>Report</span>
+                          </button>
+                          {canEditStakeholder(sh) && (
                             <button
                               onClick={() => onOpenStakeholderModal(sh)}
                               className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors"
@@ -621,6 +1149,8 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
+                          )}
+                          {canManageRoles && (
                             <button
                               onClick={() => setMemberToRemove(sh)}
                               className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-300 transition-colors"
@@ -628,128 +1158,98 @@ export const StakeholdersView: React.FC<StakeholdersViewProps> = ({
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          </>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-semibold text-slate-500 flex items-center gap-1" title="Read-only">
-                            <Lock className="w-3 h-3 text-slate-500" />
-                            <span>Read-Only</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Contact & Rates Details */}
-                    <div className="mt-3.5 space-y-2 text-xs text-slate-300 border-t border-slate-800/80 pt-3 min-w-0">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-slate-400 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0 truncate">
-                          <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                          <span className="truncate">
-                            {sh.isPlaceholder || sh.email.includes('@placeholder')
-                              ? <em className="text-purple-300 font-sans font-medium">No email assigned</em>
-                              : sh.email}
-                          </span>
+                          )}
                         </div>
-                        {isPM && (
-                          sh.isPlaceholder || sh.email.includes('@placeholder') ? (
-                            <button
-                              onClick={() => onOpenStakeholderModal(sh)}
-                              className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 text-purple-200 border border-purple-500/40 text-[10px] font-bold transition-colors shrink-0 flex items-center gap-1"
-                            >
-                              <Mail className="w-2.5 h-2.5 text-purple-300" />
-                              <span>Assign Email</span>
-                            </button>
-                          ) : (
-                            onOpenInviteModal && (
-                              <button
-                                onClick={() => onOpenInviteModal(sh.email)}
-                                className="px-2 py-0.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 text-[10px] font-bold transition-colors shrink-0 flex items-center gap-1"
-                              >
-                                <Mail className="w-2.5 h-2.5" />
-                                <span>{sh.status === 'invited' ? 'Resend Invite' : 'Send Invite'}</span>
-                              </button>
-                            )
-                          )
-                        )}
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="flex items-center gap-1.5 text-slate-400">
-                          <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Billing Rate:</span>
-                        </span>
-                        <span className="font-mono font-bold text-emerald-400">${sh.hourlyRate}/hr</span>
-                      </div>
-                    </div>
-
-                    {/* Skills Tags */}
-                    <div className="mt-3">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
-                        Skills
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sh.skills && sh.skills.length > 0 ? (
-                          sh.skills.map((skill, idx) => (
-                            <span key={idx} className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700/80 text-[11px] text-slate-300">
-                              {skill}
+                      {/* Contact & Rates Details */}
+                      <div className="mt-3.5 space-y-2 text-xs text-slate-300 border-t border-slate-800/80 pt-3 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-slate-400 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0 truncate">
+                            <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                            <span className="truncate">
+                              {sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder'))
+                                ? <em className="text-purple-300 font-sans font-medium">No email assigned</em>
+                                : sh.email}
                             </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-500 text-[11px] italic">No skills listed</span>
-                        )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="flex items-center gap-1.5 text-slate-400">
+                            <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Billing Rate:</span>
+                          </span>
+                          <span className="font-mono font-bold text-emerald-400">${sh.hourlyRate}/hr</span>
+                        </div>
+                      </div>
+
+                      {/* Skills Tags */}
+                      <div className="mt-3">
+                        <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                          Skills
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sh.skills && sh.skills.length > 0 ? (
+                            sh.skills.map((skill, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700/80 text-[11px] text-slate-300">
+                                {skill}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-500 text-[11px] italic">No skills listed</span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Task & Workload Capacity Summary Footer */}
-                  <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <Briefcase className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Assigned Tasks:</span>
-                      <strong className="text-indigo-300 font-mono ml-0.5">{assignedTasks.length}</strong>
-                    </span>
-
-                    {wl && (
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
-                        wl.overloaded
-                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-                          : 'bg-teal-500/10 border-teal-500/30 text-teal-300'
-                      }`}>
-                        {wl.assignedHours}h / {wl.capacityHours}h
+                    {/* Task & Workload Capacity Summary Footer */}
+                    <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                      <span className="flex items-center gap-1">
+                        <Briefcase className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Assigned Tasks:</span>
+                        <strong className="text-indigo-300 font-mono ml-0.5">{assignedTasks.length}</strong>
                       </span>
-                    )}
+
+                      {wl && (
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                          wl.overloaded
+                            ? 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                            : 'bg-teal-500/10 border-teal-500/30 text-teal-300'
+                        }`}>
+                          {wl.assignedHours}h / {wl.capacityHours}h
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {filteredStakeholders.length === 0 && (
             <EmptyState
               preset="users"
-              title={searchQuery || categoryFilter !== 'all' ? 'No matching team members' : 'No stakeholders added yet'}
+              title={hasActiveFilters ? 'No matching team members' : 'No stakeholders added yet'}
               description={
-                searchQuery || categoryFilter !== 'all'
-                  ? 'No project team members or stakeholders match your search and category filters.'
+                hasActiveFilters
+                  ? 'No project team members or stakeholders match your current role, status, or search filters.'
                   : 'Add project stakeholders, contributors, or team members to manage workload and assign tasks.'
               }
               action={
-                isAdmin
+                hasActiveFilters
+                  ? {
+                      label: 'Clear All Filters',
+                      onClick: handleResetFilters,
+                      icon: RotateCcw,
+                      variant: 'emerald'
+                    }
+                  : canManageRoles
                   ? {
                       label: 'Add Stakeholder',
                       onClick: () => onOpenStakeholderModal(),
                       icon: Plus,
                       variant: 'emerald'
-                    }
-                  : undefined
-              }
-              secondaryAction={
-                searchQuery || categoryFilter !== 'all'
-                  ? {
-                      label: 'Clear Filters',
-                      onClick: () => {
-                        setSearchQuery('');
-                        setCategoryFilter('all');
-                      }
                     }
                   : undefined
               }

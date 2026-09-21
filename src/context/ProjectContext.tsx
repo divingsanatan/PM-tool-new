@@ -28,10 +28,17 @@ import {
   MemberLeave,
   LeaveStatus,
   OrganizationSettings,
-  UserRole
+  UserRole,
+  AppRole
 } from '../types';
 import { initialProjectData, defaultProjectsMap } from '../data/initialData';
 import { calculateEVMMetrics } from '../utils/evm';
+import {
+  normalizeToAppRole,
+  isUserAdmin,
+  isUserPM,
+  canManageRolesAndTeam
+} from '../utils/roleUtils';
 import {
   getTaskEffectiveValues,
   getStatusProgress,
@@ -134,8 +141,9 @@ export const DEFAULT_USERS: UserProfile[] = [
     id: 'user-admin-1',
     name: 'Sophia Martinez',
     email: 'admin@apex.io',
-    role: 'admin',
-    title: 'Executive Portfolio Administrator & Head of PMO',
+    role: 'Admin',
+    appRole: 'Admin',
+    title: 'Admin',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=150',
     department: 'Executive PMO & Governance',
     hourlyRate: 175,
@@ -146,20 +154,24 @@ export const DEFAULT_USERS: UserProfile[] = [
     id: 'user-pm-1',
     name: 'Alex Morgan',
     email: 'alex.m@apex.io',
-    role: 'pm',
-    title: 'Project Manager & Scrum Master',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    isDualPMDev: true, // Can be both a developer and a PM: inherits all PM access and has own tasks
+    hasPMAccess: true,
+    title: 'Project Manager & Developer',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150',
     department: 'PMO',
-    hourlyRate: 95,
+    hourlyRate: 120,
     weeklyCapacityHours: 40,
-    skills: ['Agile', 'Scrum', 'EVM', 'Risk Management']
+    skills: ['Agile', 'Scrum', 'EVM', 'Risk Management', 'Full Stack Development']
   },
   {
     id: 'user-pm-2',
     name: 'Carlos Santana',
     email: 'carlos.s@apex.io',
-    role: 'pm',
-    title: 'Senior Technical Project Manager',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    title: 'Project Manager',
     avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=150',
     department: 'PMO',
     hourlyRate: 110,
@@ -170,8 +182,9 @@ export const DEFAULT_USERS: UserProfile[] = [
     id: 'user-pm-3',
     name: 'Aisha Al-Mansoor',
     email: 'aisha.m@apex.io',
-    role: 'pm',
-    title: 'Agile Delivery Lead & Scrum Consultant',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    title: 'Project Manager',
     avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?auto=format&fit=crop&q=80&w=150',
     department: 'PMO & Agile CoE',
     hourlyRate: 115,
@@ -179,23 +192,75 @@ export const DEFAULT_USERS: UserProfile[] = [
     skills: ['Agile Coaching', 'Release Management', 'Kanban', 'Stakeholder Alignment']
   },
   {
+    id: 'user-dummy-pm-1',
+    name: 'Interim PM (Unassigned / Dummy)',
+    email: 'unassigned.pm@placeholder.local',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    isPlaceholder: true,
+    isDummy: true,
+    hasPMAccess: true,
+    title: 'Interim Project Manager (Placeholder)',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150',
+    department: 'PMO (Bench Pool)',
+    hourlyRate: 100,
+    weeklyCapacityHours: 40,
+    skills: ['Project Management', 'Agile', 'Sprint Planning', 'Risk Mitigation']
+  },
+  {
+    id: 'user-dummy-pm-2',
+    name: 'Contract PM Placeholder',
+    email: 'contractor.pm@placeholder.local',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    isPlaceholder: true,
+    isDummy: true,
+    hasPMAccess: true,
+    title: 'Contract / External PM (Dummy)',
+    avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=150',
+    department: 'External Contractors',
+    hourlyRate: 110,
+    weeklyCapacityHours: 40,
+    skills: ['Technical PM', 'Vendor Coordination', 'Sprint Tracking']
+  },
+  {
+    id: 'user-dummy-pm-3',
+    name: 'Agile Delivery Lead (Placeholder)',
+    email: 'delivery.lead@placeholder.local',
+    role: 'Project Manager',
+    appRole: 'Project Manager',
+    isPlaceholder: true,
+    isDummy: true,
+    hasPMAccess: true,
+    title: 'Agile Delivery Lead (Dummy)',
+    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
+    department: 'Agile CoE',
+    hourlyRate: 105,
+    weeklyCapacityHours: 40,
+    skills: ['Scrum Master', 'Sprint Cadence', 'Backlog Refinement']
+  },
+  {
     id: 'user-sh-3',
     name: 'Marcus Vance',
     email: 'marcus.v@apex.io',
-    role: 'stakeholder',
-    title: 'Senior Full Stack Engineer',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    isDualPMDev: true, // Dual Developer & PM: granted full PM access while maintaining developer task ownership
+    hasPMAccess: true,
+    title: 'Developer (Team member) & PM',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150',
     department: 'Engineering',
     hourlyRate: 110,
     weeklyCapacityHours: 40,
-    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets', 'GraphQL']
+    skills: ['React', 'TypeScript', 'Node.js', 'WebSockets', 'GraphQL', 'Sprint Planning']
   },
   {
     id: 'user-sh-2',
     name: 'Dr. Elena Rostova',
     email: 'elena.r@apex.io',
-    role: 'stakeholder',
-    title: 'Principal Cloud Architect',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
     avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=150',
     department: 'Architecture',
     hourlyRate: 130,
@@ -203,47 +268,38 @@ export const DEFAULT_USERS: UserProfile[] = [
     skills: ['Cloud Architecture', 'Distributed Systems', 'Security', 'Kubernetes']
   },
   {
-    id: 'user-sh-4',
-    name: 'Priya Sharma',
-    email: 'priya.s@apex.io',
-    role: 'stakeholder',
-    title: 'Lead UI/UX & Design Systems Designer',
-    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
-    department: 'Design',
-    hourlyRate: 85,
-    weeklyCapacityHours: 30,
-    skills: ['Figma', 'Design Systems', 'User Research', 'Accessibility', 'Prototyping']
-  },
-  {
-    id: 'user-sh-5',
-    name: 'David Chen',
-    email: 'david.c@apex.io',
-    role: 'stakeholder',
-    title: 'DevOps & Infrastructure Specialist',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
-    department: 'DevOps',
-    hourlyRate: 90,
-    weeklyCapacityHours: 40,
-    skills: ['CI/CD', 'Kubernetes', 'Terraform', 'Automated QA', 'Docker']
-  },
-  {
     id: 'user-sh-6',
     name: 'Rachel Adams',
     email: 'rachel.a@apex.io',
-    role: 'stakeholder',
-    title: 'Principal Backend & Microservices Architect',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
     avatar: 'https://images.unsplash.com/photo-1534751516642-a171edd25218?auto=format&fit=crop&q=80&w=150',
     department: 'Engineering',
     hourlyRate: 125,
     weeklyCapacityHours: 40,
-    skills: ['Golang', 'PostgreSQL', 'Microservices', 'Kafka', 'Redis', 'High Throughput']
+    skills: ['Golang', 'PostgreSQL', 'Microservices', 'Kafka', 'Redis']
+  },
+  {
+    id: 'user-sh-9',
+    name: 'Samuel Wright',
+    email: 'samuel.w@apex.io',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
+    department: 'Engineering',
+    hourlyRate: 135,
+    weeklyCapacityHours: 40,
+    skills: ['SOC2 Compliance', 'Zero Trust', 'Pen Testing', 'Cloud Security']
   },
   {
     id: 'user-sh-7',
     name: 'Liam O\'Connor',
     email: 'liam.o@apex.io',
-    role: 'stakeholder',
-    title: 'Senior Mobile & React Native Specialist',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
     avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&q=80&w=150',
     department: 'Engineering',
     hourlyRate: 105,
@@ -254,49 +310,66 @@ export const DEFAULT_USERS: UserProfile[] = [
     id: 'user-sh-8',
     name: 'Zoe Chen',
     email: 'zoe.c@apex.io',
-    role: 'stakeholder',
-    title: 'AI / ML & Data Analytics Specialist',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150',
     department: 'Data & AI',
     hourlyRate: 120,
     weeklyCapacityHours: 35,
-    skills: ['Gemini API', 'LLM Fine-Tuning', 'Python', 'Vector DB', 'Prompt Engineering']
-  },
-  {
-    id: 'user-sh-9',
-    name: 'Samuel Wright',
-    email: 'samuel.w@apex.io',
-    role: 'stakeholder',
-    title: 'Cybersecurity & Compliance Lead',
-    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=150',
-    department: 'Security',
-    hourlyRate: 135,
-    weeklyCapacityHours: 40,
-    skills: ['SOC2 Compliance', 'Zero Trust', 'Pen Testing', 'Cloud Security']
-  },
-  {
-    id: 'user-sh-10',
-    name: 'Kevin Taylor',
-    email: 'kevin.t@apex.io',
-    role: 'stakeholder',
-    title: 'Lead Automation SDET & QA Architect',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150',
-    department: 'Quality Assurance',
-    hourlyRate: 95,
-    weeklyCapacityHours: 40,
-    skills: ['Playwright', 'Cypress', 'Performance Testing', 'Load Testing', 'CI Pipelines']
+    skills: ['Gemini API', 'LLM Fine-Tuning', 'Python', 'Vector DB']
   },
   {
     id: 'user-sh-11',
     name: 'Maya Lin',
     email: 'maya.l@apex.io',
-    role: 'stakeholder',
-    title: 'Senior Product Owner & Business Analyst',
+    role: 'Developer (Team member)',
+    appRole: 'Developer (Team member)',
+    title: 'Developer (Team member)',
     avatar: 'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?auto=format&fit=crop&q=80&w=150',
-    department: 'Product Management',
+    department: 'Product & Engineering',
     hourlyRate: 100,
     weeklyCapacityHours: 40,
-    skills: ['Requirements Gathering', 'User Story Mapping', 'UAT', 'Data Analytics']
+    skills: ['User Story Mapping', 'UAT', 'Data Analytics', 'TypeScript']
+  },
+  {
+    id: 'user-sh-5',
+    name: 'David Chen',
+    email: 'david.c@apex.io',
+    role: 'Tester (Team Member)',
+    appRole: 'Tester (Team Member)',
+    title: 'Tester (Team Member)',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=150',
+    department: 'Quality Assurance',
+    hourlyRate: 85,
+    weeklyCapacityHours: 40,
+    skills: ['CI/CD', 'Kubernetes', 'Automated QA', 'Docker', 'Cypress']
+  },
+  {
+    id: 'user-sh-10',
+    name: 'Kevin Taylor',
+    email: 'kevin.t@apex.io',
+    role: 'Tester (Team Member)',
+    appRole: 'Tester (Team Member)',
+    title: 'Tester (Team Member)',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150',
+    department: 'Quality Assurance',
+    hourlyRate: 95,
+    weeklyCapacityHours: 40,
+    skills: ['Playwright', 'Cypress', 'Performance Testing', 'Load Testing']
+  },
+  {
+    id: 'user-sh-4',
+    name: 'Priya Sharma',
+    email: 'priya.s@apex.io',
+    role: 'UI/UX Dev (Team Member)',
+    appRole: 'UI/UX Dev (Team Member)',
+    title: 'UI/UX Dev (Team Member)',
+    avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150',
+    department: 'Design',
+    hourlyRate: 90,
+    weeklyCapacityHours: 30,
+    skills: ['Figma', 'Design Systems', 'User Research', 'Accessibility', 'Tailwind CSS']
   }
 ];
 
@@ -320,7 +393,10 @@ interface ProjectContextType {
   createUserAccount: (user: UserProfile) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
   promoteUserRole: (userId: string, newRole: UserRole, newTitle?: string) => Promise<void>;
+  updateUserRole: (userId: string, newRole: AppRole | UserRole, isDualPMDev?: boolean, newTitle?: string) => Promise<void>;
   assignProjectManager: (projectId: string, pmUserId: string) => Promise<void>;
+  unassignProjectManager: (projectId: string, pmUserId: string) => Promise<void>;
+  setProjectManagers: (projectId: string, pmUserIds: string[]) => Promise<void>;
   switchProject: (projectId: string) => Promise<void>;
   createProject: (newProject: Partial<ProjectData>) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
@@ -445,6 +521,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return projectData.id || 'proj-1';
   });
 
+  const activeProjectIdRef = useRef<string>(activeProjectId);
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
   const [projectsList, setProjectsList] = useState<ProjectMeta[]>(() => {
     try {
       const cached = localStorage.getItem(PROJECTS_LIST_KEY);
@@ -507,7 +588,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Merge missing DEFAULT_USERS into cached users so new bench talent and PMs are always accessible
           const existingEmails = new Set(parsed.map((u: UserProfile) => u.email?.toLowerCase()));
-          const missingDefaults = DEFAULT_USERS.filter(d => !existingEmails.has(d.email?.toLowerCase()));
+          const existingIds = new Set(parsed.map((u: UserProfile) => u.id?.toLowerCase()));
+          const missingDefaults = DEFAULT_USERS.filter(d => !existingEmails.has(d.email?.toLowerCase()) && !existingIds.has(d.id?.toLowerCase()));
           const merged = [...parsed, ...missingDefaults];
 
           // Guarantee that at least one admin user exists and that admin@apex.io has role: 'admin'
@@ -584,6 +666,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const storedProjectsList = await localforage.getItem<ProjectMeta[]>(PROJECTS_LIST_KEY);
         if (isMounted && storedProjectsList && storedProjectsList.length > 0) {
           setProjectsList(storedProjectsList);
+        }
+        const storedAllProjectsMap = await localforage.getItem<Record<string, ProjectData>>(ALL_PROJECTS_MAP_KEY);
+        if (isMounted && storedAllProjectsMap && typeof storedAllProjectsMap === 'object' && Object.keys(storedAllProjectsMap).length > 0) {
+          setAllProjectsMap(prev => ({ ...prev, ...storedAllProjectsMap }));
         }
         const storedActiveId = await localforage.getItem<string>(ACTIVE_PROJECT_ID_KEY);
         if (isMounted && storedActiveId && (!storedProjectData || storedProjectData.id === storedActiveId)) {
@@ -772,6 +858,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(projectData));
           localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(projectsList));
+          localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(allProjectsMap));
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
           localStorage.setItem(USERS_LIST_KEY, JSON.stringify(allUsers));
           localStorage.setItem(AI_CONFIG_STORAGE_KEY, JSON.stringify(customAiConfig));
@@ -787,6 +874,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       localForageTimerRef.current = setTimeout(() => {
         localforage.setItem(LOCAL_STORAGE_KEY, projectData).catch(() => {});
         localforage.setItem(PROJECTS_LIST_KEY, projectsList).catch(() => {});
+        localforage.setItem(ALL_PROJECTS_MAP_KEY, allProjectsMap).catch(() => {});
         localforage.setItem(ACTIVE_PROJECT_ID_KEY, activeProjectId).catch(() => {});
         localforage.setItem(USER_STORAGE_KEY, currentUser).catch(() => {});
         localforage.setItem(USERS_LIST_KEY, allUsers).catch(() => {});
@@ -796,7 +884,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } catch (e) {
       console.error('Failed to schedule local persistence:', e);
     }
-  }, [projectData, projectsList, activeProjectId, currentUser, allUsers, isAuthenticated, customAiConfig]);
+  }, [projectData, projectsList, allProjectsMap, activeProjectId, currentUser, allUsers, isAuthenticated, customAiConfig]);
 
   // Handle Theme switching
   useEffect(() => {
@@ -957,24 +1045,30 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
           }
           if (message.type === 'INIT_STATE' || message.type === 'DATA_UPDATED') {
-            if (message.data) {
-              setProjectData(message.data);
-              queryClient.setQueryData(queryKeys.project('active'), {
-                activeProjectId: message.activeProjectId || message.data.id || 'proj-1',
+            if (message.data && message.data.id) {
+              setAllProjectsMap(prev => ({
+                ...prev,
+                [message.data.id]: message.data
+              }));
+              queryClient.setQueryData(queryKeys.project(message.data.id), {
+                activeProjectId: message.data.id,
                 data: message.data
               });
-              if (message.data.id) {
-                queryClient.setQueryData(queryKeys.project(message.data.id), {
+
+              // Only update the active project view if this update matches the client's current active project
+              const currentActive = activeProjectIdRef.current;
+              if (message.data.id === currentActive) {
+                setProjectData(message.data);
+                queryClient.setQueryData(queryKeys.project('active'), {
                   activeProjectId: message.data.id,
                   data: message.data
                 });
               }
             }
-            if (message.activeProjectId) setActiveProjectId(message.activeProjectId);
             if (message.projects) {
               setProjectsList(message.projects);
               queryClient.setQueryData(queryKeys.projectsList, {
-                activeProjectId: message.activeProjectId || 'proj-1',
+                activeProjectId: activeProjectIdRef.current,
                 projects: message.projects
               });
             }
@@ -1043,12 +1137,22 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (res.success && res.projects) {
           setProjectsList(res.projects);
           queryClient.setQueryData(queryKeys.projectsList, {
-            activeProjectId: res.activeProjectId || 'proj-1',
+            activeProjectId: activeProjectIdRef.current || 'proj-1',
             projects: res.projects
           });
           if (res.activeProjectId && !localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
             setActiveProjectId(res.activeProjectId);
+            activeProjectIdRef.current = res.activeProjectId;
           }
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/projects/all')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.projectsMap) {
+          setAllProjectsMap(prev => ({ ...prev, ...res.projectsMap }));
         }
       })
       .catch(() => {});
@@ -1097,11 +1201,27 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   // Switch Active Project
   const switchProject = async (projectId: string) => {
     setActiveProjectId(projectId);
+    activeProjectIdRef.current = projectId;
+    try {
+      localStorage.setItem(ACTIVE_PROJECT_ID_KEY, projectId);
+      localforage.setItem(ACTIVE_PROJECT_ID_KEY, projectId).catch(() => {});
+    } catch (e) {}
 
     // Immediate optimistic local update if target exists in allProjectsMap, default map, or cache
-    const targetLocal = allProjectsMap[projectId] || defaultProjectsMap[projectId];
+    let targetLocal = allProjectsMap[projectId] || defaultProjectsMap[projectId];
+    if (!targetLocal) {
+      const cached = queryClient.getQueryData<{ activeProjectId: string; data: ProjectData }>(queryKeys.project(projectId));
+      if (cached?.data) {
+        targetLocal = cached.data;
+      }
+    }
+
     if (targetLocal) {
       setProjectData(targetLocal);
+      setAllProjectsMap(prev => ({
+        ...prev,
+        [projectId]: targetLocal!
+      }));
       queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: projectId, data: targetLocal });
       queryClient.setQueryData(queryKeys.project(projectId), { activeProjectId: projectId, data: targetLocal });
       broadcastLocalTabSync(targetLocal, projectsList, projectId);
@@ -1112,22 +1232,18 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const res = await fetch('/api/projects/switch', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId })
+          body: JSON.stringify({ projectId, projectData: targetLocal })
         });
         const json = await res.json();
         if (json.success && json.data) {
           setProjectData(json.data);
+          setAllProjectsMap(prev => ({
+            ...prev,
+            [json.data.id || projectId]: json.data
+          }));
           queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: json.activeProjectId || projectId, data: json.data });
           queryClient.setQueryData(queryKeys.project(projectId), { activeProjectId: projectId, data: json.data });
           broadcastLocalTabSync(json.data, projectsList, projectId);
-        } else if (!targetLocal) {
-          // If server switch returned error and we don't have local default, push active project state
-          fetch('/api/project').then(r => r.json()).then(r => {
-            if (r.data) {
-              setProjectData(r.data);
-              queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: r.activeProjectId || projectId, data: r.data });
-            }
-          }).catch(() => {});
         }
       } catch (err) {
         console.warn('Failed to switch project on server:', err);
@@ -1211,6 +1327,16 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     setProjectData(newProject);
     setActiveProjectId(newProject.id);
+    activeProjectIdRef.current = newProject.id;
+    setAllProjectsMap(prev => ({
+      ...prev,
+      [newProject.id]: newProject
+    }));
+
+    try {
+      localStorage.setItem(ACTIVE_PROJECT_ID_KEY, newProject.id);
+      localforage.setItem(ACTIVE_PROJECT_ID_KEY, newProject.id).catch(() => {});
+    } catch (e) {}
 
     const newMetaList: ProjectMeta[] = [
       ...projectsList,
@@ -1250,6 +1376,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (projectsList.length <= 1) return;
     const updatedList = projectsList.filter(p => p.id !== projectId);
     setProjectsList(updatedList);
+    setAllProjectsMap(prev => {
+      const next = { ...prev };
+      delete next[projectId];
+      return next;
+    });
     queryClient.setQueryData(queryKeys.projectsList, { activeProjectId, projects: updatedList });
     queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
 
@@ -3082,18 +3213,21 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const promoteUserRole = async (userId: string, newRole: UserRole, newTitle?: string) => {
-    // Strict role boundary: Only Executive Administrators can promote or modify user roles
-    if (currentUser.role !== 'admin') {
-      console.warn('Unauthorized role change attempt. Only Executive Admins can assign or promote user roles.');
+    // Flow handled by PM and Admin roles only
+    if (!canManageRolesAndTeam(currentUser)) {
+      console.warn('Unauthorized role change attempt. Only Admin and PM can assign or promote user roles.');
       return;
     }
+
+    const normalizedRole = normalizeToAppRole(newRole as string);
 
     const updatedUsers = allUsers.map(u => {
       if (u.id === userId) {
         return {
           ...u,
-          role: newRole,
-          title: newTitle || (newRole === 'admin' ? 'Executive Administrator' : newRole === 'pm' ? 'Project Manager' : u.title)
+          role: normalizedRole,
+          appRole: normalizedRole,
+          title: newTitle || normalizedRole
         };
       }
       return u;
@@ -3121,47 +3255,513 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const targetUser = updatedUsers.find(u => u.id === userId);
     addAuditNote(
       'Updated User Role / Permissions',
-      `Changed role for ${targetUser?.name || userId} to ${newRole.toUpperCase()}${newTitle ? ` (${newTitle})` : ''}.`,
+      `Changed role for ${targetUser?.name || userId} to ${normalizedRole}${newTitle ? ` (${newTitle})` : ''}.`,
+      'audit'
+    );
+  };
+
+  const updateUserRole = async (userId: string, newRole: AppRole | UserRole, isDualPMDev?: boolean, newTitle?: string) => {
+    // Access control: Managed by PM and Admin roles only
+    if (!canManageRolesAndTeam(currentUser)) {
+      console.warn('Unauthorized role update. Only PM and Admin roles can manage user roles and dual PM+Developer access.');
+      return;
+    }
+
+    const normalizedRole = normalizeToAppRole(newRole as string);
+
+    const updatedUsers = allUsers.map(u => {
+      if (u.id === userId) {
+        const dualFlag = isDualPMDev !== undefined ? isDualPMDev : u.isDualPMDev;
+        return {
+          ...u,
+          role: normalizedRole,
+          appRole: normalizedRole,
+          isDualPMDev: dualFlag,
+          hasPMAccess: dualFlag || normalizedRole === 'Admin' || normalizedRole === 'Project Manager',
+          title: newTitle || (dualFlag && normalizedRole === 'Developer (Team member)' ? 'Developer (Team member) & PM' : normalizedRole)
+        };
+      }
+      return u;
+    });
+
+    setAllUsers(updatedUsers);
+    try {
+      localStorage.setItem(USERS_LIST_KEY, JSON.stringify(updatedUsers));
+      await localforage.setItem(USERS_LIST_KEY, updatedUsers);
+    } catch (e) {
+      console.warn('Failed to persist all users:', e);
+    }
+
+    if (currentUser.id === userId) {
+      const updatedCurrent = updatedUsers.find(u => u.id === userId)!;
+      setCurrentUser(updatedCurrent);
+      try {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedCurrent));
+        await localforage.setItem(USER_STORAGE_KEY, updatedCurrent);
+      } catch (e) {
+        // Ignore
+      }
+    }
+
+    // Also sync active project stakeholder if present
+    const existingShIdx = projectData.stakeholders.findIndex(s => s.id === userId || (s.email && s.email.toLowerCase() === (updatedUsers.find(u => u.id === userId)?.email || '').toLowerCase()));
+    if (existingShIdx >= 0) {
+      const updatedStakeholders = [...projectData.stakeholders];
+      const prevSh = updatedStakeholders[existingShIdx];
+      const dualFlag = isDualPMDev !== undefined ? isDualPMDev : prevSh.isDualPMDev;
+      updatedStakeholders[existingShIdx] = {
+        ...prevSh,
+        role: normalizedRole,
+        appRole: normalizedRole,
+        isDualPMDev: dualFlag,
+        hasPMAccess: dualFlag || normalizedRole === 'Admin' || normalizedRole === 'Project Manager'
+      };
+      const updatedProj = { ...projectData, stakeholders: updatedStakeholders };
+      setProjectData(updatedProj);
+      broadcastLocalTabSync(updatedProj);
+    }
+
+    const targetUser = updatedUsers.find(u => u.id === userId);
+    addAuditNote(
+      'Updated Member Role & Dual Access',
+      `Assigned role ${normalizedRole} to ${targetUser?.name || userId}${isDualPMDev ? ' with Dual Developer + PM access enabled' : ''}.`,
       'audit'
     );
   };
 
   const assignProjectManager = async (projectId: string, pmUserId: string) => {
-    const pmUser = allUsers.find(u => u.id === pmUserId);
-    if (!pmUser) return;
+    let pmUser = allUsers.find(u => u.id.toLowerCase() === pmUserId.toLowerCase() || (u.email && u.email.toLowerCase() === pmUserId.toLowerCase()));
+    
+    // Get current target project
+    const currentProj = (allProjectsMap && allProjectsMap[projectId]) ||
+      (projectId === activeProjectId ? projectData : defaultProjectsMap[projectId]);
+    if (!currentProj) return;
 
-    // Check if target project is active project
-    if (projectId === activeProjectId) {
-      // Ensure PM is in stakeholders list with lead role
-      const existingIdx = projectData.stakeholders.findIndex(s => s.id === pmUser.id || s.email === pmUser.email);
-      let updatedStakeholders = [...projectData.stakeholders];
-      const pmStakeholder: Stakeholder = {
-        id: pmUser.id,
-        name: pmUser.name,
-        email: pmUser.email,
-        role: pmUser.title || 'Project Manager & Scrum Master',
-        category: 'internal',
-        avatar: pmUser.avatar,
-        hourlyRate: pmUser.hourlyRate || 100,
-        weeklyCapacityHours: pmUser.weeklyCapacityHours || 40,
-        skills: pmUser.skills || ['Agile', 'Scrum', 'Leadership'],
-        status: 'active'
-      };
-
-      if (existingIdx >= 0) {
-        updatedStakeholders[existingIdx] = pmStakeholder;
-      } else {
-        updatedStakeholders.unshift(pmStakeholder);
+    if (!pmUser) {
+      // Look in stakeholders across projects
+      const allProjs: any[] = Object.values(allProjectsMap || {});
+      if (projectData) allProjs.push(projectData);
+      for (const p of allProjs) {
+        const sh = (p.stakeholders || []).find((s: any) => s.id?.toLowerCase() === pmUserId.toLowerCase() || s.email?.toLowerCase() === pmUserId.toLowerCase());
+        if (sh) {
+          pmUser = {
+            id: sh.id,
+            name: sh.name,
+            email: sh.email || `${sh.id}@placeholder.local`,
+            role: 'Project Manager',
+            appRole: 'Project Manager',
+            title: sh.role || 'Project Manager',
+            avatar: sh.avatar,
+            isDummy: Boolean(sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder'))),
+            isPlaceholder: Boolean(sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder'))),
+            hourlyRate: sh.hourlyRate || 100,
+            weeklyCapacityHours: sh.weeklyCapacityHours || 40,
+            skills: sh.skills || ['Project Management', 'Agile']
+          };
+          break;
+        }
       }
-
-      const updated = { ...projectData, stakeholders: updatedStakeholders };
-      setProjectData(updated);
-      broadcastLocalTabSync(updated);
     }
+
+    if (!pmUser) {
+      pmUser = {
+        id: pmUserId,
+        name: pmUserId,
+        email: `${pmUserId}@placeholder.local`,
+        role: 'Project Manager',
+        appRole: 'Project Manager',
+        title: 'Project Manager',
+        hourlyRate: 100,
+        weeklyCapacityHours: 40,
+        skills: ['Project Management']
+      };
+    }
+
+    // Ensure pmUser is in allUsers
+    setAllUsers(prev => {
+      if (!prev.some(u => u.id.toLowerCase() === pmUser!.id.toLowerCase())) {
+        const next = [...prev, pmUser!];
+        try {
+          localStorage.setItem(USERS_LIST_KEY, JSON.stringify(next));
+          localforage.setItem(USERS_LIST_KEY, next).catch(() => {});
+        } catch (e) {}
+        return next;
+      }
+      return prev;
+    });
+
+    const currentPmIds = currentProj.projectManagerIds || (currentProj.projectManagerId ? [currentProj.projectManagerId] : []);
+    const currentPmEmails = currentProj.projectManagerEmails || (currentProj.projectManagerEmail ? [currentProj.projectManagerEmail.toLowerCase()] : []);
+
+    const pmIds = Array.from(new Set([...currentPmIds, pmUser.id, pmUserId]));
+    const pmEmails = Array.from(new Set([...currentPmEmails, pmUser.email.toLowerCase()]));
+
+    // Update stakeholders list
+    const updatedStakeholders = [...(currentProj.stakeholders || [])];
+    const existingIdx = updatedStakeholders.findIndex(s => s.id.toLowerCase() === pmUser!.id.toLowerCase() || s.id.toLowerCase() === pmUserId.toLowerCase() || (s.email && s.email.toLowerCase() === pmUser!.email.toLowerCase()));
+
+    const pmStakeholder: Stakeholder = {
+      id: pmUser.id,
+      name: pmUser.name,
+      email: pmUser.email,
+      role: pmUser.title || 'Project Manager',
+      appRole: 'Project Manager',
+      category: 'internal',
+      avatar: pmUser.avatar,
+      hourlyRate: pmUser.hourlyRate || 110,
+      weeklyCapacityHours: pmUser.weeklyCapacityHours || 40,
+      skills: pmUser.skills || ['Agile', 'Scrum', 'Leadership'],
+      status: 'active'
+    };
+
+    if (existingIdx >= 0) {
+      updatedStakeholders[existingIdx] = {
+        ...updatedStakeholders[existingIdx],
+        role: updatedStakeholders[existingIdx].role?.toLowerCase().includes('pm') || updatedStakeholders[existingIdx].role?.toLowerCase().includes('manager')
+          ? updatedStakeholders[existingIdx].role
+          : (pmUser.title || 'Project Manager'),
+        appRole: 'Project Manager',
+        avatar: pmUser.avatar || updatedStakeholders[existingIdx].avatar
+      };
+    } else {
+      updatedStakeholders.unshift(pmStakeholder);
+    }
+
+    const updatedProj: ProjectData = {
+      ...currentProj,
+      projectManagerIds: pmIds,
+      projectManagerEmails: pmEmails,
+      projectManagerId: pmIds[0],
+      projectManagerEmail: pmEmails[0],
+      stakeholders: updatedStakeholders
+    };
+
+    // Update allProjectsMap
+    setAllProjectsMap(prev => {
+      const next = { ...prev, [projectId]: updatedProj };
+      try {
+        localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(next));
+        localforage.setItem(ALL_PROJECTS_MAP_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    // Update projectsList
+    setProjectsList(prev => {
+      const next = prev.map(p => {
+        if (p.id === projectId) {
+          return {
+            ...p,
+            projectManagerIds: pmIds,
+            projectManagerEmails: pmEmails,
+            projectManagerId: pmIds[0],
+            projectManagerEmail: pmEmails[0],
+            pmNames: pmIds.map(id => allUsers.find(u => u.id === id)?.name || id)
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(next));
+        localforage.setItem(PROJECTS_LIST_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    // If active project, update projectData
+    if (projectId === activeProjectId) {
+      setProjectData(updatedProj);
+    }
+
+    // Persist to server and broadcast
+    if (navigator.onLine) {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedProj })
+        });
+      } catch (e) {
+        console.warn('Failed to sync PM assignment to server:', e);
+      }
+    }
+
+    broadcastLocalTabSync(updatedProj);
 
     addAuditNote(
       'Assigned Project Manager',
-      `Assigned ${pmUser.name} as Lead Project Manager for Project ID: ${projectId}.`,
+      `Assigned ${pmUser.name} as Project Manager for ${updatedProj.projectName} (${updatedProj.projectCode}).`,
+      'audit'
+    );
+  };
+
+  const unassignProjectManager = async (projectId: string, pmUserId: string) => {
+    const pmUser = allUsers.find(u => u.id.toLowerCase() === pmUserId.toLowerCase() || u.email?.toLowerCase() === pmUserId.toLowerCase());
+    const currentProj = (allProjectsMap && allProjectsMap[projectId]) ||
+      (projectId === activeProjectId ? projectData : defaultProjectsMap[projectId]);
+    if (!currentProj) return;
+
+    const targetId = pmUser ? pmUser.id.toLowerCase() : pmUserId.toLowerCase();
+    const targetEmail = pmUser?.email?.toLowerCase();
+
+    const currentPmIds = currentProj.projectManagerIds || (currentProj.projectManagerId ? [currentProj.projectManagerId] : []);
+    const currentPmEmails = currentProj.projectManagerEmails || (currentProj.projectManagerEmail ? [currentProj.projectManagerEmail.toLowerCase()] : []);
+
+    const pmIds = currentPmIds.filter(id => id.toLowerCase() !== targetId && id.toLowerCase() !== pmUserId.toLowerCase() && (targetEmail ? id.toLowerCase() !== targetEmail : true));
+    const pmEmails = currentPmEmails.filter(e => targetEmail ? e.toLowerCase() !== targetEmail : true);
+
+    // Update stakeholders
+    const updatedStakeholders = (currentProj.stakeholders || []).map(s => {
+      const match = s.id.toLowerCase() === targetId || s.id.toLowerCase() === pmUserId.toLowerCase() || (targetEmail && s.email?.toLowerCase() === targetEmail);
+      if (match) {
+        return {
+          ...s,
+          appRole: 'Developer (Team member)' as AppRole,
+          role: s.role?.toLowerCase().includes('project manager') ? 'Contributor' : s.role
+        };
+      }
+      return s;
+    });
+
+    const updatedProj: ProjectData = {
+      ...currentProj,
+      projectManagerIds: pmIds,
+      projectManagerEmails: pmEmails,
+      projectManagerId: pmIds.length > 0 ? pmIds[0] : undefined,
+      projectManagerEmail: pmEmails.length > 0 ? pmEmails[0] : undefined,
+      stakeholders: updatedStakeholders
+    };
+
+    setAllProjectsMap(prev => {
+      const next = { ...prev, [projectId]: updatedProj };
+      try {
+        localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(next));
+        localforage.setItem(ALL_PROJECTS_MAP_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    setProjectsList(prev => {
+      const next = prev.map(p => {
+        if (p.id === projectId) {
+          return {
+            ...p,
+            projectManagerIds: pmIds,
+            projectManagerEmails: pmEmails,
+            projectManagerId: pmIds.length > 0 ? pmIds[0] : undefined,
+            projectManagerEmail: pmEmails.length > 0 ? pmEmails[0] : undefined,
+            pmNames: pmIds.map(id => allUsers.find(u => u.id === id)?.name || id)
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(next));
+        localforage.setItem(PROJECTS_LIST_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    if (projectId === activeProjectId) {
+      setProjectData(updatedProj);
+    }
+
+    if (navigator.onLine) {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedProj })
+        });
+      } catch (e) {
+        console.warn('Failed to sync PM unassignment to server:', e);
+      }
+    }
+
+    broadcastLocalTabSync(updatedProj);
+
+    addAuditNote(
+      'Unassigned Project Manager',
+      `Unassigned ${pmUser?.name || pmUserId} from ${updatedProj.projectName} (${updatedProj.projectCode}).`,
+      'audit'
+    );
+  };
+
+  const setProjectManagers = async (projectId: string, pmUserIds: string[]) => {
+    const currentProj = (allProjectsMap && allProjectsMap[projectId]) ||
+      (projectId === activeProjectId ? projectData : defaultProjectsMap[projectId]);
+    if (!currentProj) return;
+
+    // Filter non-empty unique IDs
+    const pmIds = Array.from(new Set(pmUserIds.filter(Boolean)));
+    const resolvedPmUsers: UserProfile[] = [];
+    const pmEmails: string[] = [];
+
+    pmIds.forEach(id => {
+      let u = allUsers.find(user => user.id.toLowerCase() === id.toLowerCase() || (user.email && user.email.toLowerCase() === id.toLowerCase()));
+      if (!u) {
+        // Look in stakeholders across projects
+        const allProjs: any[] = Object.values(allProjectsMap || {});
+        if (projectData) allProjs.push(projectData);
+        for (const p of allProjs) {
+          const sh = (p.stakeholders || []).find((s: any) => s.id?.toLowerCase() === id.toLowerCase() || s.email?.toLowerCase() === id.toLowerCase());
+          if (sh) {
+            u = {
+              id: sh.id,
+              name: sh.name,
+              email: sh.email || `${sh.id}@placeholder.local`,
+              role: 'Project Manager',
+              appRole: 'Project Manager',
+              title: sh.role || 'Project Manager',
+              avatar: sh.avatar,
+              isDummy: Boolean(sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder'))),
+              isPlaceholder: Boolean(sh.isPlaceholder || (sh.email && sh.email.includes('@placeholder'))),
+              hourlyRate: sh.hourlyRate || 100,
+              weeklyCapacityHours: sh.weeklyCapacityHours || 40,
+              skills: sh.skills || ['Project Management']
+            };
+            break;
+          }
+        }
+      }
+      if (!u) {
+        u = {
+          id,
+          name: id,
+          email: `${id}@placeholder.local`,
+          role: 'Project Manager',
+          appRole: 'Project Manager',
+          title: 'Project Manager',
+          hourlyRate: 100,
+          weeklyCapacityHours: 40,
+          skills: ['Project Management']
+        };
+      }
+      resolvedPmUsers.push(u);
+      if (u.email) {
+        pmEmails.push(u.email.toLowerCase());
+      }
+    });
+
+    const pmIdsLowerSet = new Set(pmIds.map(i => i.toLowerCase()));
+    const pmEmailsLowerSet = new Set(pmEmails.map(e => e.toLowerCase()));
+
+    // Ensure any newly resolved PM users are added to allUsers state
+    const missingUsers = resolvedPmUsers.filter(ru => !allUsers.some(u => u.id.toLowerCase() === ru.id.toLowerCase()));
+    if (missingUsers.length > 0) {
+      setAllUsers(prev => {
+        const next = [...prev, ...missingUsers];
+        try {
+          localStorage.setItem(USERS_LIST_KEY, JSON.stringify(next));
+          localforage.setItem(USERS_LIST_KEY, next).catch(() => {});
+        } catch (e) {}
+        return next;
+      });
+    }
+
+    // Adjust stakeholders
+    let updatedStakeholders = [...(currentProj.stakeholders || [])];
+
+    // For newly assigned PMs, add or update them
+    resolvedPmUsers.forEach(pmUser => {
+      const existingIdx = updatedStakeholders.findIndex(s => s.id.toLowerCase() === pmUser.id.toLowerCase() || (s.email && s.email.toLowerCase() === pmUser.email.toLowerCase()));
+      if (existingIdx >= 0) {
+        updatedStakeholders[existingIdx] = {
+          ...updatedStakeholders[existingIdx],
+          appRole: 'Project Manager',
+          avatar: pmUser.avatar || updatedStakeholders[existingIdx].avatar
+        };
+      } else {
+        updatedStakeholders.unshift({
+          id: pmUser.id,
+          name: pmUser.name,
+          email: pmUser.email,
+          role: pmUser.title || 'Project Manager',
+          appRole: 'Project Manager',
+          category: 'internal',
+          avatar: pmUser.avatar,
+          hourlyRate: pmUser.hourlyRate || 110,
+          weeklyCapacityHours: pmUser.weeklyCapacityHours || 40,
+          skills: pmUser.skills || ['Agile', 'Scrum', 'Leadership'],
+          status: 'active'
+        });
+      }
+    });
+
+    // For unassigned previous PMs, revert appRole
+    updatedStakeholders = updatedStakeholders.map(s => {
+      const wasPM = s.appRole === 'Project Manager';
+      const isStillSelected = pmIdsLowerSet.has(s.id.toLowerCase()) || (s.email && pmEmailsLowerSet.has(s.email.toLowerCase()));
+      if (wasPM && !isStillSelected) {
+        return {
+          ...s,
+          appRole: 'Developer (Team member)' as AppRole,
+          role: s.role?.toLowerCase().includes('project manager') ? 'Contributor' : s.role
+        };
+      }
+      return s;
+    });
+
+    const updatedProj: ProjectData = {
+      ...currentProj,
+      projectManagerIds: pmIds,
+      projectManagerEmails: pmEmails,
+      projectManagerId: pmIds.length > 0 ? pmIds[0] : undefined,
+      projectManagerEmail: pmEmails.length > 0 ? pmEmails[0] : undefined,
+      stakeholders: updatedStakeholders
+    };
+
+    setAllProjectsMap(prev => {
+      const next = { ...prev, [projectId]: updatedProj };
+      try {
+        localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(next));
+        localforage.setItem(ALL_PROJECTS_MAP_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    setProjectsList(prev => {
+      const next = prev.map(p => {
+        if (p.id === projectId) {
+          return {
+            ...p,
+            projectManagerIds: pmIds,
+            projectManagerEmails: pmEmails,
+            projectManagerId: pmIds.length > 0 ? pmIds[0] : undefined,
+            projectManagerEmail: pmEmails.length > 0 ? pmEmails[0] : undefined,
+            pmNames: resolvedPmUsers.map(u => u.name)
+          };
+        }
+        return p;
+      });
+      try {
+        localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(next));
+        localforage.setItem(PROJECTS_LIST_KEY, next).catch(() => {});
+      } catch (e) {}
+      return next;
+    });
+
+    if (projectId === activeProjectId) {
+      setProjectData(updatedProj);
+    }
+
+    if (navigator.onLine) {
+      try {
+        await fetch('/api/project', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: updatedProj })
+        });
+      } catch (e) {
+        console.warn('Failed to sync PMs to server:', e);
+      }
+    }
+
+    broadcastLocalTabSync(updatedProj);
+
+    addAuditNote(
+      'Updated Project Managers',
+      `Updated PM assignments for ${updatedProj.projectName}: ${resolvedPmUsers.map(u => u.name).join(', ') || 'None (Unassigned)'}.`,
       'audit'
     );
   };
@@ -3188,7 +3788,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         createUserAccount,
         updateUserProfile,
         promoteUserRole,
+        updateUserRole,
         assignProjectManager,
+        unassignProjectManager,
+        setProjectManagers,
         switchProject,
         createProject,
         deleteProject,

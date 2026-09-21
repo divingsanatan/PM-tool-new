@@ -103,8 +103,9 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
       const pmId = currentUser.id;
       const pmEmail = (currentUser.email || '').toLowerCase();
       const filtered = allProjects.filter(proj => {
-        const isLeadPM = proj.projectManagerId === pmId ||
-          (proj.projectManagerEmail && proj.projectManagerEmail.toLowerCase() === pmEmail);
+        const pmIds = (proj.projectManagerIds || (proj.projectManagerId ? [proj.projectManagerId] : [])).map(id => id.toLowerCase());
+        const pmEmails = (proj.projectManagerEmails || (proj.projectManagerEmail ? [proj.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+        const isLeadPM = pmIds.includes(pmId.toLowerCase()) || (pmEmail ? pmEmails.includes(pmEmail) : false);
         const isStakeholderInProj = (proj.stakeholders || []).some(
           s => s.id === pmId || (s.email && s.email.toLowerCase() === pmEmail)
         );
@@ -163,10 +164,11 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         return true;
       }
       // Match against project manager assignments in all projects
-      return allProjects.some(
-        p => p.projectManagerId === s.id ||
-             (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === emailLower)
-      );
+      return allProjects.some(p => {
+        const pmIds = (p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : [])).map(id => id.toLowerCase());
+        const pmEmails = (p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+        return pmIds.includes(s.id.toLowerCase()) || (emailLower ? pmEmails.includes(emailLower) : false);
+      });
     };
 
     const stakeholderMap = new Map<string, Stakeholder>();
@@ -276,25 +278,27 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
     const roleLower = (selectedStakeholder.role || '').toLowerCase();
     if (roleLower.includes('project manager') || roleLower.includes('pm')) return true;
     const targetEmail = (selectedStakeholder.email || '').toLowerCase();
-    const targetId = selectedStakeholder.id;
-    return allProjects.some(
-      p => p.projectManagerId === targetId ||
-           (p.projectManagerEmail && p.projectManagerEmail.toLowerCase() === targetEmail)
-    );
+    const targetId = selectedStakeholder.id.toLowerCase();
+    return allProjects.some(p => {
+      const pmIds = (p.projectManagerIds || (p.projectManagerId ? [p.projectManagerId] : [])).map(id => id.toLowerCase());
+      const pmEmails = (p.projectManagerEmails || (p.projectManagerEmail ? [p.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+      return pmIds.includes(targetId) || (targetEmail ? pmEmails.includes(targetEmail) : false);
+    });
   }, [selectedStakeholder, matchedUserObj, allProjects]);
 
   // Only the projects where this selected team member or PM is added/participates
   const memberProjects = useMemo(() => {
     if (!selectedStakeholder) return userAccessibleProjects;
     const targetEmail = (selectedStakeholder.email || '').toLowerCase();
-    const targetId = selectedStakeholder.id;
+    const targetId = selectedStakeholder.id.toLowerCase();
 
     if (isSelectedMemberPM) {
       const pmProjects = allProjects.filter(proj => {
-        const isAssignedPM = proj.projectManagerId === targetId ||
-          (proj.projectManagerEmail && proj.projectManagerEmail.toLowerCase() === targetEmail);
+        const pmIds = (proj.projectManagerIds || (proj.projectManagerId ? [proj.projectManagerId] : [])).map(id => id.toLowerCase());
+        const pmEmails = (proj.projectManagerEmails || (proj.projectManagerEmail ? [proj.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+        const isAssignedPM = pmIds.includes(targetId) || (targetEmail ? pmEmails.includes(targetEmail) : false);
         const isStakeholderInProj = (proj.stakeholders || []).some(
-          s => s.id === targetId || (s.email && s.email.toLowerCase() === targetEmail)
+          s => s.id?.toLowerCase() === targetId || (s.email && s.email.toLowerCase() === targetEmail)
         );
         return isAssignedPM || isStakeholderInProj;
       });
@@ -767,57 +771,63 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
         </div>
 
         {/* Cohesive Responsive Control Toolbar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full xl:w-auto min-w-0 flex-wrap">
-          {/* Unified Selectors Segment */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:flex items-center gap-1.5 p-1 bg-slate-950/70 rounded-xl border border-slate-800/80 min-w-0 flex-1 xl:flex-initial">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2.5 w-full xl:w-auto min-w-0">
+          {/* Selectors Segment */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 min-w-0 flex-1 xl:flex-initial">
             {/* Project Scope Filter */}
-            <ResponsiveSelect
-              value={selectedProjectId}
-              onChange={setSelectedProjectId}
-              icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
-              label="Scope:"
-              options={[
-                {
-                  value: 'all',
-                  label: `All Assigned (${memberProjects.length} Project${memberProjects.length !== 1 ? 's' : ''})`,
-                  icon: <span className="text-sm">🌐</span>
-                },
-                ...memberProjects.map(p => ({
-                  value: p.id,
-                  label: `[${p.projectCode}] ${p.projectName}`,
-                  sublabel: p.description,
-                  icon: <span className="text-sm">📁</span>
-                }))
-              ]}
-              align="auto"
-              className="bg-transparent border-transparent hover:bg-slate-900 text-emerald-300 shadow-none min-h-[36px] sm:min-h-0"
-            />
+            <div className="min-w-0 sm:w-56 md:w-60 lg:w-64">
+              <ResponsiveSelect
+                value={selectedProjectId}
+                onChange={setSelectedProjectId}
+                icon={<Building2 className="w-3.5 h-3.5 text-emerald-400" />}
+                label="Scope:"
+                options={[
+                  {
+                    value: 'all',
+                    label: `All Assigned (${memberProjects.length} Project${memberProjects.length !== 1 ? 's' : ''})`,
+                    icon: <span className="text-sm">🌐</span>
+                  },
+                  ...memberProjects.map(p => ({
+                    value: p.id,
+                    label: `[${p.projectCode}] ${p.projectName}`,
+                    sublabel: p.description,
+                    icon: <span className="text-sm">📁</span>
+                  }))
+                ]}
+                align="auto"
+                fullWidth
+                className="bg-slate-950/80 border-slate-800 hover:border-slate-700 text-emerald-300 min-h-[38px]"
+              />
+            </div>
 
             {/* Member Selector (Target Selection) */}
-            <ResponsiveSelect
-              value={selectedMemberId}
-              onChange={setSelectedMemberId}
-              icon={<User className="w-3.5 h-3.5 text-indigo-400" />}
-              label="Member:"
-              options={selectableStakeholders.map(s => {
-                const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
-                const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
-                const roleBadge = isProjectManager ? 'PM' : 'Team';
-                return {
-                  value: s.id,
-                  label: `${isAdmin ? `[${roleBadge}] ` : ''}${s.name}`,
-                  sublabel: `${s.role} • ${s.email}`,
-                  badge: isAdmin ? roleBadge : undefined,
-                  badgeColor: isProjectManager ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800 text-slate-300 border-slate-700'
-                };
-              })}
-              align="auto"
-              className="bg-transparent border-transparent hover:bg-slate-900 text-slate-100 shadow-none min-h-[36px] sm:min-h-0"
-            />
+            <div className="min-w-0 sm:w-52 md:w-56 lg:w-60">
+              <ResponsiveSelect
+                value={selectedMemberId}
+                onChange={setSelectedMemberId}
+                icon={<User className="w-3.5 h-3.5 text-indigo-400" />}
+                label="Member:"
+                options={selectableStakeholders.map(s => {
+                  const userObj = allUsers.find(u => u.email.toLowerCase() === s.email.toLowerCase());
+                  const isProjectManager = userObj?.role === 'pm' || (s.role || '').toLowerCase().includes('project manager');
+                  const roleBadge = isProjectManager ? 'PM' : 'Team';
+                  return {
+                    value: s.id,
+                    label: `${isAdmin ? `[${roleBadge}] ` : ''}${s.name}`,
+                    sublabel: `${s.role} • ${s.email}`,
+                    badge: isAdmin ? roleBadge : undefined,
+                    badgeColor: isProjectManager ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' : 'bg-slate-800 text-slate-300 border-slate-700'
+                  };
+                })}
+                align="auto"
+                fullWidth
+                className="bg-slate-950/80 border-slate-800 hover:border-slate-700 text-slate-100 min-h-[38px]"
+              />
+            </div>
           </div>
 
           {/* Action Buttons Row */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap shrink-0">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0">
             {/* Jump to Report Card & Calendar */}
             <button
               onClick={() => {
@@ -828,7 +838,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
                   setShowReportCardModal(true);
                 }
               }}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[36px] sm:min-h-0"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[38px]"
               title="Jump to comprehensive 360 Report Card & Availability Calendar card below"
             >
               <CalendarCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -839,7 +849,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             {!isAdmin && (
               <button
                 onClick={() => setShowLeaveModal(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[36px] sm:min-h-0"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-300 hover:text-indigo-200 border border-indigo-500/30 text-xs font-semibold transition-all shrink-0 shadow-sm cursor-pointer min-h-[38px]"
                 title="Apply for Day(s) Leave or a couple of Hours Off"
               >
                 <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -851,7 +861,7 @@ export const TeamMemberDashboard: React.FC<TeamMemberDashboardProps> = ({ onOpen
             {isPM && !isViewingSelf && (
               <button
                 onClick={() => handleSwitchToMemberRole(selectedStakeholder)}
-                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20 shrink-0 min-h-[36px] sm:min-h-0 cursor-pointer"
+                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20 shrink-0 min-h-[38px] cursor-pointer"
                 title={`Switch session role to act as ${selectedStakeholder.name}`}
               >
                 <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />

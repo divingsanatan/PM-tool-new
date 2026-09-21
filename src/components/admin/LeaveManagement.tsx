@@ -44,6 +44,7 @@ import {
   LayoutList,
   Sparkles,
   RefreshCw,
+  RotateCcw,
   Check,
   FileSpreadsheet,
   Download,
@@ -92,6 +93,28 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
   const [durationFilter, setDurationFilter] = useState<'all' | 'days' | 'hours'>('all');
   const [roleFilter, setRoleFilter] = useState<'all' | 'pm' | 'stakeholder'>('all');
   const [projectFilter, setProjectFilter] = useState<string>('all');
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Active filters count
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== 'all') count++;
+    if (typeFilter !== 'all') count++;
+    if (durationFilter !== 'all') count++;
+    if (roleFilter !== 'all') count++;
+    if (projectFilter !== 'all') count++;
+    if (searchQuery.trim()) count++;
+    return count;
+  }, [statusFilter, typeFilter, durationFilter, roleFilter, projectFilter, searchQuery]);
+
+  const handleResetFilters = () => {
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setDurationFilter('all');
+    setRoleFilter('all');
+    setProjectFilter('all');
+    setSearchQuery('');
+  };
 
   // Modals & Selected Leave inspection
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
@@ -703,112 +726,179 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
       </div>
 
       {/* Filter & Month Navigation Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-3xl">
-        {/* Month Navigation */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center bg-slate-950 rounded-2xl border border-slate-800 p-0.5">
+      <div className="bg-slate-900 border border-slate-800 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl space-y-3 shadow-xl">
+        {/* Top Control Bar: Month Navigation, Search & Filter Toggle */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Month Navigation */}
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+            <div className="flex items-center bg-slate-950 rounded-2xl border border-slate-800 p-0.5 flex-1 sm:flex-initial justify-between">
+              <button
+                onClick={handlePrevMonth}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-3 py-1 text-xs sm:text-sm font-bold text-slate-100 min-w-[120px] sm:min-w-[140px] text-center font-mono">
+                {monthTitle}
+              </span>
+              <button
+                onClick={handleNextMonth}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Next Month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
             <button
-              onClick={handlePrevMonth}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="Previous Month"
+              onClick={handleToday}
+              className="px-3 py-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold transition-colors shrink-0"
             >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="px-3.5 py-1 text-sm font-bold text-slate-100 min-w-[140px] text-center font-mono">
-              {monthTitle}
-            </span>
-            <button
-              onClick={handleNextMonth}
-              className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="Next Month"
-            >
-              <ChevronRight className="w-4 h-4" />
+              Today
             </button>
           </div>
 
-          <button
-            onClick={handleToday}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-semibold transition-colors"
-          >
-            Today
-          </button>
+          {/* Search, Filter Toggle & Reset */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Search Input */}
+            <div className="relative flex-1 sm:w-60 lg:w-48">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search member or reason..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-7 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  title="Clear search"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Mobile / Tablet Filter Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowMobileFilters(prev => !prev)}
+              className={`lg:hidden px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors ${
+                showMobileFilters || activeFiltersCount > 0
+                  ? 'bg-indigo-600/20 border-indigo-500/40 text-indigo-300'
+                  : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+              }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span>Filters</span>
+              {activeFiltersCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white font-mono text-[10px] font-bold">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+
+            {/* Reset All Filters Button */}
+            {activeFiltersCount > 0 && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 hover:bg-rose-500/20 text-xs font-medium transition-colors shrink-0"
+                title="Reset all filters"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span className="hidden sm:inline">Reset</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Filters Grid: Always visible on large screens, collapsible toggle on mobile */}
+        <div
+          className={`${
+            showMobileFilters ? 'grid' : 'hidden lg:grid'
+          } grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-3 border-t border-slate-800/80`}
+        >
           {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={e => setStatusFilter(e.target.value as any)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Statuses ({leaves.length})</option>
-            <option value="approved">Approved</option>
-            <option value="pending">Pending Approval</option>
-            <option value="rejected">Rejected</option>
-          </select>
+          <div className="min-w-0">
+            <label className="block lg:hidden text-[10px] text-slate-400 font-semibold mb-1">Status</label>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as any)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              <option value="all">All Statuses ({roleScopedLeaves.length})</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending Approval</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
 
           {/* Duration Unit Filter (Full Day vs Hourly) */}
-          <select
-            value={durationFilter}
-            onChange={e => setDurationFilter(e.target.value as any)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Durations (Days &amp; Hours)</option>
-            <option value="days">📅 Full Day(s) Only</option>
-            <option value="hours">⏱️ Hourly Off Only</option>
-          </select>
+          <div className="min-w-0">
+            <label className="block lg:hidden text-[10px] text-slate-400 font-semibold mb-1">Duration Unit</label>
+            <select
+              value={durationFilter}
+              onChange={e => setDurationFilter(e.target.value as any)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              <option value="all">All Durations (Days &amp; Hours)</option>
+              <option value="days">📅 Full Day(s) Only</option>
+              <option value="hours">⏱️ Hourly Off Only</option>
+            </select>
+          </div>
 
           {/* Role Routing Filter */}
-          <select
-            value={roleFilter}
-            onChange={e => setRoleFilter(e.target.value as any)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Applicant Roles</option>
-            <option value="pm">👑 PM Leaves (To Admin)</option>
-            <option value="stakeholder">👥 Team Member Leaves</option>
-          </select>
+          <div className="min-w-0">
+            <label className="block lg:hidden text-[10px] text-slate-400 font-semibold mb-1">Applicant Role</label>
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value as any)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              <option value="all">All Applicant Roles</option>
+              <option value="pm">👑 PM Leaves (To Admin)</option>
+              <option value="stakeholder">👥 Team Member Leaves</option>
+            </select>
+          </div>
 
           {/* Type Filter */}
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value as any)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Leave Types</option>
-            <option value="vacation">🏖️ Vacation</option>
-            <option value="sick">🏥 Sick / Medical</option>
-            <option value="conference">🎤 Conference</option>
-            <option value="training">📚 Training</option>
-            <option value="parental">👶 Parental</option>
-            <option value="unpaid">⏳ Unpaid / Sabbatical</option>
-          </select>
+          <div className="min-w-0">
+            <label className="block lg:hidden text-[10px] text-slate-400 font-semibold mb-1">Leave Type</label>
+            <select
+              value={typeFilter}
+              onChange={e => setTypeFilter(e.target.value as any)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              <option value="all">All Leave Types</option>
+              <option value="vacation">🏖️ Vacation</option>
+              <option value="sick">🏥 Sick / Medical</option>
+              <option value="conference">🎤 Conference</option>
+              <option value="training">📚 Training</option>
+              <option value="parental">👶 Parental</option>
+              <option value="unpaid">⏳ Unpaid / Sabbatical</option>
+            </select>
+          </div>
 
           {/* Project Filter */}
-          <select
-            value={projectFilter}
-            onChange={e => setProjectFilter(e.target.value)}
-            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-          >
-            <option value="all">All Projects</option>
-            {projectsList.map(p => (
-              <option key={p.id} value={p.id}>
-                {p.projectCode} - {p.projectName}
-              </option>
-            ))}
-          </select>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search member or reason..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-44"
-            />
+          <div className="min-w-0">
+            <label className="block lg:hidden text-[10px] text-slate-400 font-semibold mb-1">Impacted Project</label>
+            <select
+              value={projectFilter}
+              onChange={e => setProjectFilter(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 truncate"
+            >
+              <option value="all">All Projects</option>
+              {projectsList.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.projectCode} - {p.projectName}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -817,95 +907,99 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
       {/* 1. MONTHLY CALENDAR GRID VIEW */}
       {/* ========================================================================= */}
       {viewFormat === 'calendar' && (
-        <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
-          {/* Day of week headers */}
-          <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/80 text-center text-xs font-bold text-slate-400 uppercase tracking-wider py-3">
-            <div>Sun</div>
-            <div>Mon</div>
-            <div>Tue</div>
-            <div>Wed</div>
-            <div>Thu</div>
-            <div>Fri</div>
-            <div>Sat</div>
-          </div>
+        <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
+          <div className="overflow-x-auto custom-scrollbar">
+            <div className="min-w-[620px] md:min-w-0">
+              {/* Day of week headers */}
+              <div className="grid grid-cols-7 border-b border-slate-800 bg-slate-950/80 text-center text-xs font-bold text-slate-400 uppercase tracking-wider py-2.5 sm:py-3">
+                <div>Sun</div>
+                <div>Mon</div>
+                <div>Tue</div>
+                <div>Wed</div>
+                <div>Thu</div>
+                <div>Fri</div>
+                <div>Sat</div>
+              </div>
 
-          {/* Days Grid Cells */}
-          <div className="grid grid-cols-7 divide-x divide-y divide-slate-800/60 bg-slate-950/30">
-            {calendarDays.map((cell, idx) => {
-              const isWeekend = cell.date.getDay() === 0 || cell.date.getDay() === 6;
+              {/* Days Grid Cells */}
+              <div className="grid grid-cols-7 divide-x divide-y divide-slate-800/60 bg-slate-950/30">
+                {calendarDays.map((cell, idx) => {
+                  const isWeekend = cell.date.getDay() === 0 || cell.date.getDay() === 6;
 
-              return (
-                <div
-                  key={idx}
-                  className={`min-h-[110px] p-2 flex flex-col justify-between transition-colors group relative ${
-                    cell.isCurrentMonth ? 'bg-slate-900/40' : 'bg-slate-950/60 opacity-60'
-                  } ${cell.isToday ? 'ring-1 ring-inset ring-indigo-500/80 bg-indigo-950/20' : ''} ${
-                    isWeekend ? 'bg-slate-950/40' : ''
-                  }`}
-                >
-                  {/* Top Bar: Day Number & Add Action */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-xs font-mono font-bold w-6 h-6 rounded-full flex items-center justify-center ${
-                        cell.isToday
-                          ? 'bg-indigo-600 text-white font-black shadow'
-                          : cell.isCurrentMonth
-                          ? 'text-slate-300'
-                          : 'text-slate-600'
+                  return (
+                    <div
+                      key={idx}
+                      className={`min-h-[85px] sm:min-h-[110px] p-1.5 sm:p-2 flex flex-col justify-between transition-colors group relative ${
+                        cell.isCurrentMonth ? 'bg-slate-900/40' : 'bg-slate-950/60 opacity-60'
+                      } ${cell.isToday ? 'ring-1 ring-inset ring-indigo-500/80 bg-indigo-950/20' : ''} ${
+                        isWeekend ? 'bg-slate-950/40' : ''
                       }`}
                     >
-                      {cell.dayNumber}
-                    </span>
-
-                    {/* Quick Add Leave on this day */}
-                    {isPM && cell.isCurrentMonth && (
-                      <button
-                        onClick={() => {
-                          setSelectedUserForLeave(undefined);
-                          setIsLeaveModalOpen(true);
-                        }}
-                        title={`Log leave on ${cell.dateStr}`}
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-slate-800 text-slate-400 hover:text-white transition-all text-[10px]"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Day's Leaves Stack */}
-                  <div className="mt-1 space-y-1 overflow-y-auto max-h-[85px] custom-scrollbar">
-                    {cell.leaves.map(l => {
-                      const cfg = leaveTypeConfig[l.leaveType] || leaveTypeConfig.other;
-                      const isPending = l.status === 'pending';
-
-                      return (
-                        <button
-                          type="button"
-                          key={l.id}
-                          onClick={() => setInspectingLeave(l)}
-                          className={`w-full text-left px-1.5 py-1 rounded-lg text-[10px] font-semibold border flex items-center justify-between gap-1 cursor-pointer transition-transform hover:scale-[1.02] focus-visible:ring-2 ${
-                            isPending
-                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-                              : `${cfg.bg} ${cfg.border} ${cfg.text}`
+                      {/* Top Bar: Day Number & Add Action */}
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-xs font-mono font-bold w-6 h-6 rounded-full flex items-center justify-center ${
+                            cell.isToday
+                              ? 'bg-indigo-600 text-white font-black shadow'
+                              : cell.isCurrentMonth
+                              ? 'text-slate-300'
+                              : 'text-slate-600'
                           }`}
-                          title={`${l.userName} - ${cfg.label} (${l.startDate} to ${l.endDate})\nStatus: ${l.status.toUpperCase()}\nReason: ${l.reason}`}
                         >
-                          <div className="flex items-center gap-1 min-w-0 truncate">
-                            <span className="shrink-0">{cfg.icon}</span>
-                            <span className="truncate font-bold">{l.userName.split(' ')[0]}</span>
-                          </div>
-                          {isPending && (
-                            <span className="text-[9px] px-1 rounded bg-amber-400/20 text-amber-300 shrink-0 font-mono">
-                              Pending
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
+                          {cell.dayNumber}
+                        </span>
+
+                        {/* Quick Add Leave on this day */}
+                        {isPM && cell.isCurrentMonth && (
+                          <button
+                            onClick={() => {
+                              setSelectedUserForLeave(undefined);
+                              setIsLeaveModalOpen(true);
+                            }}
+                            title={`Log leave on ${cell.dateStr}`}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-md bg-slate-800 text-slate-400 hover:text-white transition-all text-[10px]"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Day's Leaves Stack */}
+                      <div className="mt-1 space-y-1 overflow-y-auto max-h-[85px] custom-scrollbar">
+                        {cell.leaves.map(l => {
+                          const cfg = leaveTypeConfig[l.leaveType] || leaveTypeConfig.other;
+                          const isPending = l.status === 'pending';
+
+                          return (
+                            <button
+                              type="button"
+                              key={l.id}
+                              onClick={() => setInspectingLeave(l)}
+                              className={`w-full text-left px-1.5 py-1 rounded-lg text-[10px] font-semibold border flex items-center justify-between gap-1 cursor-pointer transition-transform hover:scale-[1.02] focus-visible:ring-2 truncate ${
+                                isPending
+                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                  : `${cfg.bg} ${cfg.border} ${cfg.text}`
+                              }`}
+                              title={`${l.userName} - ${cfg.label} (${l.startDate} to ${l.endDate})\nStatus: ${l.status.toUpperCase()}\nReason: ${l.reason}`}
+                            >
+                              <div className="flex items-center gap-1 min-w-0 truncate">
+                                <span className="shrink-0">{cfg.icon}</span>
+                                <span className="truncate font-bold">{l.userName.split(' ')[0]}</span>
+                              </div>
+                              {isPending && (
+                                <span className="text-[9px] px-1 rounded bg-amber-400/20 text-amber-300 shrink-0 font-mono">
+                                  Pending
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -914,13 +1008,13 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
       {/* 2. HORIZONTAL TIMELINE VIEW */}
       {/* ========================================================================= */}
       {viewFormat === 'timeline' && (
-        <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
+          <div className="p-3.5 sm:p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-slate-950/60">
             <div>
-              <h3 className="text-sm font-bold text-slate-100">Team Member Schedule Timeline</h3>
-              <p className="text-xs text-slate-400">Horizontal monthly allocation map showing blocked leave periods.</p>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-100">Team Member Schedule Timeline</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400">Horizontal monthly allocation map showing blocked leave periods.</p>
             </div>
-            <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-2 sm:gap-3 text-xs flex-wrap">
               <span className="flex items-center gap-1.5 text-sky-400">
                 <span className="w-2.5 h-2.5 rounded-sm bg-sky-500" /> Vacation
               </span>
@@ -936,7 +1030,7 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <div className="min-w-[900px]">
               {/* Header Days */}
               <div className="flex border-b border-slate-800 bg-slate-950 text-slate-400 text-xs font-mono">
@@ -1037,17 +1131,17 @@ export const LeaveManagement: React.FC<LeaveManagementProps> = ({ onNavigateToPr
       {/* 3. LEAVE REQUESTS & APPROVALS TABLE */}
       {/* ========================================================================= */}
       {viewFormat === 'table' && (
-        <div className="rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div className="rounded-2xl sm:rounded-3xl bg-slate-900 border border-slate-800 overflow-hidden shadow-2xl">
+          <div className="p-3.5 sm:p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
             <div>
-              <h3 className="text-sm font-bold text-slate-100">Leave Requests & Governance Approvals</h3>
-              <p className="text-xs text-slate-400">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-100">Leave Requests & Governance Approvals</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400">
                 Review submitted time-off, approve availability blocks, and manage task delegations.
               </p>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-xs border-collapse min-w-[950px]">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold">

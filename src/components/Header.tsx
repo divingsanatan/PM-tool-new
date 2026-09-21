@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useProject } from '../context/ProjectContext';
 import { ViewMode, Task, RaidItem, Stakeholder } from '../types';
+import { isUserAdmin, isUserPM } from '../utils/roleUtils';
 import { ProjectManagementModal } from './modals/ProjectManagementModal';
 import { UserAuthModal } from './modals/UserAuthModal';
 import {
@@ -32,7 +33,8 @@ import {
   Check,
   FolderPlus,
   Layers,
-  Pencil
+  Pencil,
+  Building2
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -59,8 +61,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCommandPalette
 }) => {
   const { projectData, projectsList, allProjectsMap, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
-  const isAdmin = currentUser?.role === 'admin';
-  const isPM = currentUser?.role === 'pm';
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
   const isPrivileged = isAdmin || isPM;
   const [showConfirmReset, setShowConfirmReset] = useState(false);
   const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
@@ -77,8 +79,10 @@ export const Header: React.FC<HeaderProps> = ({
     const currentEmail = (currentUser?.email || '').toLowerCase();
     const currentId = currentUser?.id;
 
-    const isPMForProject = pData.projectManagerId === currentId ||
-      (pData.projectManagerEmail && pData.projectManagerEmail.toLowerCase() === currentEmail);
+    const pmIds = (pData.projectManagerIds || (pData.projectManagerId ? [pData.projectManagerId] : [])).map(id => id.toLowerCase());
+    const pmEmails = (pData.projectManagerEmails || (pData.projectManagerEmail ? [pData.projectManagerEmail.toLowerCase()] : [])).map(e => e.toLowerCase());
+    const isPMForProject = (currentId ? pmIds.includes(currentId.toLowerCase()) : false) ||
+      (currentEmail ? pmEmails.includes(currentEmail) : false);
 
     const isStakeholder = (pData.stakeholders || []).some(
       s => s.id === currentId || (s.email && s.email.toLowerCase() === currentEmail)
@@ -257,111 +261,134 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-project-selector"
               onClick={() => setIsProjectDropdownOpen(prev => !prev)}
-              className="group text-left px-2 sm:px-2.5 py-1 rounded-xl bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 transition-all flex items-center gap-1 shrink min-w-0 max-w-[95px] xs:max-w-[125px] sm:max-w-[165px] md:max-w-[195px] lg:max-w-[220px]"
+              className="group text-left px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300/80 dark:border-slate-700/80 transition-all flex items-center gap-1.5 shrink min-w-0 max-w-[125px] xs:max-w-[155px] sm:max-w-[190px] md:max-w-[230px] lg:max-w-[260px] shadow-xs"
               title="Click to Switch Project or Manage Portfolio"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1 min-w-0">
-                  <h1 className="font-bold text-xs sm:text-sm text-slate-100 tracking-tight leading-none group-hover:text-indigo-300 transition-colors truncate min-w-0">
+                  <h1 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 tracking-tight leading-none group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors truncate min-w-0">
                     {projectData.projectName || 'Apex Project'}
                   </h1>
-                  <span className="hidden 2xl:inline-block text-[9px] px-1 py-0.5 rounded bg-slate-950 text-indigo-300 font-mono border border-slate-800 shrink-0">
+                  <span className="hidden 2xl:inline-block text-[9px] px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-950 text-indigo-700 dark:text-indigo-300 font-mono border border-slate-300 dark:border-slate-800 shrink-0 font-bold">
                     {projectData.projectCode}
                   </span>
                 </div>
               </div>
-              <ChevronDown className={`w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-400 group-hover:text-slate-200 transition-transform shrink-0 ${isProjectDropdownOpen ? 'rotate-180 text-indigo-400' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-transform shrink-0 ${isProjectDropdownOpen ? 'rotate-180 text-indigo-600 dark:text-indigo-400' : ''}`} />
             </button>
 
-            {/* Quick Project Switch Dropdown Menu */}
+            {/* Quick Project Switch Dropdown Menu (With Mobile Backdrop & High-Contrast Light/Dark Themes) */}
             {isProjectDropdownOpen && (
-              <div
-                ref={projectDropdownRef}
-                className="absolute left-0 top-full mt-1.5 w-64 sm:w-72 max-w-[calc(100vw-1.5rem)] bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 p-2 animate-fade-in space-y-1.5"
-              >
-                <div className="px-2.5 py-1.5 border-b border-slate-800 flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  <span>Switch Project ({projectsList.length})</span>
-                  <span className="text-[10px] text-emerald-400 font-normal">Instant Multi-Project Sync</span>
-                </div>
+              <>
+                {/* Mobile Backdrop Overlay for Clean Tap Dismissal */}
+                <div
+                  className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-xs sm:hidden"
+                  onClick={() => setIsProjectDropdownOpen(false)}
+                />
 
-                <div className="max-h-64 overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
-                  {projectsList.map(proj => {
-                    const currentActiveProjectId = projectData?.id || activeProjectId;
-                    const isActive = proj.id === currentActiveProjectId;
-                    const { isMember, isPMForProject, roleBadge } = getProjectMembership(proj.id);
+                <div
+                  ref={projectDropdownRef}
+                  className="fixed sm:absolute left-3 right-3 sm:left-0 sm:right-auto top-[60px] sm:top-full mt-1.5 sm:w-88 md:w-96 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 animate-in fade-in zoom-in-95 duration-150 space-y-2.5"
+                >
+                  <div className="px-1 py-1 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Briefcase className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                        Switch Project ({projectsList.length})
+                      </span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      Multi-Project Sync
+                    </span>
+                  </div>
 
-                    return (
-                      <button
-                        key={proj.id}
-                        onClick={() => {
-                          switchProject(proj.id);
-                          setIsProjectDropdownOpen(false);
-                        }}
-                        className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-2 border ${
-                          isActive
-                            ? 'bg-indigo-950/60 border-indigo-500/50 text-slate-100 shadow-sm ring-1 ring-indigo-500/30'
-                            : 'bg-slate-950/40 hover:bg-slate-800/80 border-slate-800/60 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-xs truncate">{proj.projectName}</span>
-                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-900 text-indigo-300 border border-slate-800 shrink-0">
-                              {proj.projectCode}
-                            </span>
-                            {/* User Assignment Status Badge */}
-                            {roleBadge && (
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-medium shrink-0 border ${
-                                isAdmin
-                                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                                  : isPMForProject
-                                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                              }`}>
-                                {isAdmin ? '👑 Portfolio' : isPMForProject ? '👔 Lead PM' : '✓ My Project'}
+                  <div className="max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
+                    {projectsList.map(proj => {
+                      const currentActiveProjectId = projectData?.id || activeProjectId;
+                      const isActive = proj.id === currentActiveProjectId;
+                      const { isPMForProject, roleBadge } = getProjectMembership(proj.id);
+
+                      return (
+                        <button
+                          key={proj.id}
+                          onClick={() => {
+                            switchProject(proj.id);
+                            setIsProjectDropdownOpen(false);
+                          }}
+                          className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between gap-2.5 border ${
+                            isActive
+                              ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-400/80 dark:border-indigo-500/60 text-slate-900 dark:text-slate-100 shadow-sm ring-2 ring-indigo-500/30'
+                              : 'bg-slate-50/80 hover:bg-slate-100/90 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                {proj.projectName}
                               </span>
+                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-slate-300 dark:border-slate-800 shrink-0">
+                                {proj.projectCode}
+                              </span>
+                              {/* User Assignment Status Badge */}
+                              {roleBadge && (
+                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 border ${
+                                  isAdmin
+                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                                    : isPMForProject
+                                    ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                }`}>
+                                  {isAdmin ? '👑 Portfolio' : isPMForProject ? '👔 Lead PM' : '✓ My Project'}
+                                </span>
+                              )}
+                            </div>
+                            {proj.description && (
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-snug">
+                                {proj.description}
+                              </p>
                             )}
                           </div>
-                          {proj.description && (
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{proj.description}</p>
+
+                          {isActive ? (
+                            <div className="p-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs shrink-0">
+                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </div>
+                          ) : (
+                            <div className="p-1 rounded-full text-slate-400 dark:text-slate-600 shrink-0 opacity-0 group-hover:opacity-100">
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </div>
                           )}
-                        </div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-                        {isActive && (
-                          <div className="p-1 rounded-full bg-emerald-500/20 text-emerald-400 shrink-0">
-                            <Check className="w-3.5 h-3.5" />
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                    <button
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        setEditTargetProjectId(projectData.id);
+                        setIsProjectsModalOpen(true);
+                      }}
+                      className="w-full p-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-200 border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 transition-colors shadow-xs"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Edit Current Project Details</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsProjectDropdownOpen(false);
+                        setEditTargetProjectId(null);
+                        setIsProjectsModalOpen(true);
+                      }}
+                      className="w-full p-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700/80 flex items-center justify-center gap-2 transition-colors shadow-md shadow-indigo-600/20"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-white" />
+                      <span>Manage Portfolio & Create Project</span>
+                    </button>
+                  </div>
                 </div>
-
-                <div className="pt-1.5 border-t border-slate-800 space-y-1">
-                  <button
-                    onClick={() => {
-                      setIsProjectDropdownOpen(false);
-                      setEditTargetProjectId(projectData.id);
-                      setIsProjectsModalOpen(true);
-                    }}
-                    className="w-full p-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700/80 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <Pencil className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Edit Current Project Details</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsProjectDropdownOpen(false);
-                      setEditTargetProjectId(null);
-                      setIsProjectsModalOpen(true);
-                    }}
-                    className="w-full p-2 rounded-xl text-xs font-semibold bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border border-indigo-500/30 flex items-center justify-center gap-2 transition-colors"
-                  >
-                    <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Manage Portfolio & Create Project</span>
-                  </button>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -380,10 +407,10 @@ export const Header: React.FC<HeaderProps> = ({
         >
           <div className={`relative flex items-center min-w-0 rounded-xl transition-all ${
             isSearchFocused
-              ? 'ring-2 ring-indigo-500/80 bg-slate-950 shadow-lg shadow-indigo-500/10'
-              : 'bg-slate-950/80 hover:bg-slate-950 border border-slate-800/80 group-hover:border-slate-700'
+              ? 'ring-2 ring-indigo-500/80 bg-white dark:bg-slate-950 shadow-lg shadow-indigo-500/10 border-indigo-400'
+              : 'bg-slate-100/90 dark:bg-slate-950/80 hover:bg-slate-200/80 dark:hover:bg-slate-950 border border-slate-300 dark:border-slate-800/80 group-hover:border-slate-400 dark:group-hover:border-slate-700'
           }`}>
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-400/80 group-hover:text-indigo-400 absolute left-2.5 pointer-events-none shrink-0 transition-colors" />
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 dark:text-indigo-400/80 group-hover:text-indigo-500 absolute left-2.5 pointer-events-none shrink-0 transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
@@ -403,8 +430,8 @@ export const Header: React.FC<HeaderProps> = ({
                   updateSearchPosition();
                 }
               }}
-              placeholder="Search tasks, RAID, team (⌘K)..."
-              className="w-full bg-transparent pl-8 sm:pl-9 pr-10 sm:pr-14 py-1.5 text-base sm:text-xs text-slate-200 placeholder-slate-400 outline-none shadow-inner truncate cursor-pointer"
+              placeholder="Search tasks, team (⌘K)..."
+              className="w-full bg-transparent pl-8 sm:pl-9 pr-8 sm:pr-14 py-1.5 text-xs text-slate-900 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-400 outline-none truncate cursor-pointer font-medium"
             />
             {searchQuery && !onOpenCommandPalette ? (
               <button
@@ -990,6 +1017,32 @@ export const Header: React.FC<HeaderProps> = ({
                       <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
                       <span>Log Risk or Issue (RAID)</span>
                     </button>
+
+                    {isAdmin && (
+                      <>
+                        <button
+                          onClick={() => {
+                            onSelectView?.('admin_portfolio');
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors text-left"
+                        >
+                          <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span>Admin Portfolio & Hub</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            onSelectView?.('admin_stakeholders');
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-indigo-200 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors text-left"
+                        >
+                          <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+                          <span>Stakeholders, PMs & Talent Directory</span>
+                        </button>
+                      </>
+                    )}
 
                     {isPM && (
                       <>

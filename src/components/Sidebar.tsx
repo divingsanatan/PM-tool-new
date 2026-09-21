@@ -3,6 +3,11 @@ import { ViewMode } from '../types';
 import { useProject } from '../context/ProjectContext';
 import { triggerHaptic } from '../utils/haptics';
 import {
+  isUserAdmin,
+  isUserPM,
+  canAccessPMActions
+} from '../utils/roleUtils';
+import {
   LayoutDashboard,
   Award,
   Network,
@@ -71,8 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenCommandPalette
 }) => {
   const { currentUser, projectData, customAiConfig, leaves } = useProject();
-  const isAdmin = currentUser.role === 'admin';
-  const isPM = currentUser.role === 'pm';
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
   
   // Calculate role-scoped pending leaves count for sidebar badge:
   const pendingLeavesCount = (leaves || []).filter(l => {
@@ -126,14 +131,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }, [toggleCollapse]);
 
   const rawMenuItems: MenuItem[] = [
-    ...(isAdmin ? [{
-      id: 'admin_portfolio' as ViewMode,
-      label: 'Portfolio & Operations',
-      shortLabel: 'Admin Hub',
-      category: 'admin' as const,
-      adminOnly: true,
-      icon: <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
-    }] : []),
+    ...(isAdmin ? [
+      {
+        id: 'admin_portfolio' as ViewMode,
+        label: 'Portfolio & Operations',
+        shortLabel: 'Admin Hub',
+        category: 'admin' as const,
+        adminOnly: true,
+        icon: <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
+      },
+      {
+        id: 'admin_stakeholders' as ViewMode,
+        label: 'Stakeholders, PMs & Talent',
+        shortLabel: 'Talent & Heatmap',
+        category: 'admin' as const,
+        adminOnly: true,
+        icon: <Users className="w-4 h-4 text-indigo-400 shrink-0" />
+      }
+    ] : []),
     {
       id: 'dashboard',
       label: 'Executive Dashboard',

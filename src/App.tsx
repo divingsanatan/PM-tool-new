@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ProjectProvider, useProject } from './context/ProjectContext';
-import { ViewMode, Task, RaidItem, Stakeholder } from './types';
+import { ViewMode, Task, RaidItem, Stakeholder, StakeholderCategory } from './types';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -16,6 +16,7 @@ import { GovernanceView } from './components/governance/GovernanceView';
 import { ProjectBoardView } from './components/board/ProjectBoardView';
 import { ProjectChatView } from './components/chat/ProjectChatView';
 import { AdminPortfolioView } from './components/admin/AdminPortfolioView';
+import { AdminStakeholdersView } from './components/admin/AdminStakeholdersView';
 import { LeaveManagement } from './components/admin/LeaveManagement';
 
 import { TaskModal } from './components/modals/TaskModal';
@@ -57,11 +58,12 @@ function MainLayout() {
       currentView === 'stakeholders' || 
       currentView === 'workload' || 
       currentView === 'governance' ||
-      currentView === 'admin_portfolio'
+      currentView === 'admin_portfolio' ||
+      currentView === 'admin_stakeholders'
     )) {
       handleSelectView('member_dashboard');
     }
-    if (!isAdmin && currentView === 'admin_portfolio') {
+    if (!isAdmin && (currentView === 'admin_portfolio' || currentView === 'admin_stakeholders')) {
       handleSelectView(isPM ? 'dashboard' : 'member_dashboard');
     }
   }, [isPM, isAdmin, currentView, handleSelectView]);
@@ -106,7 +108,13 @@ function MainLayout() {
   const [stakeholderToEdit, setStakeholderToEdit] = useState<Stakeholder | null>(null);
 
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
-  const [inviteDefaultEmail, setInviteDefaultEmail] = useState<string>('');
+  const [inviteModalData, setInviteModalData] = useState<{
+    email?: string;
+    name?: string;
+    role?: string;
+    category?: StakeholderCategory;
+    stakeholderId?: string;
+  }>({});
 
   const [isAiReportModalOpen, setIsAiReportModalOpen] = useState(false);
   const [isAiSettingsModalOpen, setIsAiSettingsModalOpen] = useState(false);
@@ -133,8 +141,14 @@ function MainLayout() {
     setIsStakeholderModalOpen(true);
   };
 
-  const handleOpenInviteModal = (email?: string) => {
-    setInviteDefaultEmail(email || '');
+  const handleOpenInviteModal = (dataOrEmail?: string | { email?: string; name?: string; role?: string; category?: StakeholderCategory; stakeholderId?: string }) => {
+    if (typeof dataOrEmail === 'string') {
+      setInviteModalData({ email: dataOrEmail });
+    } else if (dataOrEmail) {
+      setInviteModalData(dataOrEmail);
+    } else {
+      setInviteModalData({});
+    }
     setIsInviteModalOpen(true);
   };
 
@@ -188,6 +202,15 @@ function MainLayout() {
 
           {currentView === 'admin_portfolio' && (
             <AdminPortfolioView
+              onSwitchToProjectView={(projId) => handleSelectView('dashboard')}
+            />
+          )}
+
+          {currentView === 'admin_stakeholders' && (
+            <AdminStakeholdersView
+              onOpenStakeholderModal={handleOpenStakeholderModal}
+              onOpenInviteModal={handleOpenInviteModal}
+              onOpenTaskModal={handleOpenTaskModal}
               onSwitchToProjectView={(projId) => handleSelectView('dashboard')}
             />
           )}
@@ -318,7 +341,11 @@ function MainLayout() {
       <InviteMemberModal
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
-        defaultEmail={inviteDefaultEmail}
+        defaultEmail={inviteModalData.email}
+        defaultName={inviteModalData.name}
+        defaultRole={inviteModalData.role}
+        defaultCategory={inviteModalData.category}
+        stakeholderId={inviteModalData.stakeholderId}
       />
 
       <AiReportModal
