@@ -12,6 +12,12 @@ import { ProjectData, MemberLeave, OrganizationSettings, UserProfile } from './s
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://icvuibdumunumdztxbbq.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'sb_publishable_Q95HY1AG_Xo4T5HU7M0UKA_oMnitXJy';
+const isSupabaseConfigured = Boolean(
+  SUPABASE_URL &&
+  !SUPABASE_URL.includes('your-project') &&
+  SUPABASE_ANON_KEY &&
+  !SUPABASE_ANON_KEY.includes('your-key')
+);
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const currentFilename = typeof __filename !== 'undefined'
@@ -162,13 +168,38 @@ function getProjectsStateHash(): string {
   }
 }
 
+// Query helper with timeout to avoid hanging requests when host is unreachable
+async function querySupabaseWithTimeout<T = any>(
+  queryPromise: Promise<{ data: T | null; error: any }>,
+  timeoutMs: number = 3000
+): Promise<{ data: T | null; error: any }> {
+  let timer: NodeJS.Timeout | null = null;
+  const timeoutPromise = new Promise<{ data: null; error: { message: string; isTimeout: boolean } }>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({ data: null, error: { message: 'Connection timed out', isTimeout: true } });
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([queryPromise, timeoutPromise]);
+    return result;
+  } catch (err: any) {
+    return { data: null, error: err };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 // Async initial hydration and continuous sync from Supabase
 async function initSupabaseHydration(shouldBroadcast: boolean = false) {
   if (isSyncInProgress) return;
   isSyncInProgress = true;
   try {
-    // 1. Projects
-    const { data: projData, error: projError } = await supabase.from('app_projects').select('*');
+    // 1. Projects with 3s timeout
+    const { data: projData, error: projError } = await querySupabaseWithTimeout(
+      supabase.from('app_projects').select('*') as any,
+      3500
+    );
     if (!projError && projData && projData.length > 0) {
       isSupabaseConnected = true;
       lastSupabaseErrorLogged = '';
@@ -189,40 +220,53 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
       lastSupabaseErrorLogged = '';
     } else if (projError) {
       isSupabaseConnected = false;
-      if (lastSupabaseErrorLogged !== projError.message) {
-        lastSupabaseErrorLogged = projError.message;
-        console.info(`[Supabase Notice] Local persistence active. Remote sync notice: ${projError.message}`);
+      // Only log once if it's a real schema error, keep network reachability notices silent as local storage is active
+      const msg = projError.message || String(projError);
+      if (lastSupabaseErrorLogged !== msg) {
+        lastSupabaseErrorLogged = msg;
+        // Don't flood console with TypeError: fetch failed; local persistence operates seamlessly
+        if (!msg.toLowerCase().includes('fetch failed') && !msg.toLowerCase().includes('timed out')) {
+          console.info(`[Supabase Notice] Local persistence active. Remote note: ${msg}`);
+        }
       }
     }
 
-    // 2. Leaves (if table exists)
-    try {
-      const { data: leavesData, error: leavesError } = await supabase.from('app_leaves').select('*');
-      if (!leavesError && leavesData && leavesData.length > 0) {
-        const remoteLeaves = leavesData.map((r: any) => r.data).filter(Boolean);
-        if (remoteLeaves.length > 0) {
-          allLeaves = remoteLeaves;
-          saveLeavesToDisk(allLeaves);
+    // 2. Leaves (if table exists and connection is available)
+    if (isSupabaseConnected) {
+      try {
+        const { data: leavesData, error: leavesError } = await querySupabaseWithTimeout(
+          supabase.from('app_leaves').select('*') as any,
+          2500
+        );
+        if (!leavesError && leavesData && leavesData.length > 0) {
+          const remoteLeaves = leavesData.map((r: any) => r.data).filter(Boolean);
+          if (remoteLeaves.length > 0) {
+            allLeaves = remoteLeaves;
+            saveLeavesToDisk(allLeaves);
+          }
         }
-      }
-    } catch (_err) {}
+      } catch (_err) {}
 
-    // 3. Global State: Users & Org Settings
-    try {
-      const { data: globalData, error: globalError } = await supabase.from('app_global_state').select('*');
-      if (!globalError && globalData && globalData.length > 0) {
-        globalData.forEach((row: any) => {
-          if (row.key === 'users' && Array.isArray(row.data) && row.data.length > 0) {
-            allUsers = row.data;
-            saveUsersToDisk(allUsers);
-          }
-          if (row.key === 'org_settings' && row.data && typeof row.data === 'object') {
-            orgSettings = row.data;
-            saveSettingsToDisk(orgSettings);
-          }
-        });
-      }
-    } catch (_err) {}
+      // 3. Global State: Users & Org Settings
+      try {
+        const { data: globalData, error: globalError } = await querySupabaseWithTimeout(
+          supabase.from('app_global_state').select('*') as any,
+          2500
+        );
+        if (!globalError && globalData && globalData.length > 0) {
+          globalData.forEach((row: any) => {
+            if (row.key === 'users' && Array.isArray(row.data) && row.data.length > 0) {
+              allUsers = row.data;
+              saveUsersToDisk(allUsers);
+            }
+            if (row.key === 'org_settings' && row.data && typeof row.data === 'object') {
+              orgSettings = row.data;
+              saveSettingsToDisk(orgSettings);
+            }
+          });
+        }
+      } catch (_err) {}
+    }
 
     const newHash = getProjectsStateHash();
     if (newHash !== lastLocalStateHash) {
@@ -239,7 +283,9 @@ async function initSupabaseHydration(shouldBroadcast: boolean = false) {
     const msg = err.message || String(err);
     if (lastSupabaseErrorLogged !== msg) {
       lastSupabaseErrorLogged = msg;
-      console.info(`[Supabase Notice] Local persistence active. Remote connection notice: ${msg}`);
+      if (!msg.toLowerCase().includes('fetch failed') && !msg.toLowerCase().includes('timed out')) {
+        console.info(`[Supabase Notice] Local persistence active. Remote note: ${msg}`);
+      }
     }
   } finally {
     isSyncInProgress = false;
@@ -355,14 +401,18 @@ async function syncToSupabase() {
     } else {
       if (lastSupabaseErrorLogged !== projErr.message) {
         lastSupabaseErrorLogged = projErr.message;
-        console.info('[Supabase Upsert Notice]', projErr.message);
+        if (!projErr.message.toLowerCase().includes('fetch failed') && !projErr.message.toLowerCase().includes('timed out')) {
+          console.info('[Supabase Upsert Notice]', projErr.message);
+        }
       }
     }
   } catch (err: any) {
     const msg = err.message || String(err);
     if (lastSupabaseErrorLogged !== msg) {
       lastSupabaseErrorLogged = msg;
-      console.info('[Supabase Upsert Notice]', msg);
+      if (!msg.toLowerCase().includes('fetch failed') && !msg.toLowerCase().includes('timed out')) {
+        console.info('[Supabase Upsert Notice]', msg);
+      }
     }
   }
 }
@@ -372,7 +422,7 @@ function debouncedSyncToSupabase(delayMs: number = 600) {
     clearTimeout(syncDebounceTimer);
   }
   syncDebounceTimer = setTimeout(() => {
-    syncToSupabase().catch(err => console.warn('[Supabase] Sync notice:', err));
+    syncToSupabase().catch(() => {});
   }, delayMs);
 }
 
@@ -417,6 +467,7 @@ function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true,
     type: 'DATA_UPDATED',
     activeProjectId,
     projects: projectsList,
+    projectsMap: allProjectsMap,
     data: currentData,
     leaves: allLeaves,
     allUsers,
@@ -432,8 +483,27 @@ function broadcastDataChange(senderWs?: WebSocket, syncToRemote: boolean = true,
   });
 }
 
-// WebSocket Connection Handler
-wss.on('connection', (ws) => {
+// WebSocket Connection Handler with Cloud Run Ping/Pong Keepalive
+const pingInterval = setInterval(() => {
+  wss.clients.forEach((client: any) => {
+    if (client.isAlive === false) {
+      return client.terminate();
+    }
+    client.isAlive = false;
+    client.ping();
+  });
+}, 25000);
+
+wss.on('close', () => {
+  clearInterval(pingInterval);
+});
+
+wss.on('connection', (ws: any) => {
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
   const currentData = getActiveProject();
   const projectsList = Object.values(allProjectsMap).map(p => ({
     id: p.id || 'proj-1',
@@ -454,6 +524,7 @@ wss.on('connection', (ws) => {
     type: 'INIT_STATE',
     activeProjectId,
     projects: projectsList,
+    projectsMap: allProjectsMap,
     data: currentData,
     leaves: allLeaves,
     allUsers,
@@ -464,6 +535,11 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const parsed = JSON.parse(message.toString());
+      if (parsed.type === 'HEARTBEAT') {
+        ws.isAlive = true;
+        ws.send(JSON.stringify({ type: 'HEARTBEAT_ACK', timestamp: Date.now() }));
+        return;
+      }
       if (parsed.type === 'SYNC_STATE') {
         if (parsed.data) {
           if (parsed.data.id) {
@@ -487,6 +563,14 @@ wss.on('connection', (ws) => {
       console.error('Error handling WS message:', err);
     }
   });
+});
+
+// Cache-Control headers for all API routes to prevent stale proxy or browser cache
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  next();
 });
 
 // Supabase Status & Database Health Endpoints
@@ -543,7 +627,10 @@ app.get('/api/supabase/status', async (_req, res) => {
   let errorCode: string | null = null;
 
   try {
-    const { data, error } = await supabase.from('app_projects').select('id').limit(50);
+    const { data, error } = await querySupabaseWithTimeout(
+      supabase.from('app_projects').select('id').limit(50) as any,
+      3500
+    );
     if (error) {
       errorMessage = error.message;
       errorCode = error.code || null;

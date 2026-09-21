@@ -149,6 +149,11 @@ interface ProjectContextType {
   metrics: EVMMetrics;
   isOffline: boolean;
   isWsConnected: boolean;
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  remoteProjectAlert: { id: string; name: string } | null;
+  dismissRemoteProjectAlert: () => void;
+  refreshServerData: (silent?: boolean) => Promise<void>;
   theme: 'dark' | 'light';
   currentUser: UserProfile;
   allUsers: UserProfile[];
@@ -399,6 +404,13 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [isWsConnected, setIsWsConnected] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [remoteProjectAlert, setRemoteProjectAlert] = useState<{ id: string; name: string } | null>(null);
+
+  const dismissRemoteProjectAlert = useCallback(() => {
+    setRemoteProjectAlert(null);
+  }, []);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem(THEME_STORAGE_KEY) as 'dark' | 'light') || 'dark';
   });
@@ -608,6 +620,8 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const wsRef = useRef<WebSocket | null>(null);
   const wsReconnectAttempts = useRef<number>(0);
   const wsReconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isInitialSyncDoneRef = useRef<boolean>(false);
   const localForageTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isRemoteIncomingUpdateRef = useRef<boolean>(false);
   const serverProjectSyncTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -892,7 +906,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, []);
 
-  // Setup WebSocket connection for real-time synchronization with exponential backoff
+  // Setup WebSocket connection for real-time synchronization with exponential backoff and keepalive
   const connectWebSocket = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return;
@@ -908,17 +922,42 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsWsConnected(true);
         setIsOffline(false);
         wsReconnectAttempts.current = 0;
+
+        // Keepalive heartbeat every 20s to ensure proxies & Cloud Run don't close idle WebSockets
+        if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = setInterval(() => {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            try {
+              wsRef.current.send(JSON.stringify({ type: 'HEARTBEAT', timestamp: Date.now() }));
+            } catch (_e) {}
+          }
+        }, 20000);
       };
 
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
+          if (message.type === 'HEARTBEAT_ACK') {
+            return;
+          }
           if (message.senderClientId && message.senderClientId === clientIdRef.current) {
             // Avoid duplicate tree re-render for locally triggered updates
             return;
           }
           if (message.type === 'INIT_STATE' || message.type === 'DATA_UPDATED') {
             isRemoteIncomingUpdateRef.current = true;
+
+            // Merge full projects map from server
+            if (message.projectsMap && typeof message.projectsMap === 'object') {
+              setAllProjectsMap(prev => {
+                const merged = { ...prev, ...message.projectsMap };
+                try {
+                  localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(merged));
+                } catch (_e) {}
+                return merged;
+              });
+            }
+
             if (message.data && message.data.id) {
               setAllProjectsMap(prev => ({
                 ...prev,
@@ -939,8 +978,49 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 });
               }
             }
-            if (message.projects) {
-              setProjectsList(message.projects);
+
+            if (message.projects && Array.isArray(message.projects)) {
+              setProjectsList(prevList => {
+                if (isInitialSyncDoneRef.current) {
+                  const prevIds = new Set(prevList.map(p => p.id));
+                  const newProjects = message.projects.filter((p: any) => !prevIds.has(p.id));
+                  if (newProjects.length > 0) {
+                    const latestNew = newProjects[newProjects.length - 1];
+                    setRemoteProjectAlert({
+                      id: latestNew.id,
+                      name: latestNew.projectName
+                    });
+                  }
+                }
+                try {
+                  localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(message.projects));
+                } catch (_e) {}
+                return message.projects;
+              });
+
+              const validIds = new Set(message.projects.map((p: any) => p.id));
+              setAllProjectsMap(prev => {
+                const next = { ...prev };
+                Object.keys(next).forEach(id => {
+                  if (!validIds.has(id)) {
+                    delete next[id];
+                  }
+                });
+                return next;
+              });
+
+              // If the current client was viewing a deleted project, switch to the active project
+              if (!validIds.has(activeProjectIdRef.current) && message.activeProjectId) {
+                setActiveProjectId(message.activeProjectId);
+                if (message.data) {
+                  setProjectData(message.data);
+                  try {
+                    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(message.data));
+                    localStorage.setItem(ACTIVE_PROJECT_ID_KEY, message.activeProjectId);
+                  } catch (_e) {}
+                }
+              }
+
               queryClient.setQueryData(queryKeys.projectsList, {
                 activeProjectId: activeProjectIdRef.current,
                 projects: message.projects
@@ -965,6 +1045,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
               } catch (_e) {}
             }
             queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
+            setLastSyncedAt(new Date());
             setTimeout(() => {
               isRemoteIncomingUpdateRef.current = false;
             }, 100);
@@ -976,6 +1057,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       socket.onclose = () => {
         setIsWsConnected(false);
+        if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
         if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
         const delay = Math.min(15000, 2000 * Math.pow(1.5, wsReconnectAttempts.current));
         wsReconnectAttempts.current += 1;
@@ -988,10 +1070,12 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       socket.onerror = () => {
         setIsWsConnected(false);
+        if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
       };
     } catch (e) {
       console.warn('WebSocket connection error:', e);
       setIsWsConnected(false);
+      if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     }
   }, []);
 
@@ -1006,6 +1090,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setIsOffline(true);
       setIsWsConnected(false);
       if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
+      if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     };
 
     window.addEventListener('online', handleOnline);
@@ -1017,6 +1102,7 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       if (wsReconnectTimerRef.current) clearTimeout(wsReconnectTimerRef.current);
+      if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
       if (localForageTimerRef.current) clearTimeout(localForageTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
@@ -1024,104 +1110,150 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
   }, [connectWebSocket]);
 
-  // Initial fetch from REST API with server authority
-  useEffect(() => {
-    fetch('/api/projects')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.projects) {
-          setProjectsList(res.projects);
-          queryClient.setQueryData(queryKeys.projectsList, {
-            activeProjectId: activeProjectIdRef.current || 'proj-1',
-            projects: res.projects
-          });
-          if (res.activeProjectId && !localStorage.getItem(ACTIVE_PROJECT_ID_KEY)) {
-            setActiveProjectId(res.activeProjectId);
-            activeProjectIdRef.current = res.activeProjectId;
+  // Robust Server Sync & Cross-Device Refresh Function
+  const refreshServerData = useCallback(async (silent = false) => {
+    if (!silent) setIsSyncing(true);
+    try {
+      const cacheBust = Date.now();
+      const headers = {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache'
+      };
+
+      const [projectsRes, allProjectsRes, activeProjectRes, leavesRes, usersRes, settingsRes] = await Promise.all([
+        fetch(`/api/projects?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/projects/all?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/project?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/leaves?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/users?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/settings?t=${cacheBust}`, { headers }).then(r => r.json()).catch(() => null),
+      ]);
+
+      if (projectsRes?.success && Array.isArray(projectsRes.projects)) {
+        const fetchedProjects: ProjectMeta[] = projectsRes.projects;
+        setProjectsList(prevList => {
+          if (isInitialSyncDoneRef.current) {
+            const prevIds = new Set(prevList.map(p => p.id));
+            const newProjects = fetchedProjects.filter(p => !prevIds.has(p.id));
+            if (newProjects.length > 0) {
+              const latestNew = newProjects[newProjects.length - 1];
+              setRemoteProjectAlert({
+                id: latestNew.id,
+                name: latestNew.projectName
+              });
+            }
           }
-        }
-      })
-      .catch(() => {});
-
-    fetch('/api/projects/all')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.projectsMap) {
-          setAllProjectsMap(prev => ({ ...prev, ...res.projectsMap }));
-        }
-      })
-      .catch(() => {});
-
-    fetch('/api/project')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.data) {
-          queryClient.setQueryData(queryKeys.project('active'), {
-            activeProjectId: res.activeProjectId || res.data.id || 'proj-1',
-            data: res.data
-          });
-          isRemoteIncomingUpdateRef.current = true;
-          setProjectData(res.data);
           try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(res.data));
+            localStorage.setItem(PROJECTS_LIST_KEY, JSON.stringify(fetchedProjects));
+          } catch (_e) {}
+          return fetchedProjects;
+        });
+
+        queryClient.setQueryData(queryKeys.projectsList, {
+          activeProjectId: activeProjectIdRef.current || 'proj-1',
+          projects: fetchedProjects
+        });
+      }
+
+      if (allProjectsRes?.success && allProjectsRes.projectsMap) {
+        setAllProjectsMap(prev => {
+          const merged = { ...prev, ...allProjectsRes.projectsMap };
+          try {
+            localStorage.setItem(ALL_PROJECTS_MAP_KEY, JSON.stringify(merged));
+          } catch (_e) {}
+          return merged;
+        });
+      }
+
+      if (activeProjectRes?.success && activeProjectRes.data) {
+        const currentActive = activeProjectIdRef.current;
+        if (activeProjectRes.data.id === currentActive) {
+          isRemoteIncomingUpdateRef.current = true;
+          setProjectData(activeProjectRes.data);
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(activeProjectRes.data));
           } catch (_e) {}
           setTimeout(() => {
             isRemoteIncomingUpdateRef.current = false;
           }, 100);
         }
-      })
-      .catch(err => {
-        console.warn('Using local cached state due to network/server response:', err);
-      });
+      }
 
-    fetch('/api/leaves')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.leaves && Array.isArray(res.leaves)) {
-          isRemoteIncomingUpdateRef.current = true;
-          setLeaves(res.leaves);
-          try {
-            localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(res.leaves));
-          } catch (_e) {}
-          setTimeout(() => {
-            isRemoteIncomingUpdateRef.current = false;
-          }, 100);
-        }
-      })
-      .catch(() => {});
+      if (leavesRes?.success && Array.isArray(leavesRes.leaves)) {
+        setLeaves(leavesRes.leaves);
+        try {
+          localStorage.setItem(LEAVES_STORAGE_KEY, JSON.stringify(leavesRes.leaves));
+        } catch (_e) {}
+      }
 
-    fetch('/api/users')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.users && Array.isArray(res.users)) {
-          isRemoteIncomingUpdateRef.current = true;
-          setAllUsers(res.users);
-          try {
-            localStorage.setItem(USERS_LIST_KEY, JSON.stringify(res.users));
-          } catch (_e) {}
-          setTimeout(() => {
-            isRemoteIncomingUpdateRef.current = false;
-          }, 100);
-        }
-      })
-      .catch(() => {});
+      if (usersRes?.success && Array.isArray(usersRes.users)) {
+        setAllUsers(usersRes.users);
+        try {
+          localStorage.setItem(USERS_LIST_KEY, JSON.stringify(usersRes.users));
+        } catch (_e) {}
+      }
 
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(res => {
-        if (res.success && res.settings && typeof res.settings === 'object') {
-          isRemoteIncomingUpdateRef.current = true;
-          setOrgSettings(res.settings);
-          try {
-            localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(res.settings));
-          } catch (_e) {}
-          setTimeout(() => {
-            isRemoteIncomingUpdateRef.current = false;
-          }, 100);
-        }
-      })
-      .catch(() => {});
+      if (settingsRes?.success && typeof settingsRes.settings === 'object') {
+        setOrgSettings(settingsRes.settings);
+        try {
+          localStorage.setItem(ORG_SETTINGS_KEY, JSON.stringify(settingsRes.settings));
+        } catch (_e) {}
+      }
+
+      setLastSyncedAt(new Date());
+      isInitialSyncDoneRef.current = true;
+    } catch (err) {
+      console.warn('[ProjectSync] Server refresh error:', err);
+    } finally {
+      if (!silent) setIsSyncing(false);
+    }
   }, []);
+
+  // Adaptive background sync: 3.5s when WS offline, 15s reconciliation when WS connected
+  useEffect(() => {
+    refreshServerData(false);
+    const intervalMs = isWsConnected ? 15000 : 3500;
+    const interval = setInterval(() => {
+      if (navigator.onLine) {
+        refreshServerData(true);
+      }
+    }, intervalMs);
+    return () => clearInterval(interval);
+  }, [isWsConnected, refreshServerData]);
+
+  // Window Focus, Visibility & Online Event Listeners for instant fresh data when switching tabs or waking device
+  useEffect(() => {
+    const handleReactivation = () => {
+      if (navigator.onLine) {
+        refreshServerData(true);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        refreshServerData(true);
+      }
+    };
+
+    window.addEventListener('focus', handleReactivation);
+    window.addEventListener('online', handleReactivation);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('focus', handleReactivation);
+      window.removeEventListener('online', handleReactivation);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [refreshServerData]);
+
+  // Auto-dismiss remote project banner after 12s
+  useEffect(() => {
+    if (!remoteProjectAlert) return;
+    const t = setTimeout(() => {
+      setRemoteProjectAlert(null);
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [remoteProjectAlert]);
 
   // Calculated EVM Metrics (Memoized for high-performance rendering)
   const metrics = useMemo(() => calculateEVMMetrics(
@@ -1314,7 +1446,25 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
       delete next[projectId];
       return next;
     });
-    queryClient.setQueryData(queryKeys.projectsList, { activeProjectId, projects: updatedList });
+
+    let nextActiveId = activeProjectId;
+    if (activeProjectId === projectId) {
+      nextActiveId = updatedList[0]?.id || 'proj-1';
+      setActiveProjectId(nextActiveId);
+      const nextProject = allProjectsMap[nextActiveId] || updatedList[0];
+      if (nextProject) {
+        setProjectData(nextProject as ProjectData);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(nextProject));
+          localStorage.setItem(ACTIVE_PROJECT_ID_KEY, nextActiveId);
+        } catch (_e) {}
+        queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: nextActiveId, data: nextProject });
+        queryClient.setQueryData(queryKeys.project(nextActiveId), { activeProjectId: nextActiveId, data: nextProject });
+        broadcastLocalTabSync(nextProject as ProjectData, updatedList, nextActiveId);
+      }
+    }
+
+    queryClient.setQueryData(queryKeys.projectsList, { activeProjectId: nextActiveId, projects: updatedList });
     queryClient.invalidateQueries({ queryKey: queryKeys.allProjectsFull });
 
     if (navigator.onLine) {
@@ -1324,6 +1474,10 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (json.success && json.data) {
           setProjectData(json.data);
           setActiveProjectId(json.activeProjectId);
+          try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(json.data));
+            localStorage.setItem(ACTIVE_PROJECT_ID_KEY, json.activeProjectId);
+          } catch (_e) {}
           queryClient.setQueryData(queryKeys.project('active'), { activeProjectId: json.activeProjectId, data: json.data });
           queryClient.setQueryData(queryKeys.project(json.activeProjectId), { activeProjectId: json.activeProjectId, data: json.data });
           broadcastLocalTabSync(json.data, updatedList, json.activeProjectId);
@@ -3711,6 +3865,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         metrics,
         isOffline,
         isWsConnected,
+        isSyncing,
+        lastSyncedAt,
+        remoteProjectAlert,
+        dismissRemoteProjectAlert,
+        refreshServerData,
         theme,
         currentUser,
         allUsers,

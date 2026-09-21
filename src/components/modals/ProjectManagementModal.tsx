@@ -16,9 +16,12 @@ import {
   UserMinus,
   Users,
   Shield,
-  Briefcase
+  Briefcase,
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 import { PMAssignProjectModal } from '../dashboard/PMAssignProjectModal';
+import { isUserAdmin, isUserPM } from '../../utils/roleUtils';
 
 interface ProjectManagementModalProps {
   isOpen: boolean;
@@ -42,11 +45,13 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
     deleteProject,
     updateProjectDetails,
     setProjectManagers,
+    refreshServerData,
+    isSyncing,
     currentUser
   } = useProject();
 
-  const isAdmin = currentUser.role === 'admin';
-  const isPM = currentUser.role === 'pm' || isAdmin;
+  const isAdmin = isUserAdmin(currentUser);
+  const isPM = isUserPM(currentUser);
 
   const [isCreating, setIsCreating] = useState(false);
   const [projectName, setProjectName] = useState('');
@@ -65,6 +70,10 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
   const [editStartDate, setEditStartDate] = useState('');
   const [editTargetEndDate, setEditTargetEndDate] = useState('');
   const [editPmIds, setEditPmIds] = useState<string[]>([]);
+
+  // Deletion confirmation state
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string; isActive?: boolean } | null>(null);
+  const [isDeletingProject, setIsDeletingProject] = useState(false);
 
   // PMAssignModal trigger for specific project
   const [pmModalProjectId, setPmModalProjectId] = useState<string | null>(null);
@@ -107,6 +116,9 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen) {
+      refreshServerData(true);
+    }
     if (isOpen && initialEditProjectId) {
       const proj =
         (allProjectsMap && allProjectsMap[initialEditProjectId]) ||
@@ -310,12 +322,23 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-100 rounded-xl hover:bg-slate-800/60 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => refreshServerData(false)}
+              disabled={isSyncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+              title="Refresh project list from cloud / other devices"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-indigo-400' : 'text-slate-400'}`} />
+              <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-100 rounded-xl hover:bg-slate-800/60 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
@@ -418,7 +441,7 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
                 <p className="text-[11px] text-slate-400 mb-2">
                   Select one or more Project Managers to lead this initiative.
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {pmUsers.map(pm => {
                     const isChecked = createPmIds.includes(pm.id);
                     return (
@@ -610,7 +633,7 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
                           </button>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {pmUsers.map(pm => {
                           const isChecked = editPmIds.includes(pm.id);
                           return (
@@ -642,21 +665,38 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">
                       <button
                         type="button"
-                        onClick={() => setEditingProjectId(null)}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:bg-slate-800"
+                        onClick={() => setProjectToDelete({ id: project.id, name: project.projectName, isActive })}
+                        disabled={projectsList.length <= 1}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                          projectsList.length <= 1
+                            ? 'opacity-40 cursor-not-allowed text-slate-500 bg-slate-800/40 border border-slate-800'
+                            : 'text-rose-400 hover:text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20'
+                        }`}
+                        title={projectsList.length <= 1 ? "At least one project is required in the portfolio" : "Delete this project"}
                       >
-                        Cancel
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Project</span>
                       </button>
-                      <button
-                        type="submit"
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20"
-                      >
-                        <Save className="w-3.5 h-3.5" />
-                        <span>Save Changes</span>
-                      </button>
+
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingProjectId(null)}
+                          className="px-3.5 py-2 rounded-xl text-xs font-medium text-slate-400 hover:bg-slate-800"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/20"
+                        >
+                          <Save className="w-3.5 h-3.5" />
+                          <span>Save Changes</span>
+                        </button>
+                      </div>
                     </div>
                   </form>
                 );
@@ -732,7 +772,7 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center flex-wrap sm:flex-nowrap">
                     <button
                       onClick={() => startEditing(project as ProjectData)}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800/80 hover:bg-slate-700 text-indigo-300 hover:text-white border border-slate-700/80 transition-all"
@@ -752,15 +792,19 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
                         Switch To
                       </button>
                     )}
-                    {projectsList.length > 1 && isPM && (
-                      <button
-                        onClick={() => deleteProject(project.id)}
-                        className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-                        title="Delete project"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      onClick={() => setProjectToDelete({ id: project.id, name: project.projectName, isActive })}
+                      disabled={projectsList.length <= 1}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                        projectsList.length <= 1
+                          ? 'opacity-40 cursor-not-allowed text-slate-500 bg-slate-800/40 border border-slate-800/60'
+                          : 'text-rose-400 hover:text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20'
+                      }`}
+                      title={projectsList.length <= 1 ? "At least one project is required in the portfolio" : `Delete ${project.projectName}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete</span>
+                    </button>
                   </div>
                 </div>
               );
@@ -778,6 +822,75 @@ export const ProjectManagementModal: React.FC<ProjectManagementModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Delete Project Confirmation Modal */}
+      {projectToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl shadow-rose-950/40 animate-in zoom-in-95">
+            <div className="flex items-start gap-3.5">
+              <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Delete Project</h3>
+                <p className="text-xs text-slate-300">
+                  Are you sure you want to delete <span className="font-semibold text-white">"{projectToDelete.name}"</span>?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-400 space-y-2 leading-relaxed">
+              <p>
+                This will permanently delete this project workspace, including all its tasks, EVM baselines, milestone schedules, risk logs, and team assignments.
+              </p>
+              {projectToDelete.isActive && (
+                <p className="text-amber-400 font-medium flex items-center gap-1.5">
+                  <span>⚠️</span> This is your currently active workspace. Deleting it will automatically switch your view to another project.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingProject}
+                onClick={() => setProjectToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingProject}
+                onClick={async () => {
+                  setIsDeletingProject(true);
+                  try {
+                    await deleteProject(projectToDelete.id);
+                    if (editingProjectId === projectToDelete.id) {
+                      setEditingProjectId(null);
+                    }
+                    setProjectToDelete(null);
+                  } catch (err) {
+                    console.error('Delete project failed:', err);
+                  } finally {
+                    setIsDeletingProject(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 transition-all"
+              >
+                {isDeletingProject ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Delete Project</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Embedded PMAssignProjectModal if triggered from project row */}
       {pmModalProjectId && (

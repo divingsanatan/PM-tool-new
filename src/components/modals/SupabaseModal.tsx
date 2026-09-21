@@ -197,9 +197,13 @@ export const SupabaseModal: React.FC<SupabaseModalProps> = ({ isOpen, onClose })
               <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold block">Notice from Supabase: {status.errorMessage}</span>
+                  <span className="font-bold block">
+                    {status.errorMessage.toLowerCase().includes('fetch failed') || status.errorMessage.toLowerCase().includes('timed out') || status.errorMessage.toLowerCase().includes('unreachable')
+                      ? 'Remote Supabase host unreachable in current network environment.'
+                      : `Notice from Supabase: ${status.errorMessage}`}
+                  </span>
                   <span className="text-[11px] text-amber-300/80 mt-0.5 block">
-                    If permission is denied, copy the SQL script below and execute it in your Supabase SQL Editor.
+                    Local persistent storage is fully active and storing all projects, leaves, and state. If using an external Supabase instance, ensure the Supabase project is online or update your credentials in environment settings.
                   </span>
                 </div>
               </div>

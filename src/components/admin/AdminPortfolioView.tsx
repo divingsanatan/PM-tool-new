@@ -19,7 +19,7 @@ import {
   DEFAULT_RATE_CARDS,
   CrossProjectMemberWorkload
 } from '../../utils/portfolioAndLeaveUtils';
-import { normalizeToAppRole, getAppRoleBadge, APP_ROLES } from '../../utils/roleUtils';
+import { normalizeToAppRole, getAppRoleBadge, APP_ROLES, isUserAdmin } from '../../utils/roleUtils';
 import { LeaveRequestModal } from './LeaveRequestModal';
 import { LeaveManagement } from './LeaveManagement';
 import { IndividualReportCardModal } from '../modals/IndividualReportCardModal';
@@ -63,7 +63,8 @@ import {
   FileSpreadsheet,
   Code,
   Laptop,
-  CheckSquare
+  CheckSquare,
+  Trash2
 } from 'lucide-react';
 
 interface AdminPortfolioViewProps {
@@ -82,13 +83,18 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
     orgSettings,
     saveLeave,
     deleteLeave,
+    deleteProject,
     updateLeaveStatus,
     updateOrgSettings,
     promoteUserRole,
     assignProjectManager
   } = useProject();
 
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = isUserAdmin(currentUser);
+
+  // Deletion confirmation state
+  const [portfolioProjectToDelete, setPortfolioProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingPortfolioProject, setIsDeletingPortfolioProject] = useState(false);
 
   // Active Tab within Admin Portfolio
   const [activeTab, setActiveTab] = useState<
@@ -848,18 +854,29 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
                     {/* Actions */}
                     <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between">
                       <span className="text-[10px] text-slate-500 font-mono">ID: {proj.projectId}</span>
-                      <button
-                        onClick={async () => {
-                          await switchProject(proj.projectId);
-                          if (onSwitchToProjectView) {
-                            onSwitchToProjectView(proj.projectId);
-                          }
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-600 dark:bg-slate-800 dark:hover:bg-indigo-600 text-slate-700 hover:text-white dark:text-slate-200 dark:hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs border border-slate-200 dark:border-transparent"
-                      >
-                        <span>Open Workspace</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {projectsList.length > 1 && (
+                          <button
+                            onClick={() => setPortfolioProjectToDelete({ id: proj.projectId, name: proj.projectName })}
+                            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title={`Delete ${proj.projectName}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={async () => {
+                            await switchProject(proj.projectId);
+                            if (onSwitchToProjectView) {
+                              onSwitchToProjectView(proj.projectId);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-indigo-600 dark:bg-slate-800 dark:hover:bg-indigo-600 text-slate-700 hover:text-white dark:text-slate-200 dark:hover:text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs border border-slate-200 dark:border-transparent"
+                        >
+                          <span>Open Workspace</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -1855,6 +1872,72 @@ export const AdminPortfolioView: React.FC<AdminPortfolioViewProps> = ({ onSwitch
           }}
           preselectedProjectId={selectedProjectIdForAssign}
         />
+      )}
+
+      {/* Delete Project Confirmation Modal */}
+      {portfolioProjectToDelete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl shadow-rose-950/40 animate-in zoom-in-95">
+            <div className="flex items-start gap-3.5">
+              <div className="p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 shrink-0">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-bold text-white">Delete Portfolio Project</h3>
+                <p className="text-xs text-slate-300">
+                  Are you sure you want to delete <span className="font-semibold text-white">"{portfolioProjectToDelete.name}"</span>?
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800/80 text-xs text-slate-400 space-y-2 leading-relaxed">
+              <p>
+                This will permanently delete this project workspace, including all its tasks, EVM baselines, milestone schedules, risk logs, and team assignments.
+              </p>
+              {portfolioProjectToDelete.id === activeProjectId && (
+                <p className="text-amber-400 font-medium flex items-center gap-1.5">
+                  <span>⚠️</span> This is your currently active workspace. Deleting it will automatically switch your view to another project.
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingPortfolioProject}
+                onClick={() => setPortfolioProjectToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingPortfolioProject}
+                onClick={async () => {
+                  setIsDeletingPortfolioProject(true);
+                  try {
+                    await deleteProject(portfolioProjectToDelete.id);
+                    setPortfolioProjectToDelete(null);
+                  } catch (err) {
+                    console.error('Delete project failed:', err);
+                  } finally {
+                    setIsDeletingPortfolioProject(false);
+                  }
+                }}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25 transition-all"
+              >
+                {isDeletingPortfolioProject ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Delete Project</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

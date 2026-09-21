@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useProject } from '../../context/ProjectContext';
 import { Stakeholder, Task, ProjectData, UserProfile } from '../../types';
 import { calculateMemberMetrics, MemberMetrics } from '../../utils/memberMetrics';
@@ -33,6 +33,8 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
+  ChevronLeft,
+  ChevronDown,
   Layers,
   Award,
   BarChart3,
@@ -74,6 +76,70 @@ import {
   PieChart,
   Pie
 } from 'recharts';
+
+// Analytics sub-views configuration for smart view switching
+const ANALYTICS_VIEWS = [
+  {
+    id: 'workload' as const,
+    label: 'Workload & Capacity',
+    shortLabel: 'Workload',
+    icon: Users,
+    color: 'text-indigo-400',
+    badge: 'Allocation',
+    sublabel: 'Weekly assigned hours vs 40h capacity baseline',
+    description: 'Evaluates individual workload distribution across active sprints to prevent burnout or under-allocation.'
+  },
+  {
+    id: 'radar' as const,
+    label: '360° Team Radar',
+    shortLabel: '360° Radar',
+    icon: Target,
+    color: 'text-purple-400',
+    badge: 'Multi-Axis',
+    sublabel: 'Velocity, quality & reliability multi-axis',
+    description: 'Holistic performance radar across velocity, quality, consistency, and sprint delivery.'
+  },
+  {
+    id: 'hours' as const,
+    label: 'Effort & Hours Log',
+    shortLabel: 'Hours Log',
+    icon: Clock,
+    color: 'text-cyan-400',
+    badge: 'Variance',
+    sublabel: 'Estimated vs actual logged vs earned hours',
+    description: 'Tracks labor effort variance across team contributors to ensure accurate work estimation and velocity.'
+  },
+  {
+    id: 'status' as const,
+    label: 'Task Status Breakdown',
+    shortLabel: 'Status',
+    icon: PieChartIcon,
+    color: 'text-emerald-400',
+    badge: 'Sprint Tasks',
+    sublabel: 'Distribution of completed, in-progress, & blocked',
+    description: 'Workflow distribution across active tasks to monitor throughput and identify work-in-progress bottlenecks.'
+  },
+  {
+    id: 'financials' as const,
+    label: 'EVM Capital ($k)',
+    shortLabel: 'EVM Capital',
+    icon: TrendingUp,
+    color: 'text-blue-400',
+    badge: 'Financials',
+    sublabel: 'PV, EV, AC, and CPI/SPI metrics',
+    description: 'Earned Value Management capital analytics, cost performance index, and schedule efficiency.'
+  },
+  {
+    id: 'forecast' as const,
+    label: 'Forecast Dates',
+    shortLabel: 'Forecast',
+    icon: Calendar,
+    color: 'text-amber-400',
+    badge: 'Projections',
+    sublabel: 'Predictive completion dates & deadline projections',
+    description: 'Predictive completion date projections based on velocity and historical milestone performance.'
+  }
+];
 
 interface PMTeamExecutiveDashboardProps {
   onNavigate: (view: any) => void;
@@ -169,6 +235,7 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
   const [isForecastModalOpen, setIsForecastModalOpen] = useState(false);
   const [forecastModalProjectId, setForecastModalProjectId] = useState<string>('');
   const [selectedRadarMemberId, setSelectedRadarMemberId] = useState<string>('');
+  const primaryTabsRef = useRef<HTMLDivElement>(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -673,151 +740,198 @@ export const PMTeamExecutiveDashboard: React.FC<PMTeamExecutiveDashboardProps> =
         </div>
       </div>
 
-      {/* 🧭 3. Navigation Tabs for the PM */}
-      <div className="flex items-center gap-2 border-b border-slate-800 overflow-x-auto pb-px">
-        <button
-          onClick={() => setActiveTab('analytics')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'analytics'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
+      {/* 🧭 3. Navigation Tabs for the PM (Clean no-scrollbar design) */}
+      <div className="relative border-b border-slate-800">
+        <div
+          ref={primaryTabsRef}
+          className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth pb-px"
         >
-          <BarChart3 className="w-4 h-4 text-purple-400" />
-          Team Visual Analytics
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              setActiveTab('analytics');
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }}
+            className={`pb-3 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'analytics'
+                ? 'border-indigo-500 text-indigo-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-purple-400" />
+            <span>Visual Analytics</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('roster')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'roster'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Users className="w-4 h-4 text-indigo-400" />
-          Team Members Roster ({filteredMembers.length})
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              setActiveTab('roster');
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }}
+            className={`pb-3 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'roster'
+                ? 'border-indigo-500 text-indigo-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Users className="w-4 h-4 text-indigo-400" />
+            <span>Team Roster ({filteredMembers.length})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('projects')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'projects'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Building2 className="w-4 h-4 text-teal-400" />
-          Managed Projects ({managedProjects.length})
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              setActiveTab('projects');
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }}
+            className={`pb-3 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'projects'
+                ? 'border-indigo-500 text-indigo-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Building2 className="w-4 h-4 text-teal-400" />
+            <span>Managed Projects ({managedProjects.length})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('raid')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'raid'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
-          Team Blockers &amp; RAID ({teamAggregateMetrics.totalBlockedTasks + teamAggregateMetrics.openRisks.length})
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              setActiveTab('raid');
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }}
+            className={`pb-3 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'raid'
+                ? 'border-indigo-500 text-indigo-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4 text-amber-400" />
+            <span>Blockers &amp; RAID ({teamAggregateMetrics.totalBlockedTasks + teamAggregateMetrics.openRisks.length})</span>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('leaves')}
-          className={`pb-3 px-4 text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-            activeTab === 'leaves'
-              ? 'border-indigo-500 text-indigo-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Plane className="w-4 h-4 text-emerald-400" />
-          Availability &amp; Leave ({teamLeaves.length})
-        </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              setActiveTab('leaves');
+              e.currentTarget.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
+            }}
+            className={`pb-3 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'leaves'
+                ? 'border-indigo-500 text-indigo-400 font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Plane className="w-4 h-4 text-emerald-400" />
+            <span>Availability &amp; Leave ({teamLeaves.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* 📈 TAB 1: Team Visual Analytics */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
-          {/* Sub-Tabs for Analytics with Responsive Scrolling and Single-line Pills */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="w-full sm:w-auto overflow-x-auto no-scrollbar py-0.5">
-              <div className="inline-flex items-center gap-1.5 bg-slate-950/80 p-1.5 rounded-2xl border border-slate-800/90 shadow-inner min-w-full sm:min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('workload')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'workload'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5 shrink-0" />
-                  <span>Workload &amp; Capacity</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('radar')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'radar'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <Target className="w-3.5 h-3.5 shrink-0" />
-                  <span>360° Team Radar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('hours')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'hours'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                  <span>Effort &amp; Hours Log</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('status')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'status'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <PieChartIcon className="w-3.5 h-3.5 shrink-0" />
-                  <span>Task Status Breakdown</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('financials')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'financials'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                  <span>EVM Capital ($k)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveAnalyticsView('forecast')}
-                  className={`px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    activeAnalyticsView === 'forecast'
-                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/60'
-                  }`}
-                >
-                  <Calendar className="w-3.5 h-3.5 shrink-0 text-amber-400" />
-                  <span>Forecast Dates</span>
-                </button>
+          {/* Smart Analytics View Switcher (Zero stacked scrollbars, responsive dropdown, quick stepper, wrapped pills) */}
+          {(() => {
+            const currentViewIndex = ANALYTICS_VIEWS.findIndex(v => v.id === activeAnalyticsView);
+            const currentView = ANALYTICS_VIEWS[currentViewIndex] || ANALYTICS_VIEWS[0];
+            const prevView = ANALYTICS_VIEWS[(currentViewIndex - 1 + ANALYTICS_VIEWS.length) % ANALYTICS_VIEWS.length];
+            const nextView = ANALYTICS_VIEWS[(currentViewIndex + 1) % ANALYTICS_VIEWS.length];
+            const CurrentIcon = currentView.icon;
+
+            return (
+              <div className="bg-slate-900/80 border border-slate-800 p-3 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-sm">
+                {/* Left: Quick View Stepper (< 1/6 >) & Dropdown Selector */}
+                <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
+                  {/* Stepper Controls */}
+                  <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800/90 shrink-0 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setActiveAnalyticsView(prevView.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer"
+                      title={`Previous: ${prevView.label}`}
+                      aria-label="Previous analytical view"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <div className="flex items-center px-1.5 text-xs font-mono select-none">
+                      <span className="font-bold text-indigo-400">{currentViewIndex + 1}</span>
+                      <span className="text-slate-600 px-1 font-normal">/</span>
+                      <span className="text-slate-400 font-semibold">{ANALYTICS_VIEWS.length}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveAnalyticsView(nextView.id)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-all cursor-pointer"
+                      title={`Next: ${nextView.label}`}
+                      aria-label="Next analytical view"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Compact/Mobile View Dropdown */}
+                  <div className="w-full sm:w-auto xl:hidden">
+                    <ResponsiveSelect
+                      value={activeAnalyticsView}
+                      onChange={(val) => setActiveAnalyticsView(val as any)}
+                      label="View:"
+                      icon={<CurrentIcon className={`w-3.5 h-3.5 ${currentView.color}`} />}
+                      options={ANALYTICS_VIEWS.map(v => {
+                        const VIcon = v.icon;
+                        return {
+                          value: v.id,
+                          label: v.label,
+                          sublabel: v.sublabel,
+                          badge: v.badge,
+                          icon: <VIcon className={`w-3.5 h-3.5 ${v.color}`} />
+                        };
+                      })}
+                      align="left"
+                      className="border-slate-800 bg-slate-950 text-white min-w-[200px] sm:min-w-[240px]"
+                    />
+                  </div>
+
+                  {/* View Context Info Tag (on wider screens next to stepper) */}
+                  <div className="hidden xl:flex items-center gap-2 pl-1 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50"></span>
+                    <span className="font-bold text-white flex items-center gap-1.5">
+                      <CurrentIcon className={`w-3.5 h-3.5 ${currentView.color}`} />
+                      {currentView.label}
+                    </span>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-slate-400 truncate max-w-sm">
+                      {currentView.sublabel}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right: Segmented Pill Buttons (Wrapped cleanly with NO horizontal scrollbar) */}
+                <div className="hidden xl:flex items-center gap-1.5 bg-slate-950/90 p-1.5 rounded-2xl border border-slate-800/90 shadow-inner flex-wrap">
+                  {ANALYTICS_VIEWS.map((view) => {
+                    const Icon = view.icon;
+                    const isActive = activeAnalyticsView === view.id;
+                    return (
+                      <button
+                        key={view.id}
+                        type="button"
+                        onClick={() => setActiveAnalyticsView(view.id)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                          isActive
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold'
+                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900/80'
+                        }`}
+                        title={view.sublabel}
+                      >
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : view.color}`} />
+                        <span>{view.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* VIEW 1: Workload & Capacity */}
           {activeAnalyticsView === 'workload' && (

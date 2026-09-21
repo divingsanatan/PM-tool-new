@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useProject } from '../context/ProjectContext';
 import { ViewMode, Task, RaidItem, Stakeholder } from '../types';
@@ -34,7 +34,8 @@ import {
   FolderPlus,
   Layers,
   Pencil,
-  Building2
+  Building2,
+  RefreshCw
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -60,7 +61,27 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectView,
   onOpenCommandPalette
 }) => {
-  const { projectData, projectsList, allProjectsMap, leaves, activeProjectId, switchProject, currentUser, logout, isOffline, isWsConnected, theme, toggleTheme, resetToDefault, customAiConfig } = useProject();
+  const {
+    projectData,
+    projectsList,
+    allProjectsMap,
+    leaves,
+    activeProjectId,
+    switchProject,
+    currentUser,
+    logout,
+    isOffline,
+    isWsConnected,
+    isSyncing,
+    lastSyncedAt,
+    remoteProjectAlert,
+    dismissRemoteProjectAlert,
+    refreshServerData,
+    theme,
+    toggleTheme,
+    resetToDefault,
+    customAiConfig
+  } = useProject();
   const isAdmin = isUserAdmin(currentUser);
   const isPM = isUserPM(currentUser);
   const isPrivileged = isAdmin || isPM;
@@ -70,6 +91,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [projectSearchFilter, setProjectSearchFilter] = useState('');
+  const [projectTabFilter, setProjectTabFilter] = useState<'all' | 'mine'>('all');
 
   // Helper to determine if current logged-in user is a stakeholder / PM in a specific project
   const getProjectMembership = (projectId: string) => {
@@ -108,6 +131,39 @@ export const Header: React.FC<HeaderProps> = ({
 
   const projectDropdownRef = useRef<HTMLDivElement>(null);
   const projectSelectorContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleProjectDropdown = () => {
+    setIsProjectDropdownOpen(prev => {
+      const next = !prev;
+      if (next) {
+        refreshServerData(true);
+      }
+      return next;
+    });
+  };
+
+  const myProjectsCount = useMemo(() => {
+    return projectsList.filter(p => {
+      const { isMember } = getProjectMembership(p.id);
+      return isMember || isAdmin;
+    }).length;
+  }, [projectsList, allProjectsMap, currentUser, isAdmin]);
+
+  const filteredProjects = useMemo(() => {
+    const q = projectSearchFilter.trim().toLowerCase();
+    return projectsList.filter(proj => {
+      if (projectTabFilter === 'mine') {
+        const { isMember } = getProjectMembership(proj.id);
+        if (!isMember && !isAdmin) return false;
+      }
+      if (!q) return true;
+      return (
+        (proj.projectName || '').toLowerCase().includes(q) ||
+        (proj.projectCode || '').toLowerCase().includes(q) ||
+        (proj.description || '').toLowerCase().includes(q)
+      );
+    });
+  }, [projectsList, projectSearchFilter, projectTabFilter, allProjectsMap, currentUser, isAdmin]);
 
   // Global Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -249,6 +305,36 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
+      {/* Remote Project Created / Updated Alert Banner */}
+      {remoteProjectAlert && (
+        <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 text-white px-3 py-1.5 text-xs font-medium flex items-center justify-between shadow-md z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 shrink-0 animate-pulse" />
+            <span className="truncate">
+              New project updated from mobile or another device: <strong>{remoteProjectAlert.name}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            <button
+              onClick={() => {
+                switchProject(remoteProjectAlert.id);
+                dismissRemoteProjectAlert();
+              }}
+              className="px-2.5 py-0.5 rounded-lg bg-white text-indigo-900 text-[11px] font-bold hover:bg-slate-100 transition-colors shadow-xs"
+            >
+              Switch Now
+            </button>
+            <button
+              onClick={dismissRemoteProjectAlert}
+              className="p-1 hover:bg-white/20 rounded-md transition-colors"
+              title="Dismiss alert"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <header id="app-header" className="w-full max-w-full bg-slate-900/95 dark:bg-slate-950/95 border-b border-slate-800/80 backdrop-blur-md sticky top-0 z-40 px-2 sm:px-3 md:px-4 py-2 text-slate-100 flex items-center justify-between gap-1.5 sm:gap-2 transition-colors min-w-0">
         {/* App Branding & Multi-Project Switcher */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
@@ -260,7 +346,7 @@ export const Header: React.FC<HeaderProps> = ({
           <div ref={projectSelectorContainerRef} className="relative shrink min-w-0">
             <button
               id="btn-project-selector"
-              onClick={() => setIsProjectDropdownOpen(prev => !prev)}
+              onClick={toggleProjectDropdown}
               className="group text-left px-2 sm:px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200/90 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300/80 dark:border-slate-700/80 transition-all flex items-center gap-1.5 shrink min-w-0 max-w-[125px] xs:max-w-[155px] sm:max-w-[190px] md:max-w-[230px] lg:max-w-[260px] shadow-xs"
               title="Click to Switch Project or Manage Portfolio"
             >
@@ -277,7 +363,7 @@ export const Header: React.FC<HeaderProps> = ({
               <ChevronDown className={`w-3.5 h-3.5 text-slate-500 dark:text-slate-400 group-hover:text-slate-800 dark:group-hover:text-slate-200 transition-transform shrink-0 ${isProjectDropdownOpen ? 'rotate-180 text-indigo-600 dark:text-indigo-400' : ''}`} />
             </button>
 
-            {/* Quick Project Switch Dropdown Menu (With Mobile Backdrop & High-Contrast Light/Dark Themes) */}
+            {/* Quick Project Switch Dropdown Menu */}
             {isProjectDropdownOpen && (
               <>
                 {/* Mobile Backdrop Overlay for Clean Tap Dismissal */}
@@ -288,92 +374,181 @@ export const Header: React.FC<HeaderProps> = ({
 
                 <div
                   ref={projectDropdownRef}
-                  className="fixed sm:absolute left-3 right-3 sm:left-0 sm:right-auto top-[60px] sm:top-full mt-1.5 sm:w-88 md:w-96 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 animate-in fade-in zoom-in-95 duration-150 space-y-2.5"
+                  className="fixed sm:absolute left-3 right-3 sm:left-0 sm:right-auto top-[60px] sm:top-full mt-1.5 sm:w-96 md:w-[420px] max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 animate-in fade-in zoom-in-95 duration-150 space-y-2.5"
                 >
-                  <div className="px-1 py-1 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                  {/* Dropdown Header with Project Count & Cloud Sync Button */}
+                  <div className="px-1 py-1 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5">
                       <Briefcase className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
                         Switch Project ({projectsList.length})
                       </span>
                     </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                      Multi-Project Sync
-                    </span>
+
+                    <button
+                      onClick={() => refreshServerData(false)}
+                      disabled={isSyncing}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-colors"
+                      title="Sync with projects created on mobile or another device"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-indigo-600 dark:text-indigo-400' : ''}`} />
+                      <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
+                    </button>
                   </div>
 
-                  <div className="max-h-72 overflow-y-auto space-y-1.5 custom-scrollbar pr-0.5">
-                    {projectsList.map(proj => {
-                      const currentActiveProjectId = projectData?.id || activeProjectId;
-                      const isActive = proj.id === currentActiveProjectId;
-                      const { isPMForProject, roleBadge } = getProjectMembership(proj.id);
+                  {/* Remote Device Alert in Dropdown */}
+                  {remoteProjectAlert && (
+                    <div className="p-2 rounded-xl bg-gradient-to-r from-indigo-500/15 to-purple-500/15 border border-indigo-500/30 flex items-center justify-between gap-2">
+                      <div className="min-w-0 text-[11px] text-indigo-950 dark:text-indigo-200 truncate">
+                        ✨ Remote change: <strong className="font-semibold">{remoteProjectAlert.name}</strong>
+                      </div>
+                      <button
+                        onClick={() => {
+                          switchProject(remoteProjectAlert.id);
+                          setIsProjectDropdownOpen(false);
+                          dismissRemoteProjectAlert();
+                        }}
+                        className="px-2 py-0.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold shrink-0 transition-colors shadow-xs"
+                      >
+                        Switch
+                      </button>
+                    </div>
+                  )}
 
-                      return (
+                  {/* Search and Tabs - Smarter switching without double scrolling */}
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={projectSearchFilter}
+                        onChange={e => setProjectSearchFilter(e.target.value)}
+                        placeholder="Search projects by name, code, or description..."
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-7 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      {projectSearchFilter && (
                         <button
-                          key={proj.id}
-                          onClick={() => {
-                            switchProject(proj.id);
-                            setIsProjectDropdownOpen(false);
-                          }}
-                          className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between gap-2.5 border ${
-                            isActive
-                              ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-400/80 dark:border-indigo-500/60 text-slate-900 dark:text-slate-100 shadow-sm ring-2 ring-indigo-500/30'
-                              : 'bg-slate-50/80 hover:bg-slate-100/90 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
-                          }`}
+                          onClick={() => setProjectSearchFilter('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
-                                {proj.projectName}
-                              </span>
-                              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-slate-300 dark:border-slate-800 shrink-0">
-                                {proj.projectCode}
-                              </span>
-                              {/* User Assignment Status Badge */}
-                              {roleBadge && (
-                                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 border ${
-                                  isAdmin
-                                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
-                                    : isPMForProject
-                                    ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
-                                    : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                                }`}>
-                                  {isAdmin ? '👑 Portfolio' : isPMForProject ? '👔 Lead PM' : '✓ My Project'}
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 p-0.5 bg-slate-100 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 text-[11px]">
+                      <button
+                        onClick={() => setProjectTabFilter('all')}
+                        className={`flex-1 py-1 px-2 rounded-md font-semibold transition-all text-center ${
+                          projectTabFilter === 'all'
+                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        All ({projectsList.length})
+                      </button>
+                      <button
+                        onClick={() => setProjectTabFilter('mine')}
+                        className={`flex-1 py-1 px-2 rounded-md font-semibold transition-all text-center ${
+                          projectTabFilter === 'mine'
+                            ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                        }`}
+                      >
+                        My Projects ({myProjectsCount})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Project List with contained scroll */}
+                  <div className="max-h-64 overflow-y-auto overscroll-contain space-y-1.5 custom-scrollbar pr-0.5">
+                    {filteredProjects.length === 0 ? (
+                      <div className="p-4 text-center rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800/80">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {projectSearchFilter ? `No projects match "${projectSearchFilter}"` : 'No projects found'}
+                        </p>
+                        {projectSearchFilter && (
+                          <button
+                            onClick={() => setProjectSearchFilter('')}
+                            className="mt-1.5 text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                          >
+                            Clear search filter
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      filteredProjects.map(proj => {
+                        const currentActiveProjectId = projectData?.id || activeProjectId;
+                        const isActive = proj.id === currentActiveProjectId;
+                        const { isPMForProject, roleBadge } = getProjectMembership(proj.id);
+
+                        return (
+                          <button
+                            key={proj.id}
+                            onClick={() => {
+                              switchProject(proj.id);
+                              setIsProjectDropdownOpen(false);
+                            }}
+                            className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between gap-2.5 border ${
+                              isActive
+                                ? 'bg-indigo-50/90 dark:bg-indigo-950/60 border-indigo-400/80 dark:border-indigo-500/60 text-slate-900 dark:text-slate-100 shadow-sm ring-2 ring-indigo-500/30'
+                                : 'bg-slate-50/80 hover:bg-slate-100/90 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border-slate-200/90 dark:border-slate-800/80 text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white'
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-xs text-slate-900 dark:text-white truncate">
+                                  {proj.projectName}
                                 </span>
+                                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border border-slate-300 dark:border-slate-800 shrink-0">
+                                  {proj.projectCode}
+                                </span>
+                                {roleBadge && (
+                                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 border ${
+                                    isAdmin
+                                      ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                                      : isPMForProject
+                                      ? 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
+                                      : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                                  }`}>
+                                    {isAdmin ? '👑 Portfolio' : isPMForProject ? '👔 Lead PM' : '✓ My Project'}
+                                  </span>
+                                )}
+                              </div>
+                              {proj.description && (
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 mt-0.5 leading-snug">
+                                  {proj.description}
+                                </p>
                               )}
                             </div>
-                            {proj.description && (
-                              <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-snug">
-                                {proj.description}
-                              </p>
-                            )}
-                          </div>
 
-                          {isActive ? (
-                            <div className="p-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs shrink-0">
-                              <Check className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </div>
-                          ) : (
-                            <div className="p-1 rounded-full text-slate-400 dark:text-slate-600 shrink-0 opacity-0 group-hover:opacity-100">
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                            {isActive ? (
+                              <div className="p-1 rounded-full bg-emerald-600 dark:bg-emerald-500 text-white shadow-xs shrink-0">
+                                <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              </div>
+                            ) : (
+                              <div className="p-1 rounded-full text-slate-400 dark:text-slate-600 shrink-0 opacity-0 group-hover:opacity-100">
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })
+                    )}
                   </div>
 
-                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 space-y-1.5">
+                  {/* Actions Footer */}
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                     <button
                       onClick={() => {
                         setIsProjectDropdownOpen(false);
                         setEditTargetProjectId(projectData.id);
                         setIsProjectsModalOpen(true);
                       }}
-                      className="w-full p-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-200 border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 transition-colors shadow-xs"
+                      className="w-full p-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-indigo-200 border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors shadow-xs"
                     >
-                      <Pencil className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                      <span>Edit Current Project Details</span>
+                      <Pencil className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span className="truncate">Edit Details</span>
                     </button>
                     <button
                       onClick={() => {
@@ -381,10 +556,10 @@ export const Header: React.FC<HeaderProps> = ({
                         setEditTargetProjectId(null);
                         setIsProjectsModalOpen(true);
                       }}
-                      className="w-full p-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700/80 flex items-center justify-center gap-2 transition-colors shadow-md shadow-indigo-600/20"
+                      className="w-full p-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-700/80 flex items-center justify-center gap-1.5 transition-colors shadow-md shadow-indigo-600/20"
                     >
-                      <Layers className="w-3.5 h-3.5 text-white" />
-                      <span>Manage Portfolio & Create Project</span>
+                      <Layers className="w-3.5 h-3.5 text-white shrink-0" />
+                      <span className="truncate">Manage & New</span>
                     </button>
                   </div>
                 </div>
@@ -748,17 +923,21 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="hidden 2xl:inline">Sign Out</span>
           </button>
 
-          {/* Sync Status Badge */}
+          {/* Sync Status Badge (Interactive Click-to-Refresh) */}
           <div className="hidden lg:flex items-center gap-1.5 shrink-0">
-
-            <div
+            <button
               id="sync-status-badge"
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-colors shrink-0 ${
+              onClick={() => refreshServerData(false)}
+              disabled={isSyncing}
+              title={lastSyncedAt ? `Last cloud sync: ${new Date(lastSyncedAt).toLocaleTimeString()}. Click to force sync across devices.` : 'Click to force sync across devices'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-all shrink-0 hover:ring-2 hover:ring-indigo-500/40 cursor-pointer ${
                 isOffline
                   ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                  : isSyncing
+                  ? 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40 animate-pulse'
                   : isWsConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20'
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                  : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 hover:bg-indigo-500/20'
               }`}
             >
               {isOffline ? (
@@ -766,13 +945,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <WifiOff className="w-3.5 h-3.5" />
                   <span>Offline</span>
                 </>
+              ) : isSyncing ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <span>Syncing...</span>
+                </>
               ) : (
                 <>
-                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{isWsConnected ? 'Live' : 'Connected'}</span>
+                  <RefreshCw className="w-3.5 h-3.5 text-emerald-400 group-hover:rotate-180 transition-transform duration-300" />
+                  <span>{isWsConnected ? 'Live Cloud' : 'Connected'}</span>
                 </>
               )}
-            </div>
+            </button>
           </div>
 
           {/* AI Executive Summary Launcher */}
